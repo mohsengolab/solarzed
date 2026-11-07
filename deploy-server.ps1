@@ -72,61 +72,75 @@ if ($LASTEXITCODE -ne 0) { Log-Err "Next.js build failed"; exit 1 }
 Log-Ok "Next.js build OK"
 Pop-Location
 
-# -- 5. SQL password --
+# -- 5. SQL password + set at Machine level so PM2 daemon inherits them --
 if (-not $SQLPass) {
     $secPass = Read-Host "SQL Server password" -AsSecureString
     $SQLPass = [System.Net.NetworkCredential]::new('', $secPass).Password
 }
 
-$env:SOLARZED_STORAGE      = 'mssql'
-$env:SOLARZED_SQL_SERVER   = '127.0.0.1'
-$env:SOLARZED_SQL_DATABASE = 'SolarzedWarranty'
-$env:SOLARZED_SQL_USER     = 'sa'
-$env:SOLARZED_SQL_PASSWORD = $SQLPass
-$env:PORT                  = '4173'
+$envVars = @{
+    SOLARZED_STORAGE      = 'mssql'
+    SOLARZED_SQL_SERVER   = '127.0.0.1'
+    SOLARZED_SQL_DATABASE = 'SolarzedWarranty'
+    SOLARZED_SQL_USER     = 'sa'
+    SOLARZED_SQL_PASSWORD = $SQLPass
+    PORT                  = '4173'
+}
+foreach ($kv in $envVars.GetEnumerator()) {
+    [System.Environment]::SetEnvironmentVariable($kv.Key, $kv.Value, 'Machine')
+    Set-Item "Env:$($kv.Key)" $kv.Value
+}
+Log-Ok "Environment variables saved at Machine scope"
 
-# -- 6. PM2 zero-downtime reload --
+# -- 6. Write ecosystem.config.js (Windows-safe Next.js via node directly) --
+$apiExe   = $apiPublish.Replace('\', '\\')
+$appDirJs = $AppDir.Replace('\', '\\')
+$ecosystem = @"
+module.exports = {
+  apps: [
+    {
+      name: 'solarzed-web',
+      script: '${appDirJs}\\serve.cjs',
+      max_memory_restart: '512M',
+      time: true,
+    },
+    {
+      name: 'solarzed-api',
+      script: '${apiExe}\\Solarzed.Api.exe',
+      interpreter: 'none',
+      max_memory_restart: '512M',
+      time: true,
+    },
+    {
+      name: 'solarzed-next',
+      script: 'node_modules/next/dist/bin/next',
+      args: 'start',
+      cwd: '${appDirJs}\\frontend',
+      interpreter: 'node',
+      max_memory_restart: '512M',
+      time: true,
+    },
+  ],
+};
+"@
+$ecosystemPath = "$AppDir\ecosystem.config.js"
+[System.IO.File]::WriteAllText($ecosystemPath, $ecosystem, [System.Text.Encoding]::UTF8)
+Log-Ok "ecosystem.config.js written"
+
+# -- 7. PM2 zero-downtime reload --
 $pm2Json = (pm2 jlist 2>$null) | ConvertFrom-Json -ErrorAction SilentlyContinue
 function PM2-Running ([string]$name) {
     return ($pm2Json | Where-Object { $_.name -eq $name }) -ne $null
 }
 
-Log-Info "PM2: solarzed-web..."
-if (PM2-Running "solarzed-web") {
-    pm2 reload solarzed-web --update-env
-    Log-Ok "solarzed-web reloaded (zero-downtime)"
+if ((PM2-Running "solarzed-web") -or (PM2-Running "solarzed-api") -or (PM2-Running "solarzed-next")) {
+    Log-Info "Reloading all services (zero-downtime)..."
+    pm2 reload $ecosystemPath --update-env
+    Log-Ok "All services reloaded"
 } else {
-    pm2 start "$AppDir\serve.cjs" `
-        --name "solarzed-web" `
-        --max-memory-restart 512M `
-        --time
-    Log-Ok "solarzed-web started"
-}
-
-Log-Info "PM2: solarzed-api..."
-if (PM2-Running "solarzed-api") {
-    pm2 reload solarzed-api --update-env
-    Log-Ok "solarzed-api reloaded (zero-downtime)"
-} else {
-    pm2 start "$apiPublish\Solarzed.Api.exe" `
-        --name "solarzed-api" `
-        --max-memory-restart 512M `
-        --time
-    Log-Ok "solarzed-api started"
-}
-
-Log-Info "PM2: solarzed-next..."
-if (PM2-Running "solarzed-next") {
-    pm2 reload solarzed-next --update-env
-    Log-Ok "solarzed-next reloaded (zero-downtime)"
-} else {
-    pm2 start npm `
-        --name "solarzed-next" `
-        --cwd "$AppDir\frontend" `
-        -- run start `
-        --max-memory-restart 512M `
-        --time
-    Log-Ok "solarzed-next started"
+    Log-Info "Starting all services..."
+    pm2 start $ecosystemPath
+    Log-Ok "All services started"
 }
 
 # -- 7. Save & report --
