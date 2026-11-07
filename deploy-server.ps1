@@ -1,5 +1,5 @@
 # ================================================================
-#  deploy-server.ps1  —  Zero-Downtime Deployment (Windows Server)
+#  deploy-server.ps1  -  Zero-Downtime Deployment (Windows Server)
 #  Server: 51.68.57.167
 #  Usage:  powershell -ExecutionPolicy Bypass -File deploy-server.ps1
 # ================================================================
@@ -19,39 +19,38 @@ function Log-Err   ([string]$m) { Write-Host "[ ERR  ] $m" -ForegroundColor Red 
 
 function Require ([string]$cmd) {
     if (-not (Get-Command $cmd -ErrorAction SilentlyContinue)) {
-        Log-Err "$cmd پیدا نشد. لطفاً نصب کنید."
+        Log-Err "$cmd not found. Please install it first."
         exit 1
     }
 }
 
-# ── بررسی ابزارها ───────────────────────────────────────────────
 Require "git"
 Require "node"
 Require "npm"
 Require "pm2"
 Require "dotnet"
 
-Log-Info "=== شروع دیپلوی  $(Get-Date -Format 'yyyy-MM-dd HH:mm:ss') ==="
-Log-Info "پوشه: $AppDir  |  Branch: $Branch"
+Log-Info "=== Deploy started: $(Get-Date -Format 'yyyy-MM-dd HH:mm:ss') ==="
+Log-Info "Dir: $AppDir  |  Branch: $Branch"
 
 Set-Location $AppDir
 
-# ── 1. گرفتن آخرین کد ───────────────────────────────────────────
-Log-Info "دریافت آخرین کد از git..."
+# -- 1. Git pull --
+Log-Info "Pulling latest code..."
 git fetch --all 2>&1 | Out-Null
 $before = git rev-parse HEAD
 git reset --hard "origin/$Branch"
 $after = git rev-parse HEAD
 
 if ($before -eq $after) {
-    Log-Warn "تغییری در کد نبود — ادامه می‌دهیم."
+    Log-Warn "No code changes - continuing anyway."
 } else {
-    Log-Ok "کد آپدیت شد: $($before.Substring(0,7)) -> $($after.Substring(0,7))"
+    Log-Ok "Code updated: $($before.Substring(0,7)) -> $($after.Substring(0,7))"
     git log --oneline "$before..$after"
 }
 
-# ── 2. بیلد .NET API ────────────────────────────────────────────
-Log-Info "بیلد .NET backend..."
+# -- 2. Build .NET API --
+Log-Info "Building .NET backend..."
 $apiPublish = "$AppDir\.publish\api"
 Push-Location "$AppDir\backend"
 dotnet publish "Solarzed.Api\Solarzed.Api.csproj" `
@@ -59,31 +58,31 @@ dotnet publish "Solarzed.Api\Solarzed.Api.csproj" `
     -o $apiPublish `
     --nologo `
     -v q
-if ($LASTEXITCODE -ne 0) { Log-Err "بیلد .NET شکست خورد"; exit 1 }
-Log-Ok ".NET build موفق -> $apiPublish"
+if ($LASTEXITCODE -ne 0) { Log-Err ".NET build failed"; exit 1 }
+Log-Ok ".NET build OK -> $apiPublish"
 Pop-Location
 
-# ── 3. نصب وابستگی‌های root ─────────────────────────────────────
+# -- 3. npm install (root) --
 Log-Info "npm ci (root)..."
 Push-Location $AppDir
 npm ci --omit=dev --silent
-if ($LASTEXITCODE -ne 0) { Log-Err "npm ci شکست خورد"; exit 1 }
-Log-Ok "وابستگی‌های root آماده"
+if ($LASTEXITCODE -ne 0) { Log-Err "npm ci failed"; exit 1 }
+Log-Ok "Root dependencies ready"
 Pop-Location
 
-# ── 4. بیلد Next.js ─────────────────────────────────────────────
-Log-Info "بیلد Next.js frontend..."
+# -- 4. Build Next.js --
+Log-Info "Building Next.js frontend..."
 Push-Location "$AppDir\frontend"
 npm ci --silent
-if ($LASTEXITCODE -ne 0) { Log-Err "npm ci frontend شکست خورد"; exit 1 }
+if ($LASTEXITCODE -ne 0) { Log-Err "npm ci (frontend) failed"; exit 1 }
 npm run build
-if ($LASTEXITCODE -ne 0) { Log-Err "بیلد Next.js شکست خورد"; exit 1 }
-Log-Ok "Next.js build موفق"
+if ($LASTEXITCODE -ne 0) { Log-Err "Next.js build failed"; exit 1 }
+Log-Ok "Next.js build OK"
 Pop-Location
 
-# ── 5. رمز SQL ──────────────────────────────────────────────────
+# -- 5. SQL password --
 if (-not $SQLPass) {
-    $secPass = Read-Host "رمز SQL Server" -AsSecureString
+    $secPass = Read-Host "SQL Server password" -AsSecureString
     $SQLPass = [System.Net.NetworkCredential]::new('', $secPass).Password
 }
 
@@ -94,20 +93,16 @@ $env:SOLARZED_SQL_USER     = 'sa'
 $env:SOLARZED_SQL_PASSWORD = $SQLPass
 $env:PORT                  = '4173'
 
-# ── 6. Zero-Downtime با PM2 ─────────────────────────────────────
-#   pm2 reload = instance جدید اول می‌آید، بعد قدیمی می‌رود
-#   هیچ request‌ای drop نمی‌شود
-
+# -- 6. PM2 zero-downtime reload --
 $pm2Json = (pm2 jlist 2>$null) | ConvertFrom-Json -ErrorAction SilentlyContinue
 function PM2-Running ([string]$name) {
     return ($pm2Json | Where-Object { $_.name -eq $name }) -ne $null
 }
 
-# Node.js web server
 Log-Info "PM2: solarzed-web..."
 if (PM2-Running "solarzed-web") {
     pm2 reload solarzed-web --update-env
-    Log-Ok "solarzed-web reload (zero-downtime)"
+    Log-Ok "solarzed-web reloaded (zero-downtime)"
 } else {
     pm2 start "$AppDir\serve.cjs" `
         --name "solarzed-web" `
@@ -116,11 +111,10 @@ if (PM2-Running "solarzed-web") {
     Log-Ok "solarzed-web started"
 }
 
-# .NET API
 Log-Info "PM2: solarzed-api..."
 if (PM2-Running "solarzed-api") {
     pm2 reload solarzed-api --update-env
-    Log-Ok "solarzed-api reload (zero-downtime)"
+    Log-Ok "solarzed-api reloaded (zero-downtime)"
 } else {
     pm2 start "$apiPublish\Solarzed.Api.exe" `
         --name "solarzed-api" `
@@ -129,11 +123,10 @@ if (PM2-Running "solarzed-api") {
     Log-Ok "solarzed-api started"
 }
 
-# Next.js
 Log-Info "PM2: solarzed-next..."
 if (PM2-Running "solarzed-next") {
     pm2 reload solarzed-next --update-env
-    Log-Ok "solarzed-next reload (zero-downtime)"
+    Log-Ok "solarzed-next reloaded (zero-downtime)"
 } else {
     pm2 start npm `
         --name "solarzed-next" `
@@ -144,14 +137,14 @@ if (PM2-Running "solarzed-next") {
     Log-Ok "solarzed-next started"
 }
 
-# ── 7. ذخیره + گزارش ────────────────────────────────────────────
+# -- 7. Save & report --
 pm2 save
-Log-Ok "وضعیت PM2 ذخیره شد"
+Log-Ok "PM2 state saved (auto-start on reboot)"
 
 Write-Host ""
-Write-Host "════════════════════════════════════════" -ForegroundColor Green
-Write-Host "  دیپلوی موفق!  $(Get-Date -Format 'HH:mm:ss')" -ForegroundColor Green
-Write-Host "════════════════════════════════════════" -ForegroundColor Green
+Write-Host "========================================" -ForegroundColor Green
+Write-Host "  Deploy successful! $(Get-Date -Format 'HH:mm:ss')" -ForegroundColor Green
+Write-Host "========================================" -ForegroundColor Green
 pm2 list
 
 Remove-Item Env:SOLARZED_SQL_PASSWORD -ErrorAction SilentlyContinue
