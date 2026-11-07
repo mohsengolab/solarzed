@@ -1,0 +1,16 @@
+SOLARZED — CLIENT DESIGN PRESENTATION
+
+Open index.html in your browser. No installation or database is needed to review this design.
+
+Pages:
+1. Home
+2. Dealer warranty registration
+3. Warranty lookup
+4. Warranty guide
+5. Contact & support
+
+Style: white, turquoise and navy. English content. Responsive desktop and mobile layouts.
+
+In this offline presentation, forms are demonstrations only. No registration is saved and no SMS or support message is sent. Use “Try a sample record” on the lookup page to see the confirmation design.
+
+Items for brand approval: final logo, licensed vehicle photograph, official warranty policy, phone number and email. The vehicle image is a reference placeholder from the earlier Sun Vision inspired concept.

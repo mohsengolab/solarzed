@@ -1,0 +1,22 @@
+/*
+  The tilted film layers grow with their width, so on a single-column (tablet) layout they used
+  to spill over the text below. Cap the card width and size the box from the layer count (--n).
+  A 420px-wide card tilted as in polish.css projects about 185px below its top edge.
+*/
+.layers :global(.layers-visual) { height: calc(225px + (var(--n) - 1) * 88px); }
+.layers :global(.layer) {
+  left: 0;
+  right: 0;
+  width: min(76%, 420px);
+  margin-inline: auto;
+}
+.layers :global(.layers-visual:hover .layer) { top: calc(10px + var(--i) * 88px); }
+.layers :global(.layer:nth-child(5)) {
+  background: linear-gradient(135deg, #e8edf0d9, #c5d0d7d9);
+  z-index: 0;
+}
+
+@media (max-width: 600px) {
+  .layers :global(.layers-visual) { height: calc(150px + (var(--n) - 1) * 70px); }
+  .layers :global(.layers-visual:hover .layer) { top: calc(10px + var(--i) * 70px); }
+}

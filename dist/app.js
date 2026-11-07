@@ -1,0 +1,11 @@
+const menu=document.querySelector('.menu'),nav=document.querySelector('#navigation');
+menu.onclick=()=>{const open=nav.classList.toggle('open');menu.setAttribute('aria-expanded',String(open));};
+nav.querySelectorAll('a').forEach(a=>a.onclick=()=>{nav.classList.remove('open');menu.setAttribute('aria-expanded','false');});
+document.querySelectorAll('[data-filter]').forEach(b=>{b.setAttribute('aria-pressed',String(b.classList.contains('active')));b.onclick=()=>{document.querySelectorAll('[data-filter]').forEach(x=>{x.classList.toggle('active',x===b);x.setAttribute('aria-pressed',String(x===b));});document.querySelectorAll('.product').forEach(c=>c.hidden=b.dataset.filter!=='all'&&b.dataset.filter!==c.dataset.category);};});
+const dialog=document.querySelector('dialog');
+const descriptions={DOMINATE:'Premium paint protection film designed for chemical and mechanical resistance. Request technical specifications and installation guidance.',PHANTOM:'Clear paint protection film designed to preserve the original appearance of your vehicle. Request specifications and availability.',MATRIX:'Durable paint protection film with self-healing properties for minor surface scratches. Contact us to find the right product.','WINDOW FILMS':'Tinting and athermal film options for automotive glass. Request the catalog for light transmission options and technical specifications.'};
+document.querySelectorAll('[data-product]').forEach(b=>b.onclick=()=>{document.querySelector('#dialog-title').textContent=b.dataset.product;document.querySelector('#dialog-text').textContent=descriptions[b.dataset.product];dialog.showModal();});
+document.querySelector('.close').onclick=()=>dialog.close();
+document.querySelector('#dialog-contact').onclick=()=>dialog.close();
+dialog.onclick=e=>{if(e.target===dialog){const r=dialog.getBoundingClientRect();if(e.clientX<r.left||e.clientX>r.right||e.clientY<r.top||e.clientY>r.bottom)dialog.close();}};
+document.querySelector('form').onsubmit=e=>{e.preventDefault();const data=new FormData(e.currentTarget);document.querySelector('#form-status').textContent=`Thanks, ${data.get('name')}. Your inquiry for ${data.get('interest')} is ready. This is a demo; no information has been sent.`;};

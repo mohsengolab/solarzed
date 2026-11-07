@@ -1,0 +1,4 @@
+<Solution>
+  <Project Path="Solarzed.Api.Tests/Solarzed.Api.Tests.csproj" />
+  <Project Path="Solarzed.Api/Solarzed.Api.csproj" />
+</Solution>

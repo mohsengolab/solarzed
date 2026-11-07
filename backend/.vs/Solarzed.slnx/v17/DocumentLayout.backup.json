@@ -1,0 +1,37 @@
+{
+  "Version": 1,
+  "WorkspaceRootPath": "F:\\Software\\sunvision\\backend\\",
+  "Documents": [
+    {
+      "AbsoluteMoniker": "D:0:0:{BD0A217D-835A-BEAB-80F7-5999CEB1FBB9}|Solarzed.Api\\Solarzed.Api.csproj|f:\\software\\sunvision\\backend\\solarzed.api\\solarzed.api.http||{5703B403-55E7-4C63-8C88-A8F52C7A45C5}",
+      "RelativeMoniker": "D:0:0:{BD0A217D-835A-BEAB-80F7-5999CEB1FBB9}|Solarzed.Api\\Solarzed.Api.csproj|solutionrelative:solarzed.api\\solarzed.api.http||{5703B403-55E7-4C63-8C88-A8F52C7A45C5}"
+    }
+  ],
+  "DocumentGroupContainers": [
+    {
+      "Orientation": 0,
+      "VerticalTabListWidth": 256,
+      "DocumentGroups": [
+        {
+          "DockedWidth": 200,
+          "SelectedChildIndex": 0,
+          "Children": [
+            {
+              "$type": "Document",
+              "DocumentIndex": 0,
+              "Title": "Solarzed.Api.http",
+              "DocumentMoniker": "F:\\Software\\sunvision\\backend\\Solarzed.Api\\Solarzed.Api.http",
+              "RelativeDocumentMoniker": "Solarzed.Api\\Solarzed.Api.http",
+              "ToolTip": "F:\\Software\\sunvision\\backend\\Solarzed.Api\\Solarzed.Api.http",
+              "RelativeToolTip": "Solarzed.Api\\Solarzed.Api.http",
+              "ViewState": "AgIAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA==",
+              "Icon": "ae27a6b0-e345-4288-96df-5eaf394ee369.003502|",
+              "WhenOpened": "2026-11-06T10:27:54.468Z",
+              "EditorCaption": ""
+            }
+          ]
+        }
+      ]
+    }
+  ]
+}

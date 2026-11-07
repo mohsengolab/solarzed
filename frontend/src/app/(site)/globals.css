@@ -1,0 +1,65 @@
+@import "tailwindcss";
+
+:root {
+  --sz-navy: #0b1d3a;
+  --sz-navy-deep: #040b1c;
+  --sz-teal: #1fc3cf;
+  --sz-teal-ink: #07737f;
+  --sz-teal-light: #8ff3f6;
+  --sz-ink: #04122a;
+  --sz-grad: linear-gradient(135deg, #1fc3cf 0%, #0ec3b5 100%);
+  --sz-font: "Plus Jakarta Sans", system-ui, sans-serif;
+}
+
+* { box-sizing: border-box; margin: 0; padding: 0; }
+
+html { scroll-behavior: smooth; }
+
+body {
+  font-family: var(--sz-font);
+  background: var(--sz-navy-deep);
+  color: #fff;
+  -webkit-font-smoothing: antialiased;
+}
+
+a { color: inherit; text-decoration: none; }
+
+/* Utility classes for legacy polish.css compatibility */
+.visually-hidden {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border: 0;
+}
+
+.sz-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  padding: 14px 32px;
+  border: none;
+  border-radius: 12px;
+  background: var(--sz-grad);
+  color: var(--sz-ink);
+  font-family: var(--sz-font);
+  font-size: 16px;
+  font-weight: 800;
+  letter-spacing: 0.5px;
+  cursor: pointer;
+  transition: filter 0.2s, transform 0.2s;
+}
+.sz-btn:hover { filter: brightness(1.06); transform: translateY(-1px); }
+.sz-btn:disabled { opacity: 0.7; cursor: wait; transform: none; }
+
+.sz-btn-ghost {
+  background: transparent;
+  border: 1.5px solid rgba(255,255,255,0.2);
+  color: #c3d4e3;
+}
+.sz-btn-ghost:hover { border-color: var(--sz-teal); color: #fff; }

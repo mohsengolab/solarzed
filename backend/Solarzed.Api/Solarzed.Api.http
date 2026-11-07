@@ -1,0 +1,6 @@
+@Solarzed.Api_HostAddress = http://localhost:5296
+
+GET {{Solarzed.Api_HostAddress}}/weatherforecast/
+Accept: application/json
+
+###
