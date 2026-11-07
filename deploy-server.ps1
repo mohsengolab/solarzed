@@ -62,15 +62,7 @@ if ($LASTEXITCODE -ne 0) { Log-Err ".NET build failed"; exit 1 }
 Log-Ok ".NET build OK -> $apiPublish"
 Pop-Location
 
-# -- 3. npm install (root) --
-Log-Info "npm ci (root)..."
-Push-Location $AppDir
-npm ci --omit=dev --silent
-if ($LASTEXITCODE -ne 0) { Log-Err "npm ci failed"; exit 1 }
-Log-Ok "Root dependencies ready"
-Pop-Location
-
-# -- 4. Build Next.js --
+# -- 3. Build Next.js --
 Log-Info "Building Next.js frontend..."
 Push-Location "$AppDir\frontend"
 npm ci --silent
