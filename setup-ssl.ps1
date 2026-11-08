@@ -94,19 +94,26 @@ if (-not $rewrite) {
     Log-Ok "URL Rewrite already installed"
 }
 
-# ── Step 4: Enable ARR proxy at server level ────────────────────
+# ── Step 4: Restart IIS to load ARR/Rewrite modules, then enable proxy ─
+Log-Info "Restarting IIS to load newly installed modules..."
+iisreset /restart /noforce | Out-Null
+Log-Ok "IIS restarted"
+
 Log-Info "Enabling ARR reverse proxy..."
-Add-WebConfigurationProperty `
-    -PSPath 'MACHINE/WEBROOT/APPHOST' `
-    -Filter "system.webServer/proxy" `
-    -Name "enabled" -Value "True" -ErrorAction SilentlyContinue
-
-Set-WebConfigurationProperty `
-    -PSPath 'MACHINE/WEBROOT/APPHOST' `
-    -Filter "system.webServer/proxy" `
-    -Name "enabled" -Value "True"
-
-Log-Ok "ARR proxy enabled"
+try {
+    Set-WebConfigurationProperty `
+        -PSPath 'MACHINE/WEBROOT/APPHOST' `
+        -Filter 'system.webServer/proxy' `
+        -Name 'enabled' -Value $true
+    Log-Ok "ARR proxy enabled via Set-WebConfigurationProperty"
+} catch {
+    # Fallback: write directly via appcmd
+    Log-Warn "Set-WebConfigurationProperty failed -- using appcmd fallback"
+    & "$env:SystemRoot\system32\inetsrv\appcmd.exe" set config `
+        -section:system.webServer/proxy /enabled:true /commit:apphost
+    if ($LASTEXITCODE -ne 0) { Log-Err "Could not enable ARR proxy. Is ARR installed?" }
+    Log-Ok "ARR proxy enabled via appcmd"
+}
 
 # ── Step 5: Create site root directory ──────────────────────────
 if (-not (Test-Path $SiteRoot)) {
