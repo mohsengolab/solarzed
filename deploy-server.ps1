@@ -134,20 +134,15 @@ $ecosystemPath = "$AppDir\ecosystem.config.js"
 Log-Ok "ecosystem.config.js written"
 
 # -- 7. PM2 zero-downtime reload --
-$pm2Json = (pm2 jlist 2>$null) | ConvertFrom-Json -ErrorAction SilentlyContinue
-function PM2-Running ([string]$name) {
-    return ($pm2Json | Where-Object { $_.name -eq $name }) -ne $null
+# startOrReload: starts processes that are new, reloads ones already running.
+# Avoids ConvertFrom-Json failure on PM2's JSON with duplicate keys (username/USERNAME).
+Log-Info "Starting/reloading all services (zero-downtime)..."
+pm2 startOrReload $ecosystemPath --update-env
+if ($LASTEXITCODE -ne 0) {
+    Log-Warn "startOrReload failed -- falling back to pm2 start"
+    pm2 start $ecosystemPath --update-env
 }
-
-if ((PM2-Running "solarzed-web") -or (PM2-Running "solarzed-api") -or (PM2-Running "solarzed-next")) {
-    Log-Info "Reloading all services (zero-downtime)..."
-    pm2 reload $ecosystemPath --update-env
-    Log-Ok "All services reloaded"
-} else {
-    Log-Info "Starting all services..."
-    pm2 start $ecosystemPath
-    Log-Ok "All services started"
-}
+Log-Ok "All services running"
 
 # -- 7. Save & report --
 pm2 save
