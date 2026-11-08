@@ -158,7 +158,7 @@ Import-Module WebAdministration
 
 $existingSite = Get-Website -Name $SiteName -ErrorAction SilentlyContinue
 if ($existingSite) {
-    Log-Warn "IIS site '$SiteName' already exists — skipping creation"
+    Log-Warn "IIS site '$SiteName' already exists -- skipping creation"
 } else {
     Log-Info "Creating IIS site '$SiteName'..."
     New-Website -Name $SiteName `
@@ -233,7 +233,7 @@ $httpsBinding = Get-WebBinding -Name $SiteName -Protocol https -ErrorAction Sile
 if ($httpsBinding) {
     Log-Ok "HTTPS binding confirmed on IIS site '$SiteName'"
 } else {
-    Log-Warn "HTTPS binding not found — win-acme may have used a different site. Check IIS Manager."
+    Log-Warn "HTTPS binding not found -- win-acme may have used a different site. Check IIS Manager."
 }
 
 # ── Step 11: Stop Default Web Site (frees port 80/443) ──────────

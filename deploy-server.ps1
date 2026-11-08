@@ -71,7 +71,11 @@ Pop-Location
 Log-Info "Building Next.js frontend..."
 Push-Location "$AppDir\frontend"
 npm ci --silent
-if ($LASTEXITCODE -ne 0) { Log-Err "npm ci (frontend) failed"; exit 1 }
+if ($LASTEXITCODE -ne 0) {
+    Log-Warn "npm ci failed -- retrying with npm install..."
+    npm install --silent
+    if ($LASTEXITCODE -ne 0) { Log-Err "npm install (frontend) failed"; exit 1 }
+}
 npm run build
 if ($LASTEXITCODE -ne 0) { Log-Err "Next.js build failed"; exit 1 }
 Log-Ok "Next.js build OK"
