@@ -84,7 +84,7 @@ $envVars = @{
     SOLARZED_SQL_DATABASE = 'SolarzedWarranty'
     SOLARZED_SQL_USER     = 'sa'
     SOLARZED_SQL_PASSWORD = $SQLPass
-    PORT                  = '4173'
+    PORT                  = '4173'   # solarzed-web only; Next.js uses --port 3000 explicitly
 }
 foreach ($kv in $envVars.GetEnumerator()) {
     [System.Environment]::SetEnvironmentVariable($kv.Key, $kv.Value, 'Machine')
@@ -114,9 +114,10 @@ module.exports = {
     {
       name: 'solarzed-next',
       script: 'node_modules/next/dist/bin/next',
-      args: 'start',
+      args: 'start --port 3000',
       cwd: '${appDirJs}\\frontend',
       interpreter: 'node',
+      env: { PORT: '3000' },
       max_memory_restart: '512M',
       time: true,
     },
