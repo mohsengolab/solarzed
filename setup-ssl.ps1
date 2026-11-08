@@ -222,7 +222,7 @@ $siteId = (Get-Website -Name $SiteName).id
     --verbose
 
 if ($LASTEXITCODE -ne 0) {
-    Log-Err "win-acme failed — check DNS is pointing to this server and port 80 is open"
+    Log-Err "win-acme failed -- check DNS is pointing to this server and port 80 is open"
 }
 
 Log-Ok "SSL certificate installed!"
