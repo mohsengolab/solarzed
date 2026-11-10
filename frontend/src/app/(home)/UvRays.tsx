@@ -1,7 +1,6 @@
 import type { CSSProperties } from "react";
-import styles from "./uv-rays.module.css";
 
-// Coordinates are in car.png pixel space (1545×1018). Each hit point lies on a car
+// Coordinates are in the car image's pixel space (1545×1018). Each hit point lies on a car
 // surface; `out` is the mirror reflection of the sun ray about that surface's normal,
 // and `tilt` (deg) aligns the splash ellipse with the surface.
 const SUN = [1800, -450] as const;
@@ -15,7 +14,8 @@ const BEAMS = [
 
 export default function UvRays() {
   return (
-    <svg className={styles.rays} viewBox="0 0 1545 1018" aria-hidden="true" focusable="false">
+    <svg className="sz-uv-rays" viewBox="0 0 1545 1018" aria-hidden="true" focusable="false">
+      <style>{RAY_STYLES}</style>
       <defs>
         <filter id="szGlow" filterUnits="userSpaceOnUse" x="-600" y="-900" width="3200" height="2600">
           <feGaussianBlur stdDeviation="7" />
@@ -42,16 +42,75 @@ export default function UvRays() {
           <line x1={b.hit[0]} y1={b.hit[1]} x2={b.out[0]} y2={b.out[1]} stroke={`url(#szOut${i})`} strokeWidth="16" opacity="0.4" filter="url(#szGlow)" />
           <line x1={SUN[0]} y1={SUN[1]} x2={b.hit[0]} y2={b.hit[1]} stroke={`url(#szIn${i})`} strokeWidth="3" />
           <line x1={b.hit[0]} y1={b.hit[1]} x2={b.out[0]} y2={b.out[1]} stroke={`url(#szOut${i})`} strokeWidth="2.5" />
-          <line className={styles.pulseIn} x1={SUN[0]} y1={SUN[1]} x2={b.hit[0]} y2={b.hit[1]}
-            pathLength={100} stroke="#e6feff" strokeWidth="9" filter="url(#szGlow)" />
-          <line className={styles.pulseOut} x1={b.hit[0]} y1={b.hit[1]} x2={b.out[0]} y2={b.out[1]}
-            pathLength={100} stroke="#e6feff" strokeWidth="8" filter="url(#szGlow)" />
+          <line className="sz-uv-in" x1={SUN[0]} y1={SUN[1]} x2={b.hit[0]} y2={b.hit[1]}
+            pathLength={100} stroke="#e6feff" strokeWidth="4" />
+          <line className="sz-uv-out" x1={b.hit[0]} y1={b.hit[1]} x2={b.out[0]} y2={b.out[1]}
+            pathLength={100} stroke="#e6feff" strokeWidth="3.5" />
           <g transform={`rotate(${b.tilt} ${b.hit[0]} ${b.hit[1]})`}>
-            <ellipse className={styles.ripple} cx={b.hit[0]} cy={b.hit[1]} rx="70" ry="20" fill="none" stroke="#8ff3f6" strokeWidth="3" />
+            <ellipse className="sz-uv-ripple" cx={b.hit[0]} cy={b.hit[1]} rx="70" ry="20" fill="none" stroke="#8ff3f6" strokeWidth="3" />
           </g>
-          <circle className={styles.flash} cx={b.hit[0]} cy={b.hit[1]} r="14" fill="#e6feff" filter="url(#szGlow)" />
+          <circle className="sz-uv-flash" cx={b.hit[0]} cy={b.hit[1]} r="7" fill="#e6feff" />
         </g>
       ))}
     </svg>
   );
 }
+
+// Keep the animation with the server-rendered SVG so it starts without hydration or another request.
+const RAY_STYLES = `
+.sz-uv-rays {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  overflow: visible;
+  pointer-events: none;
+  mix-blend-mode: screen;
+}
+
+.sz-uv-in, .sz-uv-out {
+  stroke-linecap: round;
+  stroke-dasharray: 10 200;
+  stroke-dashoffset: 10;
+}
+
+.sz-uv-ripple, .sz-uv-flash {
+  opacity: 0;
+  transform-box: fill-box;
+  transform-origin: center;
+}
+
+@media (prefers-reduced-motion: no-preference) {
+  .sz-uv-in { animation: sz-uv-in 3.2s cubic-bezier(.4,0,.9,.6) var(--d) infinite; }
+  .sz-uv-out { animation: sz-uv-out 3.2s cubic-bezier(.1,.5,.6,1) var(--d) infinite; }
+  .sz-uv-ripple { animation: sz-uv-ripple 3.2s ease-out var(--d) infinite; }
+  .sz-uv-flash { animation: sz-uv-flash 3.2s ease var(--d) infinite; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .sz-uv-flash { opacity: .6; }
+}
+
+@keyframes sz-uv-in {
+  0% { stroke-dashoffset: 10; }
+  42%, 100% { stroke-dashoffset: -100; }
+}
+
+@keyframes sz-uv-out {
+  0%, 42% { stroke-dashoffset: 10; }
+  80%, 100% { stroke-dashoffset: -100; }
+}
+
+@keyframes sz-uv-ripple {
+  0%, 41% { opacity: 0; transform: scale(.15); }
+  43% { opacity: 1; transform: scale(.25); }
+  78%, 100% { opacity: 0; transform: scale(1); }
+}
+
+@keyframes sz-uv-flash {
+  0%, 40% { opacity: 0; transform: scale(.4); }
+  43% { opacity: 1; transform: scale(1.5); }
+  62% { opacity: .2; transform: scale(1); }
+  100% { opacity: 0; transform: scale(.8); }
+}
+`;

@@ -17,7 +17,7 @@ function Stage({ product, large, categoryLabel }: { product: Product; large: boo
           <div className="roll" style={{ "--swatch": product.swatch ?? "#0b1d3a" } as CSSProperties}>
             <span className="roll-end" /><span className="roll-sheet" />
           </div>
-          <img className="stage-car" src="/assets/car.png" alt="" loading={large ? "eager" : "lazy"} />
+          <img className="stage-car" src="/assets/car.webp" alt="" loading={large ? "eager" : "lazy"} />
         </>
       )}
       {large && (

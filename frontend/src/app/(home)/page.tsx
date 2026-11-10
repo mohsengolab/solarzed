@@ -30,7 +30,7 @@ export default function HomePage() {
             </div>
             <div className="sz-hero-visual">
               <div className="sz-car-wrap">
-                <img src="/assets/car.png" alt="Vehicle with Solarzed window film" className="sz-car" fetchPriority="high" />
+                <img src="/assets/car.webp" width={1545} height={1018} alt="Vehicle with Solarzed window film" className="sz-car" fetchPriority="high" />
                 <span className="sz-glare" aria-hidden="true" />
                 <UvRays />
                 <span className="sz-glass-tag">UV WINDOW FILM<small>Glass protection</small></span>
