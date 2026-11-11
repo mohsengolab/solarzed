@@ -51,8 +51,10 @@ if ($before -eq $after) {
 
 # -- 2. Stop API process so the exe is not locked during publish --
 Log-Info "Stopping solarzed-api before build (releases exe lock)..."
-pm2 stop solarzed-api 2>&1 | Out-Null
-Log-Ok "solarzed-api stopped"
+$ea = $ErrorActionPreference; $ErrorActionPreference = 'SilentlyContinue'
+pm2 stop solarzed-api 2>$null
+$ErrorActionPreference = $ea
+Log-Ok "solarzed-api stopped (or was not running)"
 
 # -- 2. Build .NET API --
 Log-Info "Building .NET backend..."
