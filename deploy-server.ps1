@@ -87,13 +87,15 @@ if (-not $SQLPass) {
     $SQLPass = [System.Net.NetworkCredential]::new('', $secPass).Password
 }
 
+$sqlConnStr = "Server=127.0.0.1;Database=SolarzedWarranty;User Id=sa;Password=$SQLPass;TrustServerCertificate=True;"
 $envVars = @{
-    SOLARZED_STORAGE      = 'mssql'
-    SOLARZED_SQL_SERVER   = '127.0.0.1'
-    SOLARZED_SQL_DATABASE = 'SolarzedWarranty'
-    SOLARZED_SQL_USER     = 'sa'
-    SOLARZED_SQL_PASSWORD = $SQLPass
-    PORT                  = '4173'   # solarzed-web only; Next.js uses --port 3000 explicitly
+    SOLARZED_STORAGE                = 'mssql'
+    SOLARZED_SQL_SERVER             = '127.0.0.1'
+    SOLARZED_SQL_DATABASE           = 'SolarzedWarranty'
+    SOLARZED_SQL_USER               = 'sa'
+    SOLARZED_SQL_PASSWORD           = $SQLPass
+    'ConnectionStrings__Default'    = $sqlConnStr   # .NET backend reads this
+    PORT                            = '4173'   # solarzed-web only; Next.js uses --port 3000 explicitly
 }
 foreach ($kv in $envVars.GetEnumerator()) {
     [System.Environment]::SetEnvironmentVariable($kv.Key, $kv.Value, 'Machine')
