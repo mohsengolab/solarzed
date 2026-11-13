@@ -95,6 +95,7 @@ $envVars = @{
     SOLARZED_SQL_USER               = 'sa'
     SOLARZED_SQL_PASSWORD           = $SQLPass
     'ConnectionStrings__Default'    = $sqlConnStr   # .NET backend reads this
+    ASPNETCORE_URLS                 = 'http://127.0.0.1:5010'  # port IIS ARR proxies to
     PORT                            = '4173'   # solarzed-web only; Next.js uses --port 3000 explicitly
 }
 foreach ($kv in $envVars.GetEnumerator()) {
