@@ -74,6 +74,9 @@ Pop-Location
 # -- 3. Build Next.js --
 Log-Info "Building Next.js frontend..."
 Push-Location "$AppDir\frontend"
+# Rewrites in next.config.ts are baked into .next/routes-manifest.json at build time.
+$env:BACKEND_URL = 'http://127.0.0.1:5010'
+[System.IO.File]::WriteAllText("$AppDir\frontend\.env.local", "BACKEND_URL=http://127.0.0.1:5010", [System.Text.Encoding]::UTF8)
 npm install --silent
 if ($LASTEXITCODE -ne 0) { Log-Err "npm install (frontend) failed"; exit 1 }
 npm run build
@@ -140,12 +143,6 @@ module.exports = {
 $ecosystemPath = "$AppDir\ecosystem.config.js"
 [System.IO.File]::WriteAllText($ecosystemPath, $ecosystem, [System.Text.Encoding]::UTF8)
 Log-Ok "ecosystem.config.js written"
-
-# -- Write frontend .env.local (BACKEND_URL must match ASPNETCORE_URLS port) --
-$frontendEnv = "BACKEND_URL=http://127.0.0.1:5010"
-[System.IO.File]::WriteAllText("$AppDir\frontend\.env.local", $frontendEnv, [System.Text.Encoding]::UTF8)
-Log-Ok "frontend/.env.local written (BACKEND_URL=http://127.0.0.1:5010)"
-
 # -- 7. PM2 zero-downtime reload --
 # startOrReload: starts processes that are new, reloads ones already running.
 # Avoids ConvertFrom-Json failure on PM2's JSON with duplicate keys (username/USERNAME).
