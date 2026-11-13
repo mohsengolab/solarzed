@@ -96,6 +96,7 @@ $envVars = @{
     SOLARZED_SQL_PASSWORD           = $SQLPass
     'ConnectionStrings__Default'    = $sqlConnStr   # .NET backend reads this
     ASPNETCORE_URLS                 = 'http://127.0.0.1:5010'  # port IIS ARR proxies to
+    BACKEND_URL                     = 'http://127.0.0.1:5010'  # Next.js → .NET API (server-side)
     PORT                            = '4173'   # solarzed-web only; Next.js uses --port 3000 explicitly
 }
 foreach ($kv in $envVars.GetEnumerator()) {
@@ -139,6 +140,11 @@ module.exports = {
 $ecosystemPath = "$AppDir\ecosystem.config.js"
 [System.IO.File]::WriteAllText($ecosystemPath, $ecosystem, [System.Text.Encoding]::UTF8)
 Log-Ok "ecosystem.config.js written"
+
+# -- Write frontend .env.local (BACKEND_URL must match ASPNETCORE_URLS port) --
+$frontendEnv = "BACKEND_URL=http://127.0.0.1:5010"
+[System.IO.File]::WriteAllText("$AppDir\frontend\.env.local", $frontendEnv, [System.Text.Encoding]::UTF8)
+Log-Ok "frontend/.env.local written (BACKEND_URL=http://127.0.0.1:5010)"
 
 # -- 7. PM2 zero-downtime reload --
 # startOrReload: starts processes that are new, reloads ones already running.
