@@ -26,6 +26,10 @@ public class Roll
     public RollQc Qc { get; set; } = RollQc.Pending;
     public RollStatus Status { get; set; } = RollStatus.InStock;
 
+    // Physical roll dimensions
+    [Column(TypeName = "decimal(7,2)")] public decimal? WidthCm { get; set; }
+    [Column(TypeName = "decimal(7,2)")] public decimal? LengthM { get; set; }
+
     public DateTime ReceivedAt { get; set; } = DateTime.UtcNow;
 
     [Column(TypeName = "nvarchar(max)")]

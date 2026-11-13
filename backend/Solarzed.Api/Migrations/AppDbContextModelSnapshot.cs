@@ -272,6 +272,9 @@ namespace Solarzed.Api.Migrations
                         .IsRequired()
                         .HasColumnType("nvarchar(max)");
 
+                    b.Property<decimal?>("LengthM")
+                        .HasColumnType("decimal(7,2)");
+
                     b.Property<string>("ModelCode")
                         .IsRequired()
                         .HasMaxLength(24)
@@ -293,6 +296,9 @@ namespace Solarzed.Api.Migrations
 
                     b.Property<int>("Type")
                         .HasColumnType("int");
+
+                    b.Property<decimal?>("WidthCm")
+                        .HasColumnType("decimal(7,2)");
 
                     b.HasKey("Id");
 

@@ -258,7 +258,7 @@ public class AdminController(AppDbContext db, IConfiguration cfg) : ControllerBa
         {
             items = result.Items.Select(r => new
             {
-                r.Id, r.ModelCode, r.Type, r.Batch, r.Supplier, r.HistoryJson,
+                r.Id, r.ModelCode, r.Type, r.Batch, r.Supplier, r.HistoryJson, r.WidthCm, r.LengthM,
                 Qc = r.Qc.ToString().ToLower(), Status = r.Status.ToString().ToLower(),
                 r.ReceivedAt,
                 Installs = counts.GetValueOrDefault(r.Id, 0)
@@ -282,6 +282,25 @@ public class AdminController(AppDbContext db, IConfiguration cfg) : ControllerBa
         var product = await db.Products.FindAsync(req.ModelCode.ToUpperInvariant());
         if (product != null && (product.Archived || product.Type != type))
             return BadRequest(new { error = "Product is archived or its type does not match." });
+        if (req.WidthCm is { } w && (w <= 0 || w > 1000)) return BadRequest(new { error = "Width must be between 0 and 1000 cm." });
+        if (req.LengthM is { } l && (l <= 0 || l > 10000)) return BadRequest(new { error = "Length must be between 0 and 10000 m." });
+        if (req.ThicknessMil is { } th && (th <= 0 || th > 20)) return BadRequest(new { error = "Thickness must be between 0 and 20 mil." });
+        if (req.Vlt is < 0 or > 100 || req.Irr is < 0 or > 100 || req.Uv is < 0 or > 100 || req.Tser is < 0 or > 100)
+            return BadRequest(new { error = "VLT, IRR, UV and TSER must be 0–100%." });
+        if (req.WarrantyYears is < 1 or > 30) return BadRequest(new { error = "Warranty years must be 1–30." });
+
+        // Technical specs belong to the product (model); store any values entered at receipt on it.
+        if (product != null)
+        {
+            var changed = false;
+            if (req.ThicknessMil is { } t && product.ThicknessMil != t) { product.ThicknessMil = t; changed = true; }
+            if (req.Vlt is { } vlt && product.Vlt != vlt) { product.Vlt = vlt; changed = true; }
+            if (req.Irr is { } irr && product.Irr != irr) { product.Irr = irr; changed = true; }
+            if (req.Uv is { } uv && product.Uv != uv) { product.Uv = uv; changed = true; }
+            if (req.Tser is { } tser && product.Tser != tser) { product.Tser = tser; changed = true; }
+            if (req.WarrantyYears is { } wy && product.WarrantyYears != wy) { product.WarrantyYears = wy; changed = true; }
+            if (changed) product.UpdatedAt = DateTime.UtcNow;
+        }
 
         var rolls = await RollService.CreateRolls(req, db);
         return Ok(rolls.Select(r => new { r.Id, r.ModelCode, r.Type, r.Batch }));

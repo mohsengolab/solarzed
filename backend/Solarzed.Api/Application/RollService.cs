@@ -6,7 +6,9 @@ using Solarzed.Api.Infrastructure;
 namespace Solarzed.Api.Application;
 
 public record CreateRollsRequest(
-    string ModelCode, string Type, string Batch, string Supplier, string Qc, int Quantity);
+    string ModelCode, string Type, string Batch, string Supplier, string Qc, int Quantity,
+    decimal? WidthCm = null, decimal? LengthM = null,
+    decimal? ThicknessMil = null, int? Vlt = null, int? Irr = null, int? Uv = null, int? Tser = null, int? WarrantyYears = null);
 
 public static class RollService
 {
@@ -50,6 +52,8 @@ public static class RollService
                 Batch = req.Batch,
                 Supplier = req.Supplier,
                 Qc = qc,
+                WidthCm = req.WidthCm,
+                LengthM = req.LengthM,
                 Status = RollStatus.InStock,
                 HistoryJson = JsonSerializer.Serialize(new[] {
                     new { at = DateTime.UtcNow, action = "received", note = $"batch {req.Batch}" }

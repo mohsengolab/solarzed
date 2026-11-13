@@ -156,5 +156,5 @@ public class CustomerSearch
     public int PageSize { get; set; } = 20;
 }
 public record ProductRequest(string Code, string Name, string Type, string? Series, string? Description, bool Archived,
-    decimal? ThicknessMil, int? Vlt, int? Irr, int? Uv, int? Tser, int? WarrantyYears);
+    decimal? ThicknessMil = null, int? Vlt = null, int? Irr = null, int? Uv = null, int? Tser = null, int? WarrantyYears = null);
 public record ChangePasswordRequest(string Username, string CurrentPassword, string NewPassword);

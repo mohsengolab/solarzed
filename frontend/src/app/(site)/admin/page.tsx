@@ -731,14 +731,28 @@ function WarrantiesPanel() {
 
 // ── Rolls ─────────────────────────────────────────────────────────────────────
 
-type RollRow = { id: string; modelCode: string; type: string; batch: string; supplier: string; qc: string; status: string; installs: number; historyJson: string; receivedAt: string };
+type RollRow = { id: string; modelCode: string; type: string; batch: string; supplier: string; qc: string; status: string; installs: number; historyJson: string; receivedAt: string; widthCm?: number | null; lengthM?: number | null };
+type SpecKey = "thicknessMil" | "vlt" | "irr" | "uv" | "tser" | "warrantyYears";
+const SPEC_FIELDS: { key: SpecKey; label: string; min: number; max: number; step: number; placeholder: string }[] = [
+  { key: "thicknessMil", label: "ضخامت (Mil)", min: 0.1, max: 20, step: 0.1, placeholder: "مثلاً 2" },
+  { key: "vlt", label: "VLT%", min: 0, max: 100, step: 1, placeholder: "عبور نور مرئی" },
+  { key: "irr", label: "IRR% (950nm)", min: 0, max: 100, step: 1, placeholder: "رد مادون قرمز" },
+  { key: "uv", label: "UV%", min: 0, max: 100, step: 1, placeholder: "رد UV" },
+  { key: "tser", label: "TSER%", min: 0, max: 100, step: 1, placeholder: "رد کل انرژی خورشیدی" },
+  { key: "warrantyYears", label: "گارانتی (سال)", min: 1, max: 30, step: 1, placeholder: "مثلاً 7" },
+];
+const SPEC_EMPTY: Record<SpecKey, string> = { thicknessMil: "", vlt: "", irr: "", uv: "", tser: "", warrantyYears: "" };
+const specsOf = (p: Partial<Record<SpecKey, number | null>>): Record<SpecKey, string> =>
+  Object.fromEntries(SPEC_FIELDS.map(s => [s.key, p[s.key] != null ? String(p[s.key]) : ""])) as Record<SpecKey, string>;
 const R_EMPTY = { q: "", model: "", type: "", qc: "", status: "", supplier: "", batch: "", receivedFrom: "", receivedTo: "", hasInstalls: "" };
 
 function RollsPanel() {
-  const [form, setForm] = useState({ modelCode: "", type: "tint", batch: "", supplier: "", qc: "pending", quantity: "1" });
+  const [form, setForm] = useState({ modelCode: "", type: "tint", batch: "", supplier: "", qc: "pending", quantity: "1", widthCm: "", lengthM: "" });
+  const [specs, setSpecs] = useState<Record<SpecKey, string>>(SPEC_EMPTY);
   const [msg, setMsg] = useState("");
   const [saving, setSaving] = useState(false);
-  const [products, setProducts] = useState<{ code: string; name: string; type: string; archived: boolean }[]>([]);
+  const [products, setProducts] = useState<({ code: string; name: string; type: string; archived: boolean } & Partial<Record<SpecKey, number | null>>)[]>([]);
+  const selectedProduct = products.find(p => p.code === form.modelCode.toUpperCase());
   const [f, setF] = useState(R_EMPTY);
   const [edit, setEdit] = useState<RollRow | null>(null);
   const [note, setNote] = useState("");
@@ -759,7 +773,11 @@ function RollsPanel() {
     e.preventDefault();
     setSaving(true); setMsg("");
     try {
-      await adminCreateRolls({ ...form, quantity: Number(form.quantity) });
+      const num = (v: string) => (v.trim() === "" ? null : Number(v));
+      const specValues = Object.fromEntries(SPEC_FIELDS.map(s => [s.key, num(specs[s.key])]));
+      await adminCreateRolls({ ...form, quantity: Number(form.quantity), widthCm: num(form.widthCm), lengthM: num(form.lengthM), ...specValues });
+      if (selectedProduct) setProducts(ps => ps.map(p => p.code === selectedProduct.code
+        ? { ...p, ...Object.fromEntries(Object.entries(specValues).filter(([, v]) => v != null)) } : p));
       setMsg("رول‌ها ساخته شدند.");
       list.reload();
     } catch (ex: unknown) {
@@ -773,7 +791,7 @@ function RollsPanel() {
     try {
       const all = await adminRollsSearch<RollRow>(list.exportQuery);
       downloadCsv("rolls", all.items, [["id", "شناسه رول"], ["modelCode", "مدل"], ["type", "نوع"], ["batch", "بچ"], ["supplier", "تأمین‌کننده"],
-        ["qc", "QC"], ["status", "وضعیت"], ["installs", "نصب‌ها"], ["receivedAt", "دریافت"]]);
+        ["widthCm", "عرض (cm)"], ["lengthM", "طول (m)"], ["qc", "QC"], ["status", "وضعیت"], ["installs", "نصب‌ها"], ["receivedAt", "دریافت"]]);
     } catch (e) { setMsg(fa(errorText(e, "خروجی ناموفق بود."))); }
   }
 
@@ -785,7 +803,7 @@ function RollsPanel() {
         <h2>دریافت رول</h2>
         <form onSubmit={onSubmit} className={styles.adminForm}>
           <label>محصول تعریف‌شده
-            <select value={products.some(p => p.code === form.modelCode) ? form.modelCode : ""} onChange={e => { const p = products.find(p => p.code === e.target.value); if (p) setForm(f => ({ ...f, modelCode: p.code, type: p.type })); }}>
+            <select value={products.some(p => p.code === form.modelCode) ? form.modelCode : ""} onChange={e => { const p = products.find(p => p.code === e.target.value); if (p) { setForm(f => ({ ...f, modelCode: p.code, type: p.type })); setSpecs(specsOf(p)); } }}>
               <option value="">یک محصول انتخاب کنید یا مدل موجود را پایین وارد کنید</option>
               {products.filter(p => !p.archived).map(p => <option key={p.code} value={p.code}>{p.code} · {p.name}</option>)}
             </select>
@@ -818,7 +836,29 @@ function RollsPanel() {
               <input type="number" required min="1" max="200" value={form.quantity}
                 onChange={e => setForm(p => ({ ...p, quantity: e.target.value }))} />
             </label>
+            <label>عرض رول (سانتی‌متر)
+              <input type="number" required min="1" max="1000" step="0.1" placeholder="مثلاً 152" value={form.widthCm} dir="ltr"
+                onChange={e => setForm(p => ({ ...p, widthCm: e.target.value }))} />
+            </label>
+            <label>طول رول (متر)
+              <input type="number" required min="1" max="10000" step="0.1" placeholder="مثلاً 30" value={form.lengthM} dir="ltr"
+                onChange={e => setForm(p => ({ ...p, lengthM: e.target.value }))} />
+            </label>
           </div>
+          <fieldset className={styles.row2} style={{ border: "1px solid rgba(127,127,127,.25)", borderRadius: 12, padding: 12 }}>
+            <legend style={{ padding: "0 6px", fontWeight: 600 }}>
+              مشخصات فنی محصول {selectedProduct ? `(${selectedProduct.code})` : ""}
+            </legend>
+            {SPEC_FIELDS.map(sf => (
+              <label key={sf.key}>{sf.label}
+                <input type="number" required={!!selectedProduct} min={sf.min} max={sf.max} step={sf.step} placeholder={sf.placeholder}
+                  value={specs[sf.key]} dir="ltr" onChange={e => setSpecs(s => ({ ...s, [sf.key]: e.target.value }))} />
+              </label>
+            ))}
+            <p style={{ gridColumn: "1 / -1", margin: 0, fontSize: 13, opacity: .75 }}>
+              {selectedProduct ? "این مقادیر روی خود محصول ذخیره می‌شوند و برای همه رول‌های این مدل یکسان است." : "برای ثبت مشخصات فنی، ابتدا محصول تعریف‌شده را از لیست بالا انتخاب کنید."}
+            </p>
+          </fieldset>
           <button type="submit" className={styles.btnPrimary} disabled={saving}>
             {saving ? "در حال ساخت…" : "ساخت شناسه رول ↗"}
           </button>
@@ -846,7 +886,7 @@ function RollsPanel() {
       <div className={styles.card}>
         <table className={`${styles.table} ${list.loading ? styles.tableBusy : ""}`}>
           <thead><tr><SortTh column="id" label="شناسه رول" {...sortProps} /><SortTh column="modelCode" label="مدل" {...sortProps} /><SortTh column="type" label="نوع" {...sortProps} />
-            <SortTh column="batch" label="بچ" {...sortProps} /><SortTh column="supplier" label="تأمین‌کننده" {...sortProps} /><SortTh column="qc" label="QC" {...sortProps} />
+            <SortTh column="batch" label="بچ" {...sortProps} /><th>ابعاد (cm × m)</th><SortTh column="supplier" label="تأمین‌کننده" {...sortProps} /><SortTh column="qc" label="QC" {...sortProps} />
             <SortTh column="status" label="وضعیت" {...sortProps} /><th>نصب‌ها</th><SortTh column="receivedAt" label="دریافت" {...sortProps} /></tr></thead>
           <tbody>
             {list.items.map(r => (
@@ -855,6 +895,7 @@ function RollsPanel() {
                 <td>{r.modelCode}</td>
                 <td>{r.type}</td>
                 <td>{r.batch}</td>
+                <td dir="ltr">{r.widthCm != null && r.lengthM != null ? `${r.widthCm} × ${r.lengthM}` : "—"}</td>
                 <td>{r.supplier}</td>
                 <td><Badge value={r.qc} /></td>
                 <td>{fa(r.status)} <button type="button" className={styles.ghost} onClick={() => { setEdit(r); setNote(""); setMsg(""); }}>مدیریت {r.id}</button></td>
