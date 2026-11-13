@@ -1,4 +1,6 @@
 using System.Text.Json;
+using Microsoft.AspNetCore.Authorization;
+using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
 using Solarzed.Api.Application;
@@ -13,7 +15,8 @@ public class WarrantyController(AppDbContext db) : ControllerBase
     [HttpPost("register")]
     public async Task<IActionResult> Register([FromBody] RegisterRequest req)
     {
-        var (err, entity) = WarrantyService.Validate(req);
+        var setting = await db.CoverageSettings.AsNoTracking().FirstOrDefaultAsync();
+        var (err, entity) = WarrantyService.Validate(req, setting?.WarrantyCodeLength ?? 16);
         if (err != null) return BadRequest(new { error = err });
 
         // Duplicate check: same FilmSerial + InvoiceNumber

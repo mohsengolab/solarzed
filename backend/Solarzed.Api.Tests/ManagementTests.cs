@@ -61,7 +61,7 @@ public class ManagementTests
     public async Task PasswordChangeRequiresCurrentPasswordAndPersistsHash()
     {
         using var db = Database(); db.AdminUsers.Add(new AdminUser { PasswordHash = BCrypt.Net.BCrypt.HashPassword("old-test-password") }); await db.SaveChangesAsync();
-        var api = new ManagementController(db);
+        var api = new AccountController(db);
         Assert.IsType<BadRequestObjectResult>(await api.Password(new("admin", "wrong", "new-test-password")));
         Assert.IsType<OkObjectResult>(await api.Password(new("admin", "old-test-password", "new-test-password")));
         Assert.True(BCrypt.Net.BCrypt.Verify("new-test-password", (await db.AdminUsers.SingleAsync()).PasswordHash));

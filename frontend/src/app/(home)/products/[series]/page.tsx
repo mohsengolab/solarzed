@@ -21,7 +21,21 @@ const find = async (params: Props["params"]) => {
 
 export async function generateMetadata({ params }: Props): Promise<Metadata> {
   const series = await find(params);
-  return series ? { title: `${series.name} | Solarzed`, description: series.tagline } : {};
+  if (!series) return {};
+  const cat = categoryOf(series.category);
+  const { series: id } = await params;
+  return {
+    title: series.name,
+    description: `${series.tagline} — ${cat.label} by Solarzed. View all models, shades and product specifications.`,
+    keywords: [series.name, cat.label, "Solarzed", "automotive film", "window tint"],
+    alternates: { canonical: `https://solarzed.com/products/${id}` },
+    openGraph: {
+      url: `https://solarzed.com/products/${id}`,
+      title: `${series.name} | Solarzed`,
+      description: `${series.tagline} — ${cat.label} by Solarzed.`,
+      images: series.banner ? [{ url: series.banner, alt: `${series.name} window film` }] : [{ url: "/assets/solarzed-box.jpg", alt: "Solarzed product" }],
+    },
+  };
 }
 
 // Port of the static site's products.html (Carbins-style series page): one page per series.
@@ -33,8 +47,20 @@ export default async function SeriesPage({ params, searchParams }: Props) {
   const cat = categoryOf(series.category);
   const start = Math.max(0, series.products.findIndex(p => p.model === model));
 
+  const { series: seriesId } = await params;
+  const breadcrumbSchema = {
+    "@context": "https://schema.org",
+    "@type": "BreadcrumbList",
+    itemListElement: [
+      { "@type": "ListItem", position: 1, name: "Home", item: "https://solarzed.com" },
+      { "@type": "ListItem", position: 2, name: "Products", item: "https://solarzed.com/products" },
+      { "@type": "ListItem", position: 3, name: series.name, item: `https://solarzed.com/products/${seriesId}` },
+    ],
+  };
+
   return (
     <main className="series-page">
+        <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: JSON.stringify(breadcrumbSchema) }} />
         <div className="wrap series-crumbs">
           <div className="breadcrumb">
             <Link href="/">Home</Link><span>/</span><Link href="/products">Products</Link><span>/</span><span>{series.name}</span>

@@ -1,4 +1,5 @@
 using System.IO.Compression;
+using System.Security.Claims;
 using System.Text;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.AspNetCore.HttpOverrides;
@@ -99,19 +100,28 @@ builder.Services.AddAuthentication(JwtBearerDefaults.AuthenticationScheme)
                     ctx.Token = cookie;
                 return Task.CompletedTask;
             },
-            // Tokens issued before a password change are rejected.
+            // Tokens issued before a password change, role change or deactivation are rejected.
             OnTokenValidated = async ctx =>
             {
                 var name = ctx.Principal?.Identity?.Name;
                 var stamp = ctx.Principal?.FindFirst(AdminAuth.StampClaim)?.Value;
+                var role = ctx.Principal?.FindFirst(ClaimTypes.Role)?.Value;
                 var db = ctx.HttpContext.RequestServices.GetRequiredService<AppDbContext>();
-                var hash = name == null ? null : await db.AdminUsers.Where(a => a.Username == name).Select(a => a.PasswordHash).FirstOrDefaultAsync();
-                if (hash == null || stamp != AdminAuth.Stamp(hash)) ctx.Fail("Session revoked.");
+                var account = name == null ? null : await db.AdminUsers
+                    .Where(a => a.Username == name)
+                    .Select(a => new { a.PasswordHash, a.Role, a.Active })
+                    .FirstOrDefaultAsync();
+                if (account == null || !account.Active || stamp != AdminAuth.Stamp(account.PasswordHash) || role != account.Role)
+                    ctx.Fail("Session revoked.");
             },
         };
     });
 builder.Services.AddAuthorization(opt =>
-    opt.AddPolicy("AdminPolicy", p => p.RequireRole("admin")));
+{
+    opt.AddPolicy("AdminPolicy", p => p.RequireRole("admin"));
+    opt.AddPolicy("CartonPolicy", p => p.RequireRole("carton"));
+    opt.AddPolicy("StaffPolicy", p => p.RequireRole("admin", "carton"));
+});
 
 // ── Controllers & CORS ───────────────────────────────────────────────────────
 builder.Services.AddControllers().AddJsonOptions(options =>
@@ -141,9 +151,31 @@ using (var scope = app.Services.CreateScope())
         var pw = builder.Configuration["AdminPassword"]
             ?? Environment.GetEnvironmentVariable("SOLARZED_ADMIN_PASSWORD")
             ?? Convert.ToHexString(System.Security.Cryptography.RandomNumberGenerator.GetBytes(8));
-        db.AdminUsers.Add(new AdminUser { PasswordHash = BCrypt.Net.BCrypt.HashPassword(pw) });
+        db.AdminUsers.Add(new AdminUser { Username = "admin", Role = "admin", Active = true, PasswordHash = BCrypt.Net.BCrypt.HashPassword(pw) });
         db.SaveChanges();
         Console.WriteLine($"\n  SOLARZED ADMIN PASSWORD: {pw}\n");
+    }
+
+    // An explicit AdminPassword / SOLARZED_ADMIN_PASSWORD is authoritative: it also resets an
+    // existing admin password, so the operator never has to know the original random one.
+    var configured = builder.Configuration["AdminPassword"] ?? Environment.GetEnvironmentVariable("SOLARZED_ADMIN_PASSWORD");
+    if (!string.IsNullOrWhiteSpace(configured))
+    {
+        var admin = db.AdminUsers.FirstOrDefault(a => a.Username == "admin");
+        if (admin == null)
+        {
+            db.AdminUsers.Add(new AdminUser { Username = "admin", Role = "admin", Active = true, PasswordHash = BCrypt.Net.BCrypt.HashPassword(configured) });
+            db.SaveChanges();
+            Console.WriteLine("\n  SOLARZED ADMIN ACCOUNT CREATED FROM CONFIGURATION\n");
+        }
+        else if (!BCrypt.Net.BCrypt.Verify(configured, admin.PasswordHash))
+        {
+            admin.PasswordHash = BCrypt.Net.BCrypt.HashPassword(configured);
+            admin.Role = "admin";
+            admin.Active = true;
+            db.SaveChanges();
+            Console.WriteLine("\n  SOLARZED ADMIN PASSWORD UPDATED FROM CONFIGURATION\n");
+        }
     }
 
     if (!db.CoverageSettings.Any())

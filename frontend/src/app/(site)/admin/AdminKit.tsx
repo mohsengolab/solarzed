@@ -1,11 +1,11 @@
 "use client";
 
 import { useCallback, useEffect, useState, type ReactNode } from "react";
-import { qs, type Paged } from "@/lib/api";
+import { qs, fa, type Paged } from "@/lib/api";
 import s from "./admin.module.css";
 
 export type Filters = Record<string, string | number | boolean | null | undefined>;
-export const errorText = (e: unknown, fallback = "Request failed.") => e instanceof Error ? e.message : fallback;
+export const errorText = (e: unknown, fallback = "درخواست ناموفق بود.") => e instanceof Error ? e.message : fallback;
 
 /**
  * Debounced, paged, sortable AJAX search. Changing a filter returns to page 1; stale responses
@@ -29,7 +29,7 @@ export function usePaged<T>(load: (query: string) => Promise<Paged<T>>, filters:
       setLoading(true);
       load(query)
         .then(d => { if (current) { setData(d); setError(""); } })
-        .catch(e => { if (current) setError(errorText(e, "Could not load results.")); })
+        .catch(e => { if (current) setError(errorText(e, "بارگذاری نتایج ناموفق بود.")); })
         .finally(() => { if (current) setLoading(false); });
     }, 250);
     return () => { current = false; clearTimeout(timer); };
@@ -58,15 +58,16 @@ export function SortTh({ column, label, sort, onSort }: { column: string; label:
 export function Pager({ page, pageSize, total, loading, onPage }: { page: number; pageSize: number; total: number; loading: boolean; onPage: (p: number) => void }) {
   const pages = Math.max(1, Math.ceil(total / pageSize));
   const from = total === 0 ? 0 : (page - 1) * pageSize + 1;
+  const number = (n: number) => n.toLocaleString("fa-IR");
   return (
     <div className={s.pager} aria-live="polite">
-      <span>{loading ? "Loading…" : `${from.toLocaleString()}–${Math.min(page * pageSize, total).toLocaleString()} of ${total.toLocaleString()}`}</span>
+      <span>{loading ? fa("Loading…") : `${number(from)}–${number(Math.min(page * pageSize, total))} ${fa("of")} ${number(total)}`}</span>
       <div>
-        <button type="button" className={s.ghost} disabled={page <= 1} onClick={() => onPage(1)} aria-label="First page">«</button>
-        <button type="button" className={s.ghost} disabled={page <= 1} onClick={() => onPage(page - 1)}>Previous</button>
-        <span>Page {page} / {pages}</span>
-        <button type="button" className={s.ghost} disabled={page >= pages} onClick={() => onPage(page + 1)}>Next</button>
-        <button type="button" className={s.ghost} disabled={page >= pages} onClick={() => onPage(pages)} aria-label="Last page">»</button>
+        <button type="button" className={s.ghost} disabled={page <= 1} onClick={() => onPage(1)} aria-label={fa("First page")}>«</button>
+        <button type="button" className={s.ghost} disabled={page <= 1} onClick={() => onPage(page - 1)}>{fa("Previous")}</button>
+        <span>{fa("Page ")}{number(page)} / {number(pages)}</span>
+        <button type="button" className={s.ghost} disabled={page >= pages} onClick={() => onPage(page + 1)}>{fa("Next")}</button>
+        <button type="button" className={s.ghost} disabled={page >= pages} onClick={() => onPage(pages)} aria-label={fa("Last page")}>»</button>
       </div>
     </div>
   );
@@ -77,8 +78,8 @@ export function FilterBar({ children, onClear, active }: { children: ReactNode; 
     <div className={`${s.card} ${s.filterBar}`} role="search">
       <div className={s.filterGrid}>{children}</div>
       <div className={s.filterFoot}>
-        <span>{active ? `${active} filter${active > 1 ? "s" : ""} active` : "No filters"}</span>
-        <button type="button" className={s.ghost} onClick={onClear} disabled={!active}>Clear filters</button>
+        <span>{active ? `${active.toLocaleString("fa-IR")} ${fa(active > 1 ? "filters active" : "filter active")}` : fa("No filters")}</span>
+        <button type="button" className={s.ghost} onClick={onClear} disabled={!active}>{fa("Clear filters")}</button>
       </div>
     </div>
   );

@@ -15,7 +15,7 @@ namespace Solarzed.Api.Controllers;
 
 [ApiController]
 [Route("api/admin")]
-[Authorize(Policy = "AdminPolicy")]
+[Authorize(Policy = "StaffPolicy")]
 public class AdminController(AppDbContext db, IConfiguration cfg) : ControllerBase
 {
     string JwtKey => cfg["Jwt:Key"] ?? throw new InvalidOperationException("Jwt:Key missing");
@@ -42,7 +42,8 @@ public class AdminController(AppDbContext db, IConfiguration cfg) : ControllerBa
 
         var admin = await db.AdminUsers.FirstOrDefaultAsync(x => x.Username == username);
         // Always run one bcrypt verification so timing does not reveal unknown usernames.
-        var ok = BCrypt.Net.BCrypt.Verify(password, admin?.PasswordHash ?? AdminAuth.DummyHash) && admin != null;
+        var ok = BCrypt.Net.BCrypt.Verify(password, admin?.PasswordHash ?? AdminAuth.DummyHash) &&
+                 admin != null && admin.Active && (admin.Role == "admin" || admin.Role == "carton");
         if (!ok)
         {
             throttle?.Fail(username);
@@ -59,11 +60,18 @@ public class AdminController(AppDbContext db, IConfiguration cfg) : ControllerBa
                 Path = "/api", MaxAge = AdminAuth.Lifetime, IsEssential = true,
             });
         // The token is also returned for API clients (scripts/tests). The admin UI relies on the HttpOnly cookie.
-        return Ok(new { token, username = admin!.Username, expiresAt = DateTime.UtcNow.Add(AdminAuth.Lifetime) });
+        return Ok(new { token, username = admin!.Username, role = admin.Role, expiresAt = DateTime.UtcNow.Add(AdminAuth.Lifetime) });
     }
 
     [HttpGet("session")]
-    public IActionResult Session() => Ok(new { username = User.Identity?.Name ?? "admin" });
+    public async Task<IActionResult> Session()
+    {
+        var name = User.Identity?.Name;
+        var role = User.FindFirst(ClaimTypes.Role)?.Value;
+        if (string.IsNullOrEmpty(role) && name != null)
+            role = await db.AdminUsers.Where(a => a.Username == name).Select(a => a.Role).FirstOrDefaultAsync();
+        return Ok(new { username = name ?? "admin", role = role ?? "admin" });
+    }
 
     [AllowAnonymous]
     [HttpPost("logout")]
@@ -81,7 +89,7 @@ public class AdminController(AppDbContext db, IConfiguration cfg) : ControllerBa
             issuer: AdminAuth.Issuer,
             audience: AdminAuth.Audience,
             claims: [
-                new Claim(ClaimTypes.Role, "admin"),
+                new Claim(ClaimTypes.Role, admin.Role),
                 new Claim(ClaimTypes.Name, admin.Username),
                 new Claim(AdminAuth.StampClaim, AdminAuth.Stamp(admin.PasswordHash)),
                 new Claim(JwtRegisteredClaimNames.Jti, Guid.NewGuid().ToString("N")),
@@ -95,6 +103,7 @@ public class AdminController(AppDbContext db, IConfiguration cfg) : ControllerBa
     // ── Overview ────────────────────────────────────────────────────────────
 
     [HttpGet("overview")]
+    [Authorize(Policy = "AdminPolicy")]
     public async Task<IActionResult> Overview()
     {
         var total = await db.WarrantyRegistrations.CountAsync();
@@ -123,6 +132,7 @@ public class AdminController(AppDbContext db, IConfiguration cfg) : ControllerBa
     };
 
     [HttpGet("warranties")]
+    [Authorize(Policy = "AdminPolicy")]
     public async Task<IActionResult> Warranties([FromQuery] WarrantySearch f, CancellationToken ct)
     {
         var query = db.WarrantyRegistrations.AsNoTracking();
@@ -163,6 +173,7 @@ public class AdminController(AppDbContext db, IConfiguration cfg) : ControllerBa
     }
 
     [HttpPost("warranties/{code}/decision")]
+    [Authorize(Policy = "AdminPolicy")]
     public async Task<IActionResult> Decision(string code, [FromBody] DecisionRequest req)
     {
         var w = await db.WarrantyRegistrations.FirstOrDefaultAsync(x => x.Code == code);
@@ -257,6 +268,7 @@ public class AdminController(AppDbContext db, IConfiguration cfg) : ControllerBa
     }
 
     [HttpPost("rolls")]
+    [Authorize(Policy = "AdminPolicy")]
     public async Task<IActionResult> ReceiveRolls([FromBody] CreateRollsRequest req)
     {
         if (string.IsNullOrWhiteSpace(req.ModelCode)) return BadRequest(new { error = "modelCode required" });
@@ -276,6 +288,7 @@ public class AdminController(AppDbContext db, IConfiguration cfg) : ControllerBa
     }
 
     [HttpPost("rolls/{id}")]
+    [Authorize(Policy = "AdminPolicy")]
     public async Task<IActionResult> UpdateRoll(string id, [FromBody] UpdateRollRequest req)
     {
         var roll = await db.Rolls.FirstOrDefaultAsync(r => r.Id == id);
@@ -317,11 +330,13 @@ public class AdminController(AppDbContext db, IConfiguration cfg) : ControllerBa
             {
                 tint = new { film = s.TintFilmYears, install = s.TintInstallYears },
                 ppf = new { film = s.PpfFilmYears, install = s.PpfInstallYears }
-            }
+            },
+            warrantyCodeLength = s.WarrantyCodeLength
         });
     }
 
     [HttpPost("settings")]
+    [Authorize(Policy = "AdminPolicy")]
     public async Task<IActionResult> SaveSettings([FromBody] SettingsRequest req)
     {
         foreach (var period in new[] { req.Durations?.Tint, req.Durations?.Ppf })
@@ -339,6 +354,11 @@ public class AdminController(AppDbContext db, IConfiguration cfg) : ControllerBa
         s.TintInstallYears = req.Durations?.Tint?.Install;
         s.PpfFilmYears = req.Durations?.Ppf?.Film;
         s.PpfInstallYears = req.Durations?.Ppf?.Install;
+        if (req.WarrantyCodeLength is int len)
+        {
+            if (len is < 6 or > 29) return BadRequest(new { error = "Warranty code length must be between 6 and 29 characters." });
+            s.WarrantyCodeLength = len;
+        }
         s.UpdatedAt = DateTime.UtcNow;
 
         await db.SaveChangesAsync();
@@ -387,6 +407,6 @@ public class RollSearch
 }
 public record DecisionRequest(string Status, string? Note);
 public record UpdateRollRequest(string? Status, string? Qc, string? Note);
-public record SettingsRequest(DurationsDto? Durations);
+public record SettingsRequest(DurationsDto? Durations, int? WarrantyCodeLength);
 public record DurationsDto(PeriodDto? Tint, PeriodDto? Ppf);
 public record PeriodDto(int? Film, int? Install);

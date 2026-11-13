@@ -1,7 +1,8 @@
 import type { NextConfig } from "next";
 
 const isDev = process.env.NODE_ENV === "development";
-const api = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:5000";
+// Server-only: browser goes through Next.js rewrite proxy, avoiding CORS on 127.0.0.1.
+const api = process.env.BACKEND_URL ?? "http://localhost:5296";
 const apiOrigin = (() => { try { return new URL(api).origin; } catch { return ""; } })();
 
 // Static (non-nonce) CSP so pages stay cacheable/prerenderable. Inline scripts are required by

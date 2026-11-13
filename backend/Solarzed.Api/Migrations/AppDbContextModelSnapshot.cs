@@ -79,10 +79,22 @@ namespace Solarzed.Api.Migrations
 
                     SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("Id"));
 
+                    b.Property<bool>("Active")
+                        .HasColumnType("bit");
+
+                    b.Property<string>("DisplayName")
+                        .HasMaxLength(100)
+                        .HasColumnType("nvarchar(100)");
+
                     b.Property<string>("PasswordHash")
                         .IsRequired()
                         .HasMaxLength(200)
                         .HasColumnType("nvarchar(200)");
+
+                    b.Property<string>("Role")
+                        .IsRequired()
+                        .HasMaxLength(20)
+                        .HasColumnType("nvarchar(20)");
 
                     b.Property<string>("Username")
                         .IsRequired()
@@ -184,6 +196,9 @@ namespace Solarzed.Api.Migrations
                     b.Property<DateTime>("UpdatedAt")
                         .HasColumnType("datetime2");
 
+                    b.Property<int>("WarrantyCodeLength")
+                        .HasColumnType("int");
+
                     b.HasKey("Id");
 
                     b.ToTable("CoverageSettings");
@@ -203,6 +218,9 @@ namespace Solarzed.Api.Migrations
                         .HasMaxLength(2000)
                         .HasColumnType("nvarchar(2000)");
 
+                    b.Property<int?>("Irr")
+                        .HasColumnType("int");
+
                     b.Property<string>("Name")
                         .IsRequired()
                         .HasMaxLength(120)
@@ -213,11 +231,26 @@ namespace Solarzed.Api.Migrations
                         .HasMaxLength(80)
                         .HasColumnType("nvarchar(80)");
 
+                    b.Property<decimal?>("ThicknessMil")
+                        .HasColumnType("decimal(5,2)");
+
+                    b.Property<int?>("Tser")
+                        .HasColumnType("int");
+
                     b.Property<int>("Type")
                         .HasColumnType("int");
 
                     b.Property<DateTime>("UpdatedAt")
                         .HasColumnType("datetime2");
+
+                    b.Property<int?>("Uv")
+                        .HasColumnType("int");
+
+                    b.Property<int?>("Vlt")
+                        .HasColumnType("int");
+
+                    b.Property<int?>("WarrantyYears")
+                        .HasColumnType("int");
 
                     b.HasKey("Code");
 

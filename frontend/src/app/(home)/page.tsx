@@ -1,8 +1,47 @@
 /* eslint-disable @next/next/no-img-element -- markup mirrors the original static homepage */
+import type { Metadata } from "next";
 import Link from "next/link";
 import HomeMotion from "./HomeMotion";
 import UvRays from "./UvRays";
 import SiteHeader, { SiteFooter } from "./_shared/SiteHeader";
+
+export const metadata: Metadata = {
+  title: "Solarzed Window Films | Automotive Tint & PPF Warranty",
+  description:
+    "Solarzed premium automotive window film and paint protection film. Register your installation, verify your warranty certificate, and explore window tint and PPF series.",
+  alternates: { canonical: "https://solarzed.com" },
+  openGraph: {
+    url: "https://solarzed.com",
+    title: "Solarzed Window Films | Automotive Tint & PPF Warranty",
+    description: "Premium automotive window film and PPF. Digital warranty certificates, traceable serials and 5-window installation maps.",
+  },
+};
+
+const organizationSchema = {
+  "@context": "https://schema.org",
+  "@type": "Organization",
+  name: "Solarzed",
+  url: "https://solarzed.com",
+  logo: "https://solarzed.com/assets/solarzed-logo.svg",
+  sameAs: ["https://instagram.com/solarzed_official"],
+  contactPoint: {
+    "@type": "ContactPoint",
+    email: "info@solarzed.com",
+    contactType: "customer service",
+  },
+};
+
+const websiteSchema = {
+  "@context": "https://schema.org",
+  "@type": "WebSite",
+  name: "Solarzed",
+  url: "https://solarzed.com",
+  potentialAction: {
+    "@type": "SearchAction",
+    target: { "@type": "EntryPoint", urlTemplate: "https://solarzed.com/warranty?q={search_term_string}" },
+    "query-input": "required name=search_term_string",
+  },
+};
 
 const MARQUEE = [
   "FILM WARRANTY", "INSTALLATION WARRANTY", "DIGITAL CERTIFICATE",
@@ -12,6 +51,14 @@ const MARQUEE = [
 export default function HomePage() {
   return (
     <div className="sv-home">
+      <script
+        type="application/ld+json"
+        dangerouslySetInnerHTML={{ __html: JSON.stringify(organizationSchema) }}
+      />
+      <script
+        type="application/ld+json"
+        dangerouslySetInnerHTML={{ __html: JSON.stringify(websiteSchema) }}
+      />
       <SiteHeader />
 
       <main>

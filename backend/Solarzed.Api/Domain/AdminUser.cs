@@ -12,4 +12,13 @@ public class AdminUser
 
     [MaxLength(200)]
     public string PasswordHash { get; set; } = default!;
+
+    // "admin" = full manager access; "carton" = carton/serial operator (no QR, no warranty code).
+    [MaxLength(20)]
+    public string Role { get; set; } = "admin";
+
+    [MaxLength(100)]
+    public string? DisplayName { get; set; }
+
+    public bool Active { get; set; } = true;
 }

@@ -95,6 +95,12 @@ public class ManagementController(AppDbContext db) : ControllerBase
         if (string.IsNullOrWhiteSpace(r.Name) || r.Name.Trim().Length > 120) return "Product name is required (maximum 120 characters).";
         if (!Enum.TryParse<WarrantyType>(r.Type, true, out var type) || !Enum.IsDefined(type)) return "Invalid product type.";
         if ((r.Series?.Length ?? 0) > 80 || (r.Description?.Length ?? 0) > 2000) return "Series or description is too long.";
+        if (r.ThicknessMil is { } thick && (thick <= 0 || thick > 20)) return "Thickness must be between 0 and 20 mil.";
+        if (r.Vlt is { } vlt && vlt is < 0 or > 100) return "VLT must be 0–100%.";
+        if (r.Irr is { } irr && irr is < 0 or > 100) return "IRR must be 0–100%.";
+        if (r.Uv is { } uv && uv is < 0 or > 100) return "UV must be 0–100%.";
+        if (r.Tser is { } tser && tser is < 0 or > 100) return "TSER must be 0–100%.";
+        if (r.WarrantyYears is { } wy && wy is < 1 or > 30) return "Warranty years must be 1–30.";
         return null;
     }
     static void Apply(Product p, ProductRequest r)
@@ -102,6 +108,8 @@ public class ManagementController(AppDbContext db) : ControllerBase
         p.Name = r.Name.Trim(); p.Type = Enum.Parse<WarrantyType>(r.Type, true);
         p.Series = r.Series?.Trim() ?? ""; p.Description = r.Description?.Trim() ?? "";
         p.Archived = r.Archived; p.UpdatedAt = DateTime.UtcNow;
+        p.ThicknessMil = r.ThicknessMil; p.Vlt = r.Vlt; p.Irr = r.Irr;
+        p.Uv = r.Uv; p.Tser = r.Tser; p.WarrantyYears = r.WarrantyYears;
     }
 
     [HttpGet("customers")]
@@ -123,22 +131,6 @@ public class ManagementController(AppDbContext db) : ControllerBase
         var items = await db.WarrantyRegistrations.AsNoTracking().Where(w => phones.Contains(w.Phone))
             .OrderByDescending(w => w.CreatedAt).Select(w => new { w.Code, w.Owner, w.Phone, w.Make, w.Model, w.Vin, w.Plate, w.Type, w.Installed, w.Status, w.FilmEnds }).ToListAsync(ct);
         return Ok(new { items, total, page = page.SafePage, pageSize = page.SafeSize, phones });
-    }
-
-    [HttpPost("account/password")]
-    public async Task<IActionResult> Password(ChangePasswordRequest req)
-    {
-        if (string.IsNullOrWhiteSpace(req.Username) || string.IsNullOrEmpty(req.CurrentPassword) || req.NewPassword is null || req.NewPassword.Length < 12 || System.Text.Encoding.UTF8.GetByteCount(req.NewPassword) > 72)
-            return BadRequest(new { error = "New password must have at least 12 characters and at most 72 UTF-8 bytes." });
-        // A signed-in administrator can only change their own password.
-        var current = HttpContext?.User.Identity?.Name;
-        if (!string.IsNullOrEmpty(current) && !string.Equals(current, req.Username, StringComparison.Ordinal))
-            return BadRequest(new { error = "Current credentials are incorrect." });
-        var admin = await db.AdminUsers.FirstOrDefaultAsync(a => a.Username == req.Username);
-        if (admin == null || !BCrypt.Net.BCrypt.Verify(req.CurrentPassword, admin.PasswordHash)) return BadRequest(new { error = "Current credentials are incorrect." });
-        admin.PasswordHash = BCrypt.Net.BCrypt.HashPassword(req.NewPassword);
-        await db.SaveChangesAsync();
-        return Ok(new { ok = true });
     }
 }
 public class ProductSearch
@@ -163,5 +155,6 @@ public class CustomerSearch
     public int Page { get; set; } = 1;
     public int PageSize { get; set; } = 20;
 }
-public record ProductRequest(string Code, string Name, string Type, string? Series, string? Description, bool Archived);
+public record ProductRequest(string Code, string Name, string Type, string? Series, string? Description, bool Archived,
+    decimal? ThicknessMil, int? Vlt, int? Irr, int? Uv, int? Tser, int? WarrantyYears);
 public record ChangePasswordRequest(string Username, string CurrentPassword, string NewPassword);

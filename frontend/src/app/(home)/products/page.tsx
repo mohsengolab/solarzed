@@ -9,8 +9,17 @@ import { getCatalog } from "@/lib/liveCatalog";
 import styles from "./overview.module.css";
 
 export const metadata: Metadata = {
-  title: "Products | Solarzed",
-  description: "Solarzed window tint, PPF and color PPF series.",
+  title: "Window Tint & PPF Products",
+  description:
+    "Explore Solarzed window tint, paint protection film and colour PPF series. Compare shades, finishes and product specifications for every model.",
+  keywords: ["window tint series", "PPF series", "automotive film products", "color PPF", "Solarzed products"],
+  alternates: { canonical: "https://solarzed.com/products" },
+  openGraph: {
+    url: "https://solarzed.com/products",
+    title: "Window Tint & PPF Products | Solarzed",
+    description: "Explore Solarzed window tint, paint protection film and colour PPF series.",
+    images: [{ url: "/assets/solarzed-box.jpg", alt: "Solarzed product lineup" }],
+  },
 };
 
 type Props = { searchParams: Promise<{ [key: string]: string | string[] | undefined }> };
@@ -25,8 +34,18 @@ export default async function ProductsOverview({ searchParams }: Props) {
     redirect(seriesHref(legacyId) + (m ? `?model=${encodeURIComponent(m)}` : ""));
   }
 
+  const breadcrumbSchema = {
+    "@context": "https://schema.org",
+    "@type": "BreadcrumbList",
+    itemListElement: [
+      { "@type": "ListItem", position: 1, name: "Home", item: "https://solarzed.com" },
+      { "@type": "ListItem", position: 2, name: "Products", item: "https://solarzed.com/products" },
+    ],
+  };
+
   return (
     <main className="series-page">
+        <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: JSON.stringify(breadcrumbSchema) }} />
         <div className="wrap series-crumbs">
           <div className="breadcrumb"><Link href="/">Home</Link><span>/</span><span>Products</span></div>
         </div>

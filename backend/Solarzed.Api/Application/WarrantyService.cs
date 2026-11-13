@@ -21,6 +21,10 @@ public record WarrantyPublic(
     string[] Areas, string Status, string StatusLabel,
     string? StatusNote, CoveragePublic? Coverage, string[] Flags);
 
+public record WarrantyLimitedPublic(
+    string Type, string Make, string Model, string Plate, string FilmSerial,
+    DateOnly Installed, string SellerName, string Status, string StatusLabel);
+
 public record CoveragePublic(DateOnly? FilmEnds, DateOnly? InstallEnds);
 
 public static class WarrantyService
@@ -46,18 +50,16 @@ public static class WarrantyService
         return Regex.Replace(s, @"[\s()\-]", "");
     }
 
-    public static string GenerateCode()
+    public static string GenerateCode(int length = 16)
     {
-        var hex = Convert.ToHexString(RandomNumberGenerator.GetBytes(8)).ToLower();
-        return $"SZ-{hex[..4]}-{hex[4..8]}-{hex[8..12]}-{hex[12..16]}";
+        length = Math.Clamp(length, 6, 29);
+        var chars = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789";
+        var code = new char[length];
+        for (var i = 0; i < length; i++) code[i] = chars[RandomNumberGenerator.GetInt32(chars.Length)];
+        return "SZ-" + new string(code);
     }
 
-    static string GenerateCode16()
-    {
-        return "SZ-" + Convert.ToHexString(RandomNumberGenerator.GetBytes(8)).ToLower();
-    }
-
-    public static (string? Error, WarrantyRegistration? Entity) Validate(RegisterRequest req)
+    public static (string? Error, WarrantyRegistration? Entity) Validate(RegisterRequest req, int codeLength = 16)
     {
         if (string.IsNullOrWhiteSpace(req.Make)) return ("make required", null);
         if (string.IsNullOrWhiteSpace(req.Model)) return ("model required", null);
@@ -109,7 +111,7 @@ public static class WarrantyService
         if (areas.Length == 0 || areas.Distinct().Count() != areas.Length)
             return ("select at least one area without duplicates", null);
 
-        var code = GenerateCode16();
+        var code = GenerateCode(codeLength);
         var entity = new WarrantyRegistration
         {
             Code = code,
@@ -187,6 +189,23 @@ public static class WarrantyService
             SellerName: w.SellerName, SellerPhoneMasked: spMasked, Installer: w.Installer,
             Areas: areas, Status: w.Status.ToString().ToLower(), StatusLabel: statusLabel,
             StatusNote: statusNote, Coverage: coverage, Flags: []);
+    }
+
+    public static WarrantyLimitedPublic ToLimitedPublic(WarrantyRegistration w)
+    {
+        var statusLabel = w.Status switch
+        {
+            WarrantyStatus.Pending => "Pending review",
+            WarrantyStatus.Active => "Active warranty",
+            WarrantyStatus.Rejected => "Not covered",
+            _ => "Unknown"
+        };
+        return new WarrantyLimitedPublic(
+            Type: w.Type.ToString().ToLower(),
+            Make: w.Make, Model: w.Model, Plate: w.Plate, FilmSerial: w.FilmSerial,
+            Installed: w.Installed,
+            SellerName: w.SellerName,
+            Status: w.Status.ToString().ToLower(), StatusLabel: statusLabel);
     }
 
     public static DateOnly AddYears(DateOnly date, int years) =>

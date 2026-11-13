@@ -12,6 +12,7 @@ namespace Solarzed.Api.Application;
 public class ActivationError(int status, string message) : Exception(message) { public int Status => status; }
 public record LabelView(string Id, string RollId, string Product, string Type, int FilmYears, int? InstallYears,
     DateTime CreatedAt, DateTime? ActivatedAt, string? WarrantyCode, string ActivationUrl);
+public record LabelSerialView(string Id, string RollId, string Product, string Type, DateTime CreatedAt, DateTime? ActivatedAt);
 public record ActivationInfo(string Id, string Product, string Type, bool Activated, int FilmYears, int? InstallYears, bool SmsAvailable, bool Released);
 public record ActivateBoxRequest(string Token, string ChallengeId, string Otp, RegisterRequest Registration);
 
@@ -39,6 +40,10 @@ public class BoxLabelService(AppDbContext db, IDataProtectionProvider protection
     public LabelView View(BoxLabel label, string site) => new(label.Id, label.RollId, label.Product,
         label.Type.ToString().ToLowerInvariant(), label.FilmYears, label.InstallYears, label.CreatedAt,
         label.ActivatedAt, label.WarrantyCode, $"{site}/activate#{protector.Unprotect(label.ProtectedToken)}");
+
+    // The carton role may only see the serial printed on the box: no QR token and no warranty code.
+    public static LabelSerialView Restricted(BoxLabel label) => new(label.Id, label.RollId, label.Product,
+        label.Type.ToString().ToLowerInvariant(), label.CreatedAt, label.ActivatedAt);
 
     public async Task<LabelView[]> Issue(string rollId, int quantity)
     {
@@ -138,7 +143,8 @@ public class BoxLabelService(AppDbContext db, IDataProtectionProvider protection
         var phone = Phone(req.Registration.Phone);
         // Product type/serial are always server-bound, never trusted from the form.
         var request = req.Registration with { Type = label.Type.ToString().ToLowerInvariant(), FilmSerial = label.Id, Phone = phone };
-        var (error, entity) = WarrantyService.Validate(request);
+        var coverage = await db.CoverageSettings.AsNoTracking().FirstOrDefaultAsync();
+        var (error, entity) = WarrantyService.Validate(request, coverage?.WarrantyCodeLength ?? 16);
         if (error != null) throw new ActivationError(400, error);
         // Honor the existing database field sizes before touching the one-time code.
         if (request.Make.Length > 100 || request.Model.Length > 100 || request.Owner.Length > 200 ||

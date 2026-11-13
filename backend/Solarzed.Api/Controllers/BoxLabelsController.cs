@@ -7,25 +7,34 @@ using Solarzed.Api.Domain;
 
 namespace Solarzed.Api.Controllers;
 
-[ApiController, Route("api/admin/box-labels"), Authorize(Policy = "AdminPolicy")]
+[ApiController, Route("api/admin/box-labels"), Authorize(Policy = "StaffPolicy")]
 public class BoxLabelsController(AppDbContext db, BoxLabelService labels, IActivationSmsSender sms) : ControllerBase
 {
+    bool IsAdmin => User.IsInRole("admin");
+
     [HttpGet]
     public async Task<IActionResult> List()
     {
         var site = await labels.Site();
         var rows = await db.BoxLabels.AsNoTracking().OrderByDescending(x => x.CreatedAt).Take(500).ToListAsync();
-        return Ok(new { labels = rows.Select(x => labels.View(x, site)), siteUrl = site, smsConfigured = sms.Configured });
+        if (!IsAdmin)
+            return Ok(new { labels = rows.Select(BoxLabelService.Restricted), siteUrl = site, smsConfigured = sms.Configured, role = "carton" });
+        return Ok(new { labels = rows.Select(x => labels.View(x, site)), siteUrl = site, smsConfigured = sms.Configured, role = "admin" });
     }
 
-    [HttpPost]
+    // Issuing labels is a manager action; the carton role can only read serials.
+    [HttpPost, Authorize(Policy = "AdminPolicy")]
     public async Task<IActionResult> Issue(IssueLabelsRequest request)
     {
-        try { return Ok(new { labels = await labels.Issue(request.RollId, request.Quantity) }); }
+        try
+        {
+            var created = await labels.Issue(request.RollId, request.Quantity);
+            return Ok(new { labels = created });
+        }
         catch (ActivationError ex) { return StatusCode(ex.Status, new { error = ex.Message }); }
     }
 
-    [HttpPost("site")]
+    [HttpPost("site"), Authorize(Policy = "AdminPolicy")]
     public async Task<IActionResult> Site(SiteUrlRequest request)
     {
         try

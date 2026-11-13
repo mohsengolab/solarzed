@@ -1,5 +1,19 @@
+import type { Metadata } from "next";
 import Link from "next/link";
 import styles from "./coverage.module.css";
+
+export const metadata: Metadata = {
+  title: "What's Covered | Warranty Policy",
+  description:
+    "Solarzed window film and PPF warranty coverage. Learn what is covered — UV rejection, delamination, adhesive failure — and how to make a warranty claim.",
+  keywords: ["window film warranty coverage", "PPF warranty", "automotive tint claim", "Solarzed warranty policy"],
+  alternates: { canonical: "https://solarzed.com/coverage" },
+  openGraph: {
+    url: "https://solarzed.com/coverage",
+    title: "Solarzed Warranty Coverage | What's Covered",
+    description: "Solarzed window film and PPF warranty coverage — UV rejection, delamination, adhesive failure and how to make a claim.",
+  },
+};
 
 const TINT_ITEMS = [
   { title: "UV & heat rejection", desc: "Film blocks 99% of UV and reduces interior heat." },

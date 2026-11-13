@@ -1,5 +1,19 @@
+import type { Metadata } from "next";
 import Link from "next/link";
 import styles from "./contact.module.css";
+
+export const metadata: Metadata = {
+  title: "Contact Us",
+  description:
+    "Contact Solarzed for warranty support, authorised installer inquiries, distribution partnerships and general product questions.",
+  keywords: ["Solarzed contact", "warranty support", "authorised installer", "window film distributor"],
+  alternates: { canonical: "https://solarzed.com/contact" },
+  openGraph: {
+    url: "https://solarzed.com/contact",
+    title: "Contact Solarzed | Warranty & Installer Inquiries",
+    description: "Contact Solarzed for warranty support, installer inquiries and product questions.",
+  },
+};
 
 export default function ContactPage() {
   return (

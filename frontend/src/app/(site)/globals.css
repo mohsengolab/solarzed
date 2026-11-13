@@ -8,7 +8,7 @@
   --sz-teal-light: #8ff3f6;
   --sz-ink: #04122a;
   --sz-grad: linear-gradient(135deg, #1fc3cf 0%, #0ec3b5 100%);
-  --sz-font: "Plus Jakarta Sans", system-ui, sans-serif;
+  --sz-font: "Vazirmatn", "Plus Jakarta Sans", system-ui, sans-serif;
 }
 
 * { box-sizing: border-box; margin: 0; padding: 0; }
