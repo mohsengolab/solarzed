@@ -37,8 +37,10 @@ Set-Location $AppDir
 
 # -- 1. Git pull --
 Log-Info "Pulling latest code..."
-git fetch --all 2>&1 | Out-Null
 $before = git rev-parse HEAD
+$ea = $ErrorActionPreference; $ErrorActionPreference = 'SilentlyContinue'
+git fetch --all
+$ErrorActionPreference = $ea
 git reset --hard "origin/$Branch"
 $after = git rev-parse HEAD
 
