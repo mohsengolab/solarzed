@@ -69,7 +69,8 @@ if (builder.Configuration.GetValue<bool>("ReverseProxy:Enabled"))
 
 // ── EF Core ──────────────────────────────────────────────────────────────────
 builder.Services.AddDbContext<AppDbContext>(opt =>
-    opt.UseSqlServer(builder.Configuration.GetConnectionString("Default")));
+    opt.UseSqlServer(builder.Configuration.GetConnectionString("Default"))
+       .ConfigureWarnings(w => w.Ignore(Microsoft.EntityFrameworkCore.Diagnostics.RelationalEventId.PendingModelChangesWarning)));
 
 // ── JWT Auth ─────────────────────────────────────────────────────────────────
 var jwtKey = builder.Configuration["Jwt:Key"]
