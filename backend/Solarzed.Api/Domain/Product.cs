@@ -1,4 +1,5 @@
 using System.ComponentModel.DataAnnotations;
+using System.ComponentModel.DataAnnotations.Schema;
 
 namespace Solarzed.Api.Domain;
 
@@ -13,7 +14,7 @@ public class Product
     public DateTime UpdatedAt { get; set; } = DateTime.UtcNow;
 
     // Technical specifications from datasheet
-    public decimal? ThicknessMil { get; set; }
+    [Column(TypeName = "decimal(5,2)")] public decimal? ThicknessMil { get; set; }
     public int? Vlt { get; set; }         // Visible Light Transmission %
     public int? Irr { get; set; }         // IR Rejection at 950nm %
     public int? Uv { get; set; }          // UV Rejection %
