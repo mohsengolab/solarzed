@@ -130,7 +130,7 @@ module.exports = {
       args: 'start --port 3000',
       cwd: '${appDirJs}\\frontend',
       interpreter: 'node',
-      env: { PORT: '3000' },
+      env: { PORT: '3000', BACKEND_URL: 'http://127.0.0.1:5010' },
       max_memory_restart: '512M',
       time: true,
     },
