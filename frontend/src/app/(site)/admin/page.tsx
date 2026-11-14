@@ -14,13 +14,14 @@ import BoxLabelsPanel from "./BoxLabelsPanel";
 import { printQrLabels } from "./qrPrint";
 import { ProductsPanel, CustomersPanel, AccountPanel, UsersPanel } from "./ManagementPanels";
 import SmsSettingsPanel from "./SmsSettingsPanel";
+import { ClaimsPanel, HistoryPanel, WarrantyActivity } from "./ClaimsPanels";
 import { usePaged, SortTh, Pager, FilterBar, countActive, downloadCsv, errorText } from "./AdminKit";
 
 type Role = "admin" | "carton";
-const VIEWS = ["overview", "reports", "warranties", "rolls", "products", "customers", "labels", "sms", "settings", "account", "users"] as const;
+const VIEWS = ["overview", "reports", "warranties", "claims", "rolls", "products", "customers", "labels", "history", "sms", "settings", "account", "users"] as const;
 type View = typeof VIEWS[number];
 const LABELS: Record<View, string> = {
-  overview: "نمای کلی", reports: "گزارش‌ها", warranties: "گارانتی‌ها", rolls: "رول‌ها", products: "محصولات",
+  overview: "نمای کلی", reports: "گزارش‌ها", warranties: "گارانتی‌ها", claims: "ادعاها", history: "سابقه تغییرات", rolls: "رول‌ها", products: "محصولات",
   labels: "برچسب‌ها", customers: "مشتریان", sms: "پیامک", settings: "تنظیمات", account: "حساب کاربری", users: "کاربران",
 };
 // A carton operator only needs the box labels and their own account.
@@ -31,6 +32,8 @@ const NavIcons: Record<View, JSX.Element> = {
   overview: <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="14" y="14" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/></svg>,
   reports:  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><line x1="18" y1="20" x2="18" y2="10"/><line x1="12" y1="20" x2="12" y2="4"/><line x1="6" y1="20" x2="6" y2="14"/></svg>,
   warranties:<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/><polyline points="9 12 11 14 15 10"/></svg>,
+  claims:   <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="12" y1="12" x2="12" y2="15"/><line x1="12" y1="18" x2="12.01" y2="18"/></svg>,
+  history:  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>,
   rolls:    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><ellipse cx="12" cy="12" rx="10" ry="4"/><path d="M2 12v6c0 2.2 4.5 4 10 4s10-1.8 10-4v-6"/><path d="M2 6v6c0 2.2 4.5 4 10 4s10-1.8 10-4V6"/></svg>,
   products: <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"/></svg>,
   labels:   <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M20.59 13.41l-7.17 7.17a2 2 0 0 1-2.83 0L2 12V2h10l8.59 8.59a2 2 0 0 1 0 2.82z"/><line x1="7" y1="7" x2="7.01" y2="7"/></svg>,
@@ -127,7 +130,7 @@ function LoginView({ onLogin }: { onLogin: (role: Role) => void }) {
 
 const NAV_GROUPS: { label?: string; views: View[] }[] = [
   { views: ["overview", "reports"] },
-  { label: "مدیریت", views: ["warranties", "rolls", "products", "customers", "labels"] },
+  { label: "مدیریت", views: ["warranties", "claims", "rolls", "products", "customers", "labels", "history"] },
   { label: "پیکربندی", views: ["sms", "settings"] },
   { label: "حساب", views: ["account", "users"] },
 ];
@@ -184,6 +187,8 @@ function AdminApp({ view, role, onNav, onLogout }: { view: View; role: Role; onN
         {view === "account"   && <AccountPanel role={role} />}
         {view === "users"     && <UsersPanel />}
         {view === "warranties"&& <WarrantiesPanel />}
+        {view === "claims"    && <ClaimsPanel />}
+        {view === "history"   && <HistoryPanel />}
         {view === "rolls"     && <RollsPanel />}
         {view === "labels"    && <BoxLabelsPanel onSettings={() => onNav("settings")} role={role} />}
         {view === "sms"       && <SmsSettingsPanel />}
@@ -197,7 +202,7 @@ const Badge = ({ value }: { value: string }) => <span className={styles.badge} d
 
 // ── Overview ─────────────────────────────────────────────────────────────────
 
-type OverviewData = { total: number; pending: number; active: number; rejected: number; rollCount: number;
+type OverviewData = { total: number; pending: number; active: number; rejected: number; rollCount: number; openClaims: number; overdueClaims: number;
   queue: { code: string; make: string; model: string; installed: string; flagsJson: string }[] };
 
 function OverviewPanel({ onNav }: { onNav: (v: View) => void }) {
@@ -220,6 +225,12 @@ function OverviewPanel({ onNav }: { onNav: (v: View) => void }) {
         {[["کل", d.total], ["در انتظار", d.pending], ["فعال", d.active], ["رد شده", d.rejected], ["رول‌ها", d.rollCount]].map(([k, v]) => (
           <div key={String(k)} className={styles.kpi}><span>{k}</span><b>{Number(v).toLocaleString("fa-IR")}</b></div>
         ))}
+        <button type="button" className={styles.kpi} onClick={() => onNav("claims")} style={{ textAlign: "inherit", cursor: "pointer" }}>
+          <span>ادعاهای باز</span><b>{Number(d.openClaims ?? 0).toLocaleString("fa-IR")}</b>
+        </button>
+        <button type="button" className={styles.kpi} onClick={() => onNav("claims")} style={{ textAlign: "inherit", cursor: "pointer" }}>
+          <span>ادعاهای دارای تأخیر</span><b style={d.overdueClaims ? { color: "#f87171" } : undefined}>{Number(d.overdueClaims ?? 0).toLocaleString("fa-IR")}</b>
+        </button>
       </div>
       <div className={styles.card}>
         <h2>صف بررسی</h2>
@@ -722,6 +733,7 @@ function WarrantiesPanel() {
               {saving ? "در حال ذخیره…" : "ذخیره تصمیم"}
             </button>
             {msg && <p>{msg}</p>}
+            <WarrantyActivity key={selected.code} code={selected.code} />
           </div>
         </div>
       )}

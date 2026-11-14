@@ -2,6 +2,7 @@ using System.Text.RegularExpressions;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
+using Solarzed.Api.Application;
 using Solarzed.Api.Domain;
 using Solarzed.Api.Infrastructure;
 
@@ -50,6 +51,8 @@ public class UsersController(AppDbContext db) : ControllerBase
             PasswordHash = BCrypt.Net.BCrypt.HashPassword(req.Password),
         };
         db.AdminUsers.Add(user);
+        AuditLog.Add(db, AuditLog.Actor(HttpContext?.User), "user", username, "created",
+            AuditLog.Diff(("role", null, user.Role), ("displayName", null, user.DisplayName), ("active", null, user.Active)));
         await db.SaveChangesAsync();
         return Ok(new { user = Shape(user) });
     }
@@ -71,10 +74,13 @@ public class UsersController(AppDbContext db) : ControllerBase
             if (otherAdmins == 0) return BadRequest(new { error = "At least one active manager account must remain." });
         }
 
+        var before = new { user.Role, user.Active, user.DisplayName };
         user.Role = nextRole;
         user.Active = nextActive;
         if (req.DisplayName != null)
             user.DisplayName = req.DisplayName.Trim() is { Length: > 0 } d ? d[..Math.Min(d.Length, 100)] : null;
+        if (AuditLog.Diff(("role", before.Role, user.Role), ("active", before.Active, user.Active), ("displayName", before.DisplayName, user.DisplayName)) is { Count: > 0 } changes)
+            AuditLog.Add(db, AuditLog.Actor(HttpContext?.User), "user", user.Username, "updated", changes);
         await db.SaveChangesAsync();
         return Ok(new { user = Shape(user) });
     }
@@ -86,6 +92,7 @@ public class UsersController(AppDbContext db) : ControllerBase
         var user = await db.AdminUsers.FirstOrDefaultAsync(u => u.Id == id);
         if (user == null) return NotFound(new { error = "User not found." });
         user.PasswordHash = BCrypt.Net.BCrypt.HashPassword(req.Password);
+        AuditLog.Add(db, AuditLog.Actor(HttpContext?.User), "user", user.Username, "passwordReset");   // never the password itself
         await db.SaveChangesAsync();
         return Ok(new { ok = true });
     }

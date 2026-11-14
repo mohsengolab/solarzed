@@ -28,6 +28,8 @@ public class RegistrationController(AppDbContext db) : ControllerBase
         entity!.FlagsJson = JsonSerializer.Serialize(flags);
 
         db.WarrantyRegistrations.Add(entity);
+        AuditLog.Add(db, "public-form", "warranty", entity.Code, "registered",
+            AuditLog.Diff(("status", null, entity.Status), ("filmSerial", null, entity.FilmSerial), ("installer", null, entity.Installer), ("flags", null, entity.FlagsJson)));
         await db.SaveChangesAsync();
 
         return Ok(new { code = entity.Code, flags });

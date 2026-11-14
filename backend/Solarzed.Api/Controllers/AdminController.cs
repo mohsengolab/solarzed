@@ -19,6 +19,7 @@ namespace Solarzed.Api.Controllers;
 public class AdminController(AppDbContext db, IConfiguration cfg) : ControllerBase
 {
     string JwtKey => cfg["Jwt:Key"] ?? throw new InvalidOperationException("Jwt:Key missing");
+    string Actor => AuditLog.Actor(HttpContext?.User);
 
     // ── Auth ────────────────────────────────────────────────────────────────
 
@@ -119,7 +120,12 @@ public class AdminController(AppDbContext db, IConfiguration cfg) : ControllerBa
             .Select(w => new { w.Code, w.Type, w.Make, w.Model, w.Owner, w.Installed, w.FlagsJson, w.CreatedAt })
             .ToListAsync();
 
-        return Ok(new { total, pending, active, rejected, rollCount, queue });
+        var awaitingDecision = await db.WarrantyClaims.AsNoTracking().Where(c => c.Stage < ClaimStage.Decided).ToListAsync();
+        var openClaims = await db.WarrantyClaims.CountAsync(c => c.Stage != ClaimStage.Closed);
+        var now = DateTime.UtcNow;
+        var overdueClaims = awaitingDecision.Count(c => ClaimService.Due(c, now).Overdue);
+
+        return Ok(new { total, pending, active, rejected, rollCount, openClaims, overdueClaims, queue });
     }
 
     // ── Warranties ──────────────────────────────────────────────────────────
@@ -185,6 +191,9 @@ public class AdminController(AppDbContext db, IConfiguration cfg) : ControllerBa
         if (st == WarrantyStatus.Rejected && string.IsNullOrWhiteSpace(req.Note))
             return BadRequest(new { error = "rejection requires a note" });
 
+        if ((req.Note?.Length ?? 0) > 500) return BadRequest(new { error = "Note is limited to 500 characters." });
+
+        var before = new { w.Status, w.ReviewNote, w.FilmEnds, w.InstallEnds };
         w.Status = st;
         w.ReviewNote = req.Note;
         w.ReviewedAt = DateTime.UtcNow;
@@ -210,6 +219,10 @@ public class AdminController(AppDbContext db, IConfiguration cfg) : ControllerBa
             }
         }
 
+        // The previous status and note stay in the change log; the decision never silently overwrites history.
+        AuditLog.Add(db, Actor, "warranty", w.Code, "decision", AuditLog.Diff(
+            ("status", before.Status, w.Status), ("reviewNote", before.ReviewNote, w.ReviewNote),
+            ("filmEnds", before.FilmEnds, w.FilmEnds), ("installEnds", before.InstallEnds, w.InstallEnds)), req.Note);
         await db.SaveChangesAsync();
         return Ok(new { ok = true });
     }
@@ -302,7 +315,7 @@ public class AdminController(AppDbContext db, IConfiguration cfg) : ControllerBa
             if (changed) product.UpdatedAt = DateTime.UtcNow;
         }
 
-        var rolls = await RollService.CreateRolls(req, db);
+        var rolls = await RollService.CreateRolls(req, db, Actor);
         return Ok(rolls.Select(r => new { r.Id, r.ModelCode, r.Type, r.Batch }));
     }
 
@@ -321,6 +334,7 @@ public class AdminController(AppDbContext db, IConfiguration cfg) : ControllerBa
         if ((st == RollStatus.Shipped || st == RollStatus.Consumed) && qc != RollQc.Approved)
             return BadRequest(new { error = "QC approval is required before release." });
         if ((req.Note?.Length ?? 0) > 1000) return BadRequest(new { error = "Note is too long." });
+        AuditLog.Add(db, Actor, "roll", roll.Id, "updated", AuditLog.Diff(("status", roll.Status, st), ("qc", roll.Qc, qc)), req.Note);
         roll.Status = st;
         roll.Qc = qc;
 
@@ -368,6 +382,7 @@ public class AdminController(AppDbContext db, IConfiguration cfg) : ControllerBa
 
         var s = await db.CoverageSettings.FirstOrDefaultAsync();
         if (s == null) { s = new CoverageSetting(); db.CoverageSettings.Add(s); }
+        var before = new { s.TintFilmYears, s.TintInstallYears, s.PpfFilmYears, s.PpfInstallYears, s.WarrantyCodeLength };
 
         s.TintFilmYears = req.Durations?.Tint?.Film;
         s.TintInstallYears = req.Durations?.Tint?.Install;
@@ -380,6 +395,11 @@ public class AdminController(AppDbContext db, IConfiguration cfg) : ControllerBa
         }
         s.UpdatedAt = DateTime.UtcNow;
 
+        var changes = AuditLog.Diff(
+            ("tintFilmYears", before.TintFilmYears, s.TintFilmYears), ("tintInstallYears", before.TintInstallYears, s.TintInstallYears),
+            ("ppfFilmYears", before.PpfFilmYears, s.PpfFilmYears), ("ppfInstallYears", before.PpfInstallYears, s.PpfInstallYears),
+            ("warrantyCodeLength", before.WarrantyCodeLength, s.WarrantyCodeLength));
+        if (changes.Count > 0) AuditLog.Add(db, Actor, "settings", "coverage", "updated", changes);
         await db.SaveChangesAsync();
         return Ok(new { ok = true });
     }

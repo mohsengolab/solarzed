@@ -106,6 +106,54 @@ namespace Solarzed.Api.Migrations
                     b.ToTable("AdminUsers");
                 });
 
+            modelBuilder.Entity("Solarzed.Api.Domain.AuditEntry", b =>
+                {
+                    b.Property<long>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("bigint");
+
+                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<long>("Id"));
+
+                    b.Property<string>("Action")
+                        .IsRequired()
+                        .HasMaxLength(40)
+                        .HasColumnType("nvarchar(40)");
+
+                    b.Property<string>("Actor")
+                        .IsRequired()
+                        .HasMaxLength(100)
+                        .HasColumnType("nvarchar(100)");
+
+                    b.Property<DateTime>("At")
+                        .HasColumnType("datetime2");
+
+                    b.Property<string>("ChangesJson")
+                        .IsRequired()
+                        .HasColumnType("nvarchar(max)");
+
+                    b.Property<string>("EntityId")
+                        .IsRequired()
+                        .HasMaxLength(64)
+                        .HasColumnType("nvarchar(64)");
+
+                    b.Property<string>("EntityType")
+                        .IsRequired()
+                        .HasMaxLength(20)
+                        .HasColumnType("nvarchar(20)");
+
+                    b.Property<string>("Reason")
+                        .HasMaxLength(1000)
+                        .HasColumnType("nvarchar(1000)");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("At");
+
+                    b.HasIndex("EntityType", "EntityId", "At");
+
+                    b.ToTable("AuditEntries");
+                });
+
             modelBuilder.Entity("Solarzed.Api.Domain.BoxLabel", b =>
                 {
                     b.Property<string>("Id")
@@ -305,6 +353,97 @@ namespace Solarzed.Api.Migrations
                     b.ToTable("Rolls");
                 });
 
+            modelBuilder.Entity("Solarzed.Api.Domain.WarrantyClaim", b =>
+                {
+                    b.Property<string>("Id")
+                        .HasMaxLength(24)
+                        .HasColumnType("nvarchar(24)");
+
+                    b.Property<DateTime?>("AcknowledgedAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<int>("Cause")
+                        .HasColumnType("int");
+
+                    b.Property<int>("Channel")
+                        .HasColumnType("int");
+
+                    b.Property<DateTime?>("ClosedAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<string>("CreatedBy")
+                        .IsRequired()
+                        .HasMaxLength(100)
+                        .HasColumnType("nvarchar(100)");
+
+                    b.Property<DateTime?>("DecidedAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<int>("Decision")
+                        .HasColumnType("int");
+
+                    b.Property<string>("DecisionNote")
+                        .HasMaxLength(1000)
+                        .HasColumnType("nvarchar(1000)");
+
+                    b.Property<string>("Description")
+                        .IsRequired()
+                        .HasMaxLength(2000)
+                        .HasColumnType("nvarchar(2000)");
+
+                    b.Property<DateTime?>("DocumentsCompleteAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<DateTime?>("InitialReviewedAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<decimal?>("LaborCost")
+                        .HasColumnType("decimal(14,2)");
+
+                    b.Property<decimal?>("OtherCost")
+                        .HasColumnType("decimal(14,2)");
+
+                    b.Property<decimal?>("PartsCost")
+                        .HasColumnType("decimal(14,2)");
+
+                    b.Property<int>("Remedy")
+                        .HasColumnType("int");
+
+                    b.Property<string>("RemedyNote")
+                        .HasMaxLength(1000)
+                        .HasColumnType("nvarchar(1000)");
+
+                    b.Property<string>("RequiredDocuments")
+                        .HasMaxLength(1000)
+                        .HasColumnType("nvarchar(1000)");
+
+                    b.Property<int>("Revision")
+                        .IsConcurrencyToken()
+                        .HasColumnType("int");
+
+                    b.Property<int>("Stage")
+                        .HasColumnType("int");
+
+                    b.Property<DateTime>("UpdatedAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<string>("WarrantyCode")
+                        .IsRequired()
+                        .HasMaxLength(32)
+                        .HasColumnType("nvarchar(32)");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("WarrantyCode");
+
+                    b.HasIndex("Stage", "CreatedAt");
+
+                    b.ToTable("WarrantyClaims");
+                });
+
             modelBuilder.Entity("Solarzed.Api.Domain.WarrantyRegistration", b =>
                 {
                     b.Property<string>("Code")
@@ -436,6 +575,15 @@ namespace Solarzed.Api.Migrations
                         .WithMany()
                         .HasForeignKey("WarrantyCode")
                         .OnDelete(DeleteBehavior.Restrict);
+                });
+
+            modelBuilder.Entity("Solarzed.Api.Domain.WarrantyClaim", b =>
+                {
+                    b.HasOne("Solarzed.Api.Domain.WarrantyRegistration", null)
+                        .WithMany()
+                        .HasForeignKey("WarrantyCode")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
                 });
 #pragma warning restore 612, 618
         }

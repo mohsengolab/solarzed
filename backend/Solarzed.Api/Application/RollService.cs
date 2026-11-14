@@ -12,7 +12,7 @@ public record CreateRollsRequest(
 
 public static class RollService
 {
-    public static async Task<Roll[]> CreateRolls(CreateRollsRequest req, AppDbContext db)
+    public static async Task<Roll[]> CreateRolls(CreateRollsRequest req, AppDbContext db, string actor = "system")
     {
         var type = req.Type.ToLower() == "ppf" ? WarrantyType.Ppf : WarrantyType.Tint;
         var qc = req.Qc.ToLower() switch
@@ -62,6 +62,10 @@ public static class RollService
         }
 
         db.Rolls.AddRange(rolls);
+        foreach (var r in rolls)
+            AuditLog.Add(db, actor, "roll", r.Id, "received", AuditLog.Diff(
+                ("modelCode", null, r.ModelCode), ("batch", null, r.Batch), ("supplier", null, r.Supplier), ("qc", null, r.Qc),
+                ("widthCm", null, r.WidthCm), ("lengthM", null, r.LengthM)));
         await db.SaveChangesAsync();
         return [.. rolls];
     }

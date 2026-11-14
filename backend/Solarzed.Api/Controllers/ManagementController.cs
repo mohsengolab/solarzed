@@ -66,6 +66,7 @@ public class ManagementController(AppDbContext db) : ControllerBase
         var product = new Product { Code = code };
         Apply(product, req);
         db.Products.Add(product);
+        AuditLog.Add(db, AuditLog.Actor(HttpContext?.User), "product", code, "created", Changes(new Product(), product));
         await db.SaveChangesAsync();
         await EvictCatalog();
         return Ok(product);
@@ -83,7 +84,10 @@ public class ManagementController(AppDbContext db) : ControllerBase
         var type = Enum.Parse<WarrantyType>(req.Type, true);
         if (type != product.Type && await db.Rolls.AnyAsync(r => r.ModelCode == code))
             return Conflict(new { error = "A product with inventory cannot change warranty type." });
+        var before = (Product)db.Entry(product).CurrentValues.ToObject();
         Apply(product, req);
+        if (Changes(before, product) is { Count: > 0 } changes)
+            AuditLog.Add(db, AuditLog.Actor(HttpContext?.User), "product", product.Code, product.Archived != before.Archived ? (product.Archived ? "archived" : "restored") : "updated", changes);
         await db.SaveChangesAsync();
         await EvictCatalog();
         return Ok(product);
@@ -103,6 +107,11 @@ public class ManagementController(AppDbContext db) : ControllerBase
         if (r.WarrantyYears is { } wy && wy is < 1 or > 30) return "Warranty years must be 1–30.";
         return null;
     }
+    static Dictionary<string, object?[]> Changes(Product a, Product b) => AuditLog.Diff(
+        ("name", a.Name, b.Name), ("type", a.Type, b.Type), ("series", a.Series, b.Series), ("description", a.Description, b.Description),
+        ("archived", a.Archived, b.Archived), ("thicknessMil", a.ThicknessMil, b.ThicknessMil), ("vlt", a.Vlt, b.Vlt), ("irr", a.Irr, b.Irr),
+        ("uv", a.Uv, b.Uv), ("tser", a.Tser, b.Tser), ("warrantyYears", a.WarrantyYears, b.WarrantyYears));
+
     static void Apply(Product p, ProductRequest r)
     {
         p.Name = r.Name.Trim(); p.Type = Enum.Parse<WarrantyType>(r.Type, true);

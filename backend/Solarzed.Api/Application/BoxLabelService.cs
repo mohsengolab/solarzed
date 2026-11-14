@@ -178,6 +178,9 @@ public class BoxLabelService(AppDbContext db, IDataProtectionProvider protection
         challenge.Consumed = true;
         challenge.Revision++;
         db.WarrantyRegistrations.Add(registration);
+        AuditLog.Add(db, "customer-qr", "warranty", registration.Code, "activated", AuditLog.Diff(
+            ("status", null, registration.Status), ("label", null, label.Id), ("roll", null, roll.Id),
+            ("filmEnds", null, registration.FilmEnds), ("installEnds", null, registration.InstallEnds), ("flags", null, registration.FlagsJson)));
         try { await db.SaveChangesAsync(); }
         catch (DbUpdateConcurrencyException) { throw new ActivationError(409, "This box was already activated or the verification code was changed. Refresh and try again."); }
         // EF's single SaveChanges transaction commits the label, OTP and warranty atomically.
