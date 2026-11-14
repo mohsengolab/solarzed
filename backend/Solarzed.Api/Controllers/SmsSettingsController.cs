@@ -17,6 +17,7 @@ public class SmsSettingsController(IConfiguration config, IWebHostEnvironment en
     static readonly SemaphoreSlim Gate = new(1, 1);
     const string Protector = "Solarzed.Faraz.Token.v1";
     const string ProviderBase = "https://api.iranpayamak.com/ws/v1/";
+    const string SoapDefault = "http://185.112.33.61/wbs/send.php";
 
     string? StoredKey()
     {
@@ -36,7 +37,8 @@ public class SmsSettingsController(IConfiguration config, IWebHostEnvironment en
             configured = sender.Configured, connected, keyStored = StoredKey() != null,
             mode = config["Faraz:Mode"] ?? "unconfigured",
             pattern = config["Faraz:OtpPattern"] ?? "2675", codeVariable = config["Faraz:CodeVariable"] ?? "code1",
-            line = config["Faraz:Sender"] ?? "", updatedAt = config["Faraz:UpdatedAt"],
+            line = config["Faraz:Sender"] ?? "",
+            endpoint = config["Faraz:Mode"] == "soap" ? config["Faraz:Endpoint"] : null, updatedAt = config["Faraz:UpdatedAt"],
             policy = new { policy.Enabled, policy.OtpMinutes, policy.ResendSeconds, policy.DailyLimit },
         });
     }
@@ -47,12 +49,26 @@ public class SmsSettingsController(IConfiguration config, IWebHostEnvironment en
     [RequestSizeLimit(8192)]
     public async Task<IActionResult> Save(SmsRequest req, CancellationToken ct)
     {
-        var key = string.IsNullOrWhiteSpace(req.Token) ? StoredKey() : req.Token.Trim();
+        // A REST API key and a SOAP token are different credentials: switching mode needs a new one.
+        var sameMode = (req.Mode == "soap") == (config["Faraz:Mode"] == "soap");
+        var key = string.IsNullOrWhiteSpace(req.Token) ? (sameMode ? StoredKey() : null) : req.Token.Trim();
         if (string.IsNullOrWhiteSpace(key) || key.Length > 2048 || key.Contains('\r') || key.Contains('\n') ||
             !Regex.IsMatch(req.Pattern ?? "", "^[a-zA-Z0-9_-]{1,100}$") ||
             !Regex.IsMatch(req.Line ?? "", "^[0-9]{3,24}$") ||
             !Regex.IsMatch(req.CodeVariable ?? "", "^[a-zA-Z][a-zA-Z0-9_]{0,49}$"))
             return BadRequest(new { error = "Enter the API key, pattern ID, sender line and code variable." });
+        if (req.Mode == "soap")
+        {
+            // SOAP pattern service (token login). It has no read-only check, so verify with a test message after saving.
+            var endpoint = string.IsNullOrWhiteSpace(req.Endpoint) ? SoapDefault : req.Endpoint.Trim();
+            if (!Uri.TryCreate(endpoint, UriKind.Absolute, out var uri) || uri.Scheme is not ("http" or "https") || endpoint.Length > 300)
+                return BadRequest(new { error = "Enter a valid SOAP endpoint URL." });
+            await Update(root => root["Faraz"] = new JsonObject { ["Mode"] = "soap", ["Endpoint"] = endpoint,
+                ["ProtectedToken"] = protection.CreateProtector(Protector).Protect(key),
+                ["OtpPattern"] = req.Pattern, ["Sender"] = req.Line, ["CodeVariable"] = req.CodeVariable,
+                ["UpdatedAt"] = DateTime.UtcNow.ToString("O") }, ct);
+            return Ok(new { ok = true, message = "SOAP settings saved. Send a test message to confirm the token and pattern." });
+        }
         // Read-only provider checks: do not send messages, display balances or expose provider bodies.
         using var http = clients.CreateClient(); http.Timeout = TimeSpan.FromSeconds(15);
         try {
@@ -128,6 +144,6 @@ public class SmsSettingsController(IConfiguration config, IWebHostEnvironment en
         } finally { Gate.Release(); }
     }
 }
-public record SmsRequest(string? Token, string Pattern, string Line, string CodeVariable);
+public record SmsRequest(string? Token, string Pattern, string Line, string CodeVariable, string? Mode = null, string? Endpoint = null);
 public record SmsPolicyRequest(bool Enabled, int OtpMinutes, int ResendSeconds, int DailyLimit);
 public record SmsTestRequest(string Phone);

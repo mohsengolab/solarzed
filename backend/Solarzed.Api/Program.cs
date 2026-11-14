@@ -25,7 +25,12 @@ builder.Services.AddSingleton(TimeProvider.System);
 builder.Services.AddSingleton<LoginThrottle>();
 builder.Services.AddSingleton<SmsLog>();
 builder.Services.AddScoped<BoxLabelService>();
+builder.Services.AddScoped<BoxTransferService>();
+builder.Services.AddScoped<PortalService>();
 builder.Services.AddHttpClient<IActivationSmsSender, ActivationSmsSender>(client => client.Timeout = TimeSpan.FromSeconds(15));
+// Local testing without a provider: codes are written to the API log. Never active outside Development.
+if (builder.Environment.IsDevelopment() && builder.Configuration.GetValue<bool>("Sms:DevConsole"))
+    builder.Services.AddSingleton<IActivationSmsSender, DevConsoleSms>();
 
 static string ClientKey(HttpContext context) => context.Connection.RemoteIpAddress?.ToString() ?? "local";
 builder.Services.AddRateLimiter(options =>
@@ -44,6 +49,8 @@ builder.Services.AddRateLimiter(options =>
         ClientKey(context), _ => new FixedWindowRateLimiterOptions { PermitLimit = 30, Window = TimeSpan.FromMinutes(1), QueueLimit = 0 }));
     options.AddPolicy("admin-login", context => RateLimitPartition.GetFixedWindowLimiter(
         ClientKey(context), _ => new FixedWindowRateLimiterOptions { PermitLimit = 10, Window = TimeSpan.FromMinutes(10), QueueLimit = 0 }));
+    options.AddPolicy("portal-otp", context => RateLimitPartition.GetFixedWindowLimiter(
+        ClientKey(context), _ => new FixedWindowRateLimiterOptions { PermitLimit = 20, Window = TimeSpan.FromMinutes(10), QueueLimit = 0 }));
     options.AddPolicy("sms-test", context => RateLimitPartition.GetFixedWindowLimiter(
         ClientKey(context), _ => new FixedWindowRateLimiterOptions { PermitLimit = 5, Window = TimeSpan.FromMinutes(10), QueueLimit = 0 }));
 });
@@ -77,8 +84,8 @@ var jwtKey = builder.Configuration["Jwt:Key"]
     ?? Convert.ToHexString(System.Security.Cryptography.RandomNumberGenerator.GetBytes(32));
 builder.Configuration["Jwt:Key"] = jwtKey;
 
-builder.Services.AddAuthentication(JwtBearerDefaults.AuthenticationScheme)
-    .AddJwtBearer(o =>
+var authentication = builder.Services.AddAuthentication(JwtBearerDefaults.AuthenticationScheme);
+authentication.AddJwtBearer(o =>
     {
         o.MapInboundClaims = true;
         o.TokenValidationParameters = new TokenValidationParameters
@@ -117,8 +124,40 @@ builder.Services.AddAuthentication(JwtBearerDefaults.AuthenticationScheme)
             },
         };
     });
+// Public-site accounts (representatives, shops, customers): a separate cookie and audience, so a portal session
+// can never satisfy an admin policy and vice versa.
+authentication.AddJwtBearer(PortalAuth.Scheme, o =>
+{
+    o.MapInboundClaims = false;
+    o.TokenValidationParameters = new TokenValidationParameters
+    {
+        ValidateIssuerSigningKey = true,
+        IssuerSigningKey = new SymmetricSecurityKey(Encoding.UTF8.GetBytes(jwtKey)),
+        ValidAlgorithms = [SecurityAlgorithms.HmacSha256],
+        ValidateIssuer = true, ValidIssuer = AdminAuth.Issuer,
+        ValidateAudience = true, ValidAudience = PortalAuth.Audience,
+        ValidateLifetime = true, RequireExpirationTime = true,
+        ClockSkew = TimeSpan.FromMinutes(1),
+    };
+    o.Events = new JwtBearerEvents
+    {
+        OnMessageReceived = ctx =>
+        {
+            ctx.Token = ctx.Request.Cookies.TryGetValue(PortalAuth.Cookie, out var cookie) ? cookie : null;
+            return Task.CompletedTask;
+        },
+        // A disabled account loses access immediately.
+        OnTokenValidated = async ctx =>
+        {
+            var phone = PortalAuth.Phone(ctx.Principal);
+            var db = ctx.HttpContext.RequestServices.GetRequiredService<AppDbContext>();
+            if (phone == null || !await db.PortalUsers.AnyAsync(u => u.Phone == phone && u.Active)) ctx.Fail("Session revoked.");
+        },
+    };
+});
 builder.Services.AddAuthorization(opt =>
 {
+    opt.AddPolicy("PortalPolicy", p => p.AddAuthenticationSchemes(PortalAuth.Scheme).RequireAuthenticatedUser().RequireClaim(PortalAuth.PhoneClaim));
     opt.AddPolicy("AdminPolicy", p => p.RequireRole("admin"));
     opt.AddPolicy("CartonPolicy", p => p.RequireRole("carton"));
     opt.AddPolicy("StaffPolicy", p => p.RequireRole("admin", "carton"));
@@ -205,7 +244,7 @@ app.Use(async (ctx, next) =>
     h["Cross-Origin-Opener-Policy"] = "same-origin";
     h["Cross-Origin-Resource-Policy"] = "same-site";
     var path = ctx.Request.Path;
-    if (path.StartsWithSegments("/api/admin") || path.StartsWithSegments("/api/activation"))
+    if (path.StartsWithSegments("/api/admin") || path.StartsWithSegments("/api/activation") || path.StartsWithSegments("/api/portal"))
         ctx.Response.OnStarting(() => { ctx.Response.Headers.CacheControl = "no-store"; ctx.Response.Headers.Pragma = "no-cache"; return Task.CompletedTask; });
 
     // CSRF defence for cookie sessions: state-changing admin requests authenticated by the cookie must carry
@@ -213,6 +252,14 @@ app.Use(async (ctx, next) =>
     if (path.StartsWithSegments("/api/admin") && !HttpMethods.IsGet(ctx.Request.Method) && !HttpMethods.IsHead(ctx.Request.Method) &&
         !HttpMethods.IsOptions(ctx.Request.Method) && string.IsNullOrEmpty(ctx.Request.Headers.Authorization) &&
         ctx.Request.Cookies.ContainsKey(AdminAuth.Cookie) && ctx.Request.Headers["X-Requested-With"] != "fetch")
+    {
+        ctx.Response.StatusCode = 403;
+        await ctx.Response.WriteAsJsonAsync(new { error = "Request blocked." });
+        return;
+    }
+    // Same CSRF rule for the public-site account cookie.
+    if ((path.StartsWithSegments("/api/portal") || path.StartsWithSegments("/api/activation")) && HttpMethods.IsPost(ctx.Request.Method) &&
+        ctx.Request.Cookies.ContainsKey(PortalAuth.Cookie) && ctx.Request.Headers["X-Requested-With"] != "fetch")
     {
         ctx.Response.StatusCode = 403;
         await ctx.Response.WriteAsJsonAsync(new { error = "Request blocked." });

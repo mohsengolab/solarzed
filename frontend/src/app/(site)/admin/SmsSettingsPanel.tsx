@@ -5,7 +5,7 @@ import s from "./admin.module.css";
 import { errorText } from "./AdminKit";
 
 type Policy = { enabled: boolean; otpMinutes: number; resendSeconds: number; dailyLimit: number };
-type Status = { configured: boolean; connected: boolean; keyStored: boolean; mode: string; pattern: string; codeVariable: string; line: string; updatedAt: string | null; policy: Policy };
+type Status = { configured: boolean; connected: boolean; keyStored: boolean; mode: string; pattern: string; codeVariable: string; line: string; endpoint: string | null; updatedAt: string | null; policy: Policy };
 type LogEntry = { at: string; phone: string; purpose: string; ok: boolean; error: string | null };
 type Note = { ok: boolean; text: string } | null;
 
@@ -15,7 +15,7 @@ const Msg = ({ note }: { note: Note }) => note ? <p role={note.ok ? "status" : "
 
 export default function SmsSettingsPanel() {
   const [status, setStatus] = useState<Status | null>(null);
-  const [form, setForm] = useState({ token: "", pattern: "2675", line: "", codeVariable: "code1" });
+  const [form, setForm] = useState({ mode: "soap", endpoint: "http://185.112.33.61/wbs/send.php", token: "", pattern: "2675", line: "21000051112", codeVariable: "code1" });
   const [policy, setPolicy] = useState<Policy>({ enabled: true, otpMinutes: 5, resendSeconds: 60, dailyLimit: 10 });
   const [phone, setPhone] = useState("");
   const [log, setLog] = useState<LogEntry[]>([]);
@@ -25,7 +25,8 @@ export default function SmsSettingsPanel() {
 
   const apply = useCallback(([r, entries]: [Status, LogEntry[]]) => {
     setStatus(r); setLog(entries); setPolicy(r.policy);
-    setForm(f => ({ ...f, pattern: r.pattern, line: r.line, codeVariable: r.codeVariable }));
+    setForm(f => ({ ...f, pattern: r.pattern, line: r.line || f.line, codeVariable: r.codeVariable,
+      ...(r.mode === "rest" || r.mode === "soap" ? { mode: r.mode } : {}), ...(r.endpoint ? { endpoint: r.endpoint } : {}) }));
   }, []);
   const load = useCallback(() => fetchAll().then(apply), [apply]);
   useEffect(() => {
@@ -62,7 +63,7 @@ export default function SmsSettingsPanel() {
 
     <div className={s.statusGrid}>
       <div className={s.kpi}><span>وضعیت</span><b><span className={s.badge} data-tone={tone}>{state}</span></b></div>
-      <div className={s.kpi}><span>ارائه‌دهنده</span><b style={{ fontSize: 16 }}>فراز · HTTPS</b></div>
+      <div className={s.kpi}><span>ارائه‌دهنده</span><b style={{ fontSize: 16 }}>{status?.mode === "soap" ? "فراز · SOAP" : "فراز · HTTPS"}</b></div>
       <div className={s.kpi}><span>خط فرستنده</span><b style={{ fontSize: 16 }} dir="ltr">{status?.line || "—"}</b></div>
       <div className={s.kpi}><span>الگو</span><b style={{ fontSize: 16 }} dir="ltr">{status?.pattern || "—"}</b></div>
       <div className={s.kpi}><span>آخرین تأیید</span><b style={{ fontSize: 14 }}>{status?.updatedAt ? new Date(status.updatedAt).toLocaleString("fa-IR") : "—"}</b></div>
@@ -72,12 +73,16 @@ export default function SmsSettingsPanel() {
     <div className={s.row2} style={{ alignItems: "start" }}>
       <form onSubmit={saveConnection} className={`${s.card} ${s.adminForm}`}>
         <h2>اتصال</h2>
-        <label>کلید API فراز<input type="password" autoComplete="off" required={!status?.keyStored} maxLength={2048} value={form.token} dir="ltr"
+        <label>نوع اتصال<select value={form.mode} onChange={e => setForm({ ...form, mode: e.target.value })}>
+          <option value="soap">وب‌سرویس SOAP (توکن — مثل ربات پیام)</option>
+          <option value="rest">REST HTTPS (کلید API)</option></select></label>
+        {form.mode === "soap" && <label>آدرس وب‌سرویس<input required maxLength={300} value={form.endpoint} dir="ltr" onChange={e => setForm({ ...form, endpoint: e.target.value })} /></label>}
+        <label>{form.mode === "soap" ? "توکن فراز" : "کلید API فراز"}<input type="password" autoComplete="off" required={!status?.keyStored || status.mode !== form.mode} maxLength={2048} value={form.token} dir="ltr"
           placeholder={status?.keyStored ? "به‌صورت امن ذخیره شده — برای حفظ آن خالی بگذارید" : ""} onChange={e => setForm({ ...form, token: e.target.value })} /></label>
         <label>شناسه الگوی OTP<input required maxLength={100} pattern="[A-Za-z0-9_\-]+" value={form.pattern} onChange={e => setForm({ ...form, pattern: e.target.value })} dir="ltr" /></label>
         <label>خط فرستنده<input required inputMode="numeric" pattern="[0-9]{3,24}" value={form.line} onChange={e => setForm({ ...form, line: e.target.value })} dir="ltr" /></label>
         <label>نام متغیر OTP<input required maxLength={50} pattern="[A-Za-z][A-Za-z0-9_]*" value={form.codeVariable} onChange={e => setForm({ ...form, codeVariable: e.target.value })} dir="ltr" /></label>
-        <p className={s.empty}>نام متغیر دقیقاً همان چیزی باشد که در الگوی تأییدشده آمده است (مثلاً code یا code1). ذخیره کردن، حساب و الگوی شما را بدون ارسال پیام بررسی می‌کند. کلید روی سرور رمزنگاری می‌شود و هرگز به این صفحه برنمی‌گردد.</p>
+        <p className={s.empty}>نام متغیر دقیقاً همان چیزی باشد که در الگوی تأییدشده آمده است (مثلاً code یا code1). {form.mode === "soap" ? "در حالت SOAP بررسی خودکار وجود ندارد؛ پس از ذخیره یک پیامک آزمایشی بفرستید." : "ذخیره کردن، حساب و الگوی شما را بدون ارسال پیام بررسی می‌کند."} کلید روی سرور رمزنگاری می‌شود و هرگز به این صفحه برنمی‌گردد.</p>
         <button disabled={!!busy} className={s.btnPrimary}>{busy === "connection" ? "در حال تأیید…" : "تأیید اتصال و ذخیره پیامک"}</button>
         {status?.keyStored && <button type="button" className={s.danger} disabled={!!busy} onClick={disconnect}>قطع اتصال و حذف کلید</button>}
         <Msg note={notes.connection ?? null} />

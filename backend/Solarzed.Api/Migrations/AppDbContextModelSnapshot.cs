@@ -163,11 +163,30 @@ namespace Solarzed.Api.Migrations
                     b.Property<DateTime?>("ActivatedAt")
                         .HasColumnType("datetime2");
 
+                    b.Property<string>("CardCode")
+                        .HasMaxLength(32)
+                        .HasColumnType("nvarchar(32)");
+
                     b.Property<DateTime>("CreatedAt")
                         .HasColumnType("datetime2");
 
+                    b.Property<string>("FactoryCode")
+                        .HasMaxLength(4)
+                        .HasColumnType("nvarchar(4)");
+
                     b.Property<int>("FilmYears")
                         .HasColumnType("int");
+
+                    b.Property<DateTime?>("HeldSince")
+                        .HasColumnType("datetime2");
+
+                    b.Property<string>("Holder")
+                        .HasMaxLength(200)
+                        .HasColumnType("nvarchar(200)");
+
+                    b.Property<string>("HolderPhone")
+                        .HasMaxLength(30)
+                        .HasColumnType("nvarchar(30)");
 
                     b.Property<int?>("InstallYears")
                         .HasColumnType("int");
@@ -204,6 +223,14 @@ namespace Solarzed.Api.Migrations
 
                     b.HasKey("Id");
 
+                    b.HasIndex("CardCode")
+                        .IsUnique()
+                        .HasFilter("[CardCode] IS NOT NULL");
+
+                    b.HasIndex("Holder");
+
+                    b.HasIndex("HolderPhone");
+
                     b.HasIndex("RollId");
 
                     b.HasIndex("TokenHash")
@@ -214,6 +241,63 @@ namespace Solarzed.Api.Migrations
                         .HasFilter("[WarrantyCode] IS NOT NULL");
 
                     b.ToTable("BoxLabels");
+                });
+
+            modelBuilder.Entity("Solarzed.Api.Domain.BoxTransfer", b =>
+                {
+                    b.Property<long>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("bigint");
+
+                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<long>("Id"));
+
+                    b.Property<string>("Actor")
+                        .IsRequired()
+                        .HasMaxLength(100)
+                        .HasColumnType("nvarchar(100)");
+
+                    b.Property<DateTime>("At")
+                        .HasColumnType("datetime2");
+
+                    b.Property<string>("BatchId")
+                        .IsRequired()
+                        .HasMaxLength(24)
+                        .HasColumnType("nvarchar(24)");
+
+                    b.Property<string>("FromHolder")
+                        .HasMaxLength(200)
+                        .HasColumnType("nvarchar(200)");
+
+                    b.Property<string>("FromPhone")
+                        .HasMaxLength(30)
+                        .HasColumnType("nvarchar(30)");
+
+                    b.Property<string>("LabelId")
+                        .IsRequired()
+                        .HasMaxLength(32)
+                        .HasColumnType("nvarchar(32)");
+
+                    b.Property<string>("Note")
+                        .HasMaxLength(500)
+                        .HasColumnType("nvarchar(500)");
+
+                    b.Property<string>("ToHolder")
+                        .HasMaxLength(200)
+                        .HasColumnType("nvarchar(200)");
+
+                    b.Property<string>("ToPhone")
+                        .HasMaxLength(30)
+                        .HasColumnType("nvarchar(30)");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("BatchId");
+
+                    b.HasIndex("FromPhone", "At");
+
+                    b.HasIndex("LabelId", "At");
+
+                    b.ToTable("BoxTransfers");
                 });
 
             modelBuilder.Entity("Solarzed.Api.Domain.CoverageSetting", b =>
@@ -250,6 +334,82 @@ namespace Solarzed.Api.Migrations
                     b.HasKey("Id");
 
                     b.ToTable("CoverageSettings");
+                });
+
+            modelBuilder.Entity("Solarzed.Api.Domain.LoginChallenge", b =>
+                {
+                    b.Property<string>("Id")
+                        .HasMaxLength(64)
+                        .HasColumnType("nvarchar(64)");
+
+                    b.Property<int>("Attempts")
+                        .HasColumnType("int");
+
+                    b.Property<string>("CodeHash")
+                        .IsRequired()
+                        .HasMaxLength(100)
+                        .HasColumnType("nvarchar(100)");
+
+                    b.Property<bool>("Consumed")
+                        .HasColumnType("bit");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<DateTime>("ExpiresAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<string>("Phone")
+                        .IsRequired()
+                        .HasMaxLength(30)
+                        .HasColumnType("nvarchar(30)");
+
+                    b.Property<int>("Revision")
+                        .IsConcurrencyToken()
+                        .HasColumnType("int");
+
+                    b.Property<bool>("Sent")
+                        .HasColumnType("bit");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("Phone", "CreatedAt");
+
+                    b.ToTable("LoginChallenges");
+                });
+
+            modelBuilder.Entity("Solarzed.Api.Domain.PortalUser", b =>
+                {
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("int");
+
+                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("Id"));
+
+                    b.Property<bool>("Active")
+                        .HasColumnType("bit");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<DateTime?>("LastLoginAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<string>("Name")
+                        .HasMaxLength(200)
+                        .HasColumnType("nvarchar(200)");
+
+                    b.Property<string>("Phone")
+                        .IsRequired()
+                        .HasMaxLength(30)
+                        .HasColumnType("nvarchar(30)");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("Phone")
+                        .IsUnique();
+
+                    b.ToTable("PortalUsers");
                 });
 
             modelBuilder.Entity("Solarzed.Api.Domain.Product", b =>
@@ -575,6 +735,15 @@ namespace Solarzed.Api.Migrations
                         .WithMany()
                         .HasForeignKey("WarrantyCode")
                         .OnDelete(DeleteBehavior.Restrict);
+                });
+
+            modelBuilder.Entity("Solarzed.Api.Domain.BoxTransfer", b =>
+                {
+                    b.HasOne("Solarzed.Api.Domain.BoxLabel", null)
+                        .WithMany()
+                        .HasForeignKey("LabelId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
                 });
 
             modelBuilder.Entity("Solarzed.Api.Domain.WarrantyClaim", b =>

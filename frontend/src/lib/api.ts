@@ -172,6 +172,20 @@ const FarsiStrings = {
   "Only QC-approved, non-void products can have box labels.": "فقط محصولات تأییدشده در QC و غیر باطل می‌توانند برچسب جعبه داشته باشند.",
   "Forbidden": "دسترسی مجاز نیست.", "Unauthorized": "ورود لازم است.", "Not found": "یافت نشد.",
   "Network error": "خطای شبکه",
+  // Box transfers
+  "BOX TRANSFERS": "جابه‌جایی کارتن‌ها", "Move boxes by carton serial": "انتقال کارتن با سریال روی جعبه",
+  "Box serials (scan or type, one per line)": "سریال کارتن‌ها (اسکن یا تایپ، هر خط یکی)",
+  "Current holder (safety check)": "دارنده فعلی (برای کنترل)", "Any holder — no check": "هر دارنده‌ای — بدون کنترل",
+  "Central warehouse": "انبار مرکزی", "Recipient": "تحویل‌گیرنده", "Recipient mobile (optional)": "موبایل تحویل‌گیرنده (اختیاری)",
+  "Note (optional)": "توضیح (اختیاری)", "Return to central warehouse": "بازگشت به انبار مرکزی", "Record transfer": "ثبت انتقال",
+  "Use selected boxes": "استفاده از کارتن‌های انتخاب‌شده", "boxes transferred": "کارتن منتقل شد", "Transfer number": "شماره حواله",
+  "Who holds the boxes": "کارتن‌ها دست چه کسی است", "Holder": "دارنده", "Boxes": "تعداد کارتن",
+  "Box history": "تاریخچه کارتن", "Show history": "نمایش تاریخچه", "From": "از", "To": "به", "By": "ثبت‌کننده", "Date": "تاریخ",
+  "No transfers recorded for this box.": "برای این کارتن انتقالی ثبت نشده است.", "Activated on a vehicle": "روی خودرو فعال شده",
+  "Enter who receives the boxes.": "تحویل‌گیرنده را وارد کنید.", "Recipient name is too long.": "نام تحویل‌گیرنده خیلی طولانی است.",
+  "Box serial not found.": "سریال کارتن یافت نشد.", "Note is too long.": "توضیح خیلی طولانی است.",
+  "Enter a valid mobile number.": "شماره موبایل معتبر وارد کنید.", "Enter 1–200 box serials.": "بین ۱ تا ۲۰۰ سریال کارتن وارد کنید.",
+  "One of these boxes was changed by someone else. Refresh and try again.": "یکی از این کارتن‌ها هم‌زمان توسط کاربر دیگری تغییر کرد. صفحه را تازه کنید و دوباره تلاش کنید.",
   "First page": "صفحه اول", "Last page": "صفحه آخر", "filter active": "فیلتر فعال", "filters active": "فیلتر فعال",
   "No filters": "بدون فیلتر", "Clear filters": "پاک کردن فیلترها",
 } as const;
@@ -324,25 +338,56 @@ export interface BoxLabel {
   id: string; rollId: string; product: string; type: "tint" | "ppf";
   filmYears: number; installYears: number | null; createdAt: string;
   activatedAt: string | null; warrantyCode?: string | null; activationUrl?: string;
+  holder: string | null; holderPhone: string | null; heldSince: string | null;
+  // Warranty card inside the carton (manager view only): factory code + box serial + card warranty number.
+  factoryCode?: string | null; cardCode?: string | null; fullCode?: string | null;
 }
 export interface BoxLabelsResult { labels: BoxLabel[]; siteUrl: string; smsConfigured: boolean }
 export function adminBoxLabels() { return apiFetch<BoxLabelsResult>("/api/admin/box-labels"); }
-export function issueBoxLabels(rollId: string, quantity: number) {
-  return apiFetch<{ labels: BoxLabel[] }>("/api/admin/box-labels", { method: "POST", body: JSON.stringify({ rollId, quantity }) });
+export function issueBoxLabels(rollId: string, quantity: number, factoryCode: string) {
+  return apiFetch<{ labels: BoxLabel[] }>("/api/admin/box-labels", { method: "POST", body: JSON.stringify({ rollId, quantity, factoryCode }) });
 }
+// ── Box transfers: the barcode serial on the carton (SZB-…) moves boxes from mobile to mobile ──
+export interface BoxTransfer { id: number; labelId: string; batchId: string; fromHolder: string | null; fromPhone: string | null; toHolder: string | null; toPhone: string | null; note: string | null; actor: string; at: string }
+export interface BoxHistory { id: string; product: string; rollId: string; activated: boolean; holder: string | null; holderPhone: string | null; heldSince: string | null; transfers: BoxTransfer[] }
+export interface TransferInput { serials: string[]; toHolder?: string | null; toPhone?: string | null; note?: string | null; expectedFrom?: string | null; toWarehouse?: boolean }
+export interface TransferResult { batchId: string; toHolder: string | null; toPhone: string | null; transfers: BoxTransfer[] }
+export function transferBoxes(data: TransferInput) {
+  return apiFetch<TransferResult>("/api/admin/box-labels/transfers", { method: "POST", body: JSON.stringify(data) });
+}
+export function boxHistory(serial: string) { return apiFetch<BoxHistory>(`/api/admin/box-labels/${encodeURIComponent(serial.trim())}/transfers`); }
+export interface HolderSummary { holder: string | null; phone: string | null; boxes: number }
+export function boxHolders() { return apiFetch<{ holders: HolderSummary[] }>("/api/admin/box-labels/holders"); }
 export function saveLabelSite(siteUrl: string) {
   return apiFetch("/api/admin/box-labels/site", { method: "POST", body: JSON.stringify({ siteUrl }) });
 }
 export function releaseRoll(id: string) {
   return apiFetch(`/api/admin/rolls/${encodeURIComponent(id)}`, { method: "POST", body: JSON.stringify({ status: "shipped", note: "Released by admin for box QR activation" }) });
 }
-export interface ActivationInfo { id: string; product: string; type: "tint" | "ppf"; activated: boolean; filmYears: number; installYears: number | null; smsAvailable: boolean; released: boolean }
+
+// ── Warranty card activation (public) ──
+export interface ActivationInfo { id: string; product: string; type: "tint" | "ppf"; activated: boolean; filmYears: number; installYears: number | null; smsAvailable: boolean; released: boolean; factoryCode: string | null; warrantyCode: string | null }
 export function inspectBox(token: string) {
   return apiFetch<ActivationInfo>("/api/activation/inspect", { method: "POST", body: JSON.stringify({ token }) });
 }
-export function sendActivationOtp(token: string, phone: string) {
-  return apiFetch<{ challengeId: string; expiresAt: string; retryAfterSeconds: number }>("/api/activation/otp", { method: "POST", body: JSON.stringify({ token, phone }) });
+/** Requires a signed-in portal session; the warranty is registered to that verified mobile. */
+export function completeActivation(token: string, registration: Record<string, unknown>) {
+  return apiFetch<WarrantyPublic>("/api/activation/complete", { method: "POST", body: JSON.stringify({ token, registration }) });
 }
-export function completeActivation(token: string, challengeId: string, otp: string, registration: Record<string, unknown>) {
-  return apiFetch<WarrantyPublic>("/api/activation/complete", { method: "POST", body: JSON.stringify({ token, challengeId, otp, registration }) });
+
+// ── Public-site account: representatives, shops and customers sign in with mobile + SMS code ──
+export interface PortalUser { phone: string; name: string | null }
+export function portalMe() { return apiFetch<{ user: PortalUser | null }>("/api/portal/me"); }
+export function portalSendCode(phone: string) {
+  return apiFetch<{ challengeId: string; phone: string; expiresAt: string; retryAfterSeconds: number }>("/api/portal/otp", { method: "POST", body: JSON.stringify({ phone }) });
 }
+export function portalLogin(challengeId: string, code: string) {
+  return apiFetch<PortalUser>("/api/portal/login", { method: "POST", body: JSON.stringify({ challengeId, code }) });
+}
+export function portalLogout() { return apiFetch<{ ok: boolean }>("/api/portal/logout", { method: "POST" }); }
+export interface HeldBox { id: string; product: string; type: "tint" | "ppf"; rollId: string; heldSince: string | null }
+export function portalBoxes() { return apiFetch<{ boxes: HeldBox[]; outgoing: BoxTransfer[] }>("/api/portal/boxes"); }
+export function portalTransfer(data: { serials: string[]; toPhone: string; toName?: string | null; note?: string | null }) {
+  return apiFetch<TransferResult>("/api/portal/boxes/transfer", { method: "POST", body: JSON.stringify(data) });
+}
+export function portalWarranties() { return apiFetch<{ warranties: WarrantyPublic[] }>("/api/portal/warranties"); }

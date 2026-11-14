@@ -8,9 +8,27 @@ using Solarzed.Api.Domain;
 namespace Solarzed.Api.Controllers;
 
 [ApiController, Route("api/admin/box-labels"), Authorize(Policy = "StaffPolicy")]
-public class BoxLabelsController(AppDbContext db, BoxLabelService labels, IActivationSmsSender sms) : ControllerBase
+public class BoxLabelsController(AppDbContext db, BoxLabelService labels, BoxTransferService transfers, IActivationSmsSender sms) : ControllerBase
 {
     bool IsAdmin => User.IsInRole("admin");
+
+    // Both managers and carton operators move boxes; the box serial is the only identifier used.
+    [HttpPost("transfers")]
+    public async Task<IActionResult> Transfer(TransferRequest request)
+    {
+        try { return Ok(await transfers.Transfer(request, AuditLog.Actor(User))); }
+        catch (ActivationError ex) { return StatusCode(ex.Status, new { error = ex.Message }); }
+    }
+
+    [HttpGet("{serial}/transfers")]
+    public async Task<IActionResult> History(string serial)
+    {
+        try { return Ok(await transfers.History(serial)); }
+        catch (ActivationError ex) { return StatusCode(ex.Status, new { error = ex.Message }); }
+    }
+
+    [HttpGet("holders")]
+    public async Task<IActionResult> Holders() => Ok(new { holders = await transfers.Holders() });
 
     [HttpGet]
     public async Task<IActionResult> List()
@@ -28,7 +46,7 @@ public class BoxLabelsController(AppDbContext db, BoxLabelService labels, IActiv
     {
         try
         {
-            var created = await labels.Issue(request.RollId, request.Quantity);
+            var created = await labels.Issue(request.RollId, request.Quantity, request.FactoryCode);
             return Ok(new { labels = created });
         }
         catch (ActivationError ex) { return StatusCode(ex.Status, new { error = ex.Message }); }
@@ -53,5 +71,5 @@ public class BoxLabelsController(AppDbContext db, BoxLabelService labels, IActiv
     }
 }
 
-public record IssueLabelsRequest(string RollId, int Quantity);
+public record IssueLabelsRequest(string RollId, int Quantity, string? FactoryCode);
 public record SiteUrlRequest(string SiteUrl);

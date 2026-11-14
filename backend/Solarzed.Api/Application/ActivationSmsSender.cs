@@ -31,11 +31,14 @@ public class ActivationSmsSender(HttpClient http, IConfiguration configuration, 
             return configuration["Faraz:Token"] ?? configuration["SMS_API_KEY"];
         }
     }
-    bool FarazConfigured => Uri.TryCreate(FarazEndpoint, UriKind.Absolute, out var uri) && uri.Scheme == "https" &&
+    // SOAP pattern web service (token login, as used by robatpayam). Its official endpoint is plain HTTP,
+    // so an administrator who explicitly picks "soap" mode may use http; other modes still require https.
+    bool Soap => configuration["Faraz:Mode"] == "soap";
+    bool FarazConfigured => Uri.TryCreate(FarazEndpoint, UriKind.Absolute, out var uri) && (uri.Scheme == "https" || (Soap && uri.Scheme == "http")) &&
         !string.IsNullOrWhiteSpace(FarazToken) && !string.IsNullOrWhiteSpace(configuration["Faraz:Sender"]) && !string.IsNullOrWhiteSpace(configuration["Faraz:OtpPattern"]);
     // Connected: credentials present. Configured: connected and not paused by an administrator.
     public bool Configured => Connected && SmsPolicy.From(configuration).Enabled;
-    public bool Connected => Rest ? !string.IsNullOrWhiteSpace(FarazToken) && !string.IsNullOrWhiteSpace(configuration["Faraz:OtpPattern"]) && !string.IsNullOrWhiteSpace(configuration["Faraz:Sender"]) : FarazConfigured || (Uri.TryCreate(Endpoint, UriKind.Absolute, out var uri) && uri.Scheme == "https");
+    public bool Connected => Soap ? FarazConfigured : Rest ?!string.IsNullOrWhiteSpace(FarazToken) && !string.IsNullOrWhiteSpace(configuration["Faraz:OtpPattern"]) && !string.IsNullOrWhiteSpace(configuration["Faraz:Sender"]) : FarazConfigured || (Uri.TryCreate(Endpoint, UriKind.Absolute, out var uri) && uri.Scheme == "https");
 
     public static bool FarazAccepted(string xml)
     {
@@ -50,11 +53,11 @@ public class ActivationSmsSender(HttpClient http, IConfiguration configuration, 
     }
 
     // Mirrors dande/apps/api/src/modules/sms/faraz-pattern.ts (SOAP pattern API).
-    public static string FarazEnvelope(string sender, string mobile, string pattern, string token, string code)
+    public static string FarazEnvelope(string sender, string mobile, string pattern, string token, string code, string variable = "code")
     {
         static string E(string value) => SecurityElement.Escape(value) ?? "";
         var recipient = mobile.StartsWith("0") ? "98" + mobile[1..] : mobile.TrimStart('+');
-        var values = E(JsonSerializer.Serialize(new { code }));
+        var values = E(JsonSerializer.Serialize(new Dictionary<string, string> { [variable] = code }));
         return $"""
             <?xml version="1.0" encoding="UTF-8"?>
             <SOAP-ENV:Envelope xmlns:SOAP-ENV="http://schemas.xmlsoap.org/soap/envelope/" xmlns:xsd="http://www.w3.org/2001/XMLSchema" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xmlns:SOAP-ENC="http://schemas.xmlsoap.org/soap/encoding/" SOAP-ENV:encodingStyle="http://schemas.xmlsoap.org/soap/encoding/"><SOAP-ENV:Body><ns1:SendSMSByPattern xmlns:ns1="Send_API"><fromNum xsi:type="xsd:string">{E(sender)}</fromNum><toNum SOAP-ENC:arrayType="xsd:string[1]" xsi:type="SOAP-ENC:Array"><item xsi:type="xsd:string">{E(recipient)}</item></toNum><Content xsi:type="xsd:string">{values}</Content><patternID xsi:type="xsd:string">{E(pattern)}</patternID><Type xsi:type="xsd:string">0</Type><token xsi:type="xsd:string">{E(token)}</token></ns1:SendSMSByPattern></SOAP-ENV:Body></SOAP-ENV:Envelope>
@@ -84,7 +87,7 @@ public class ActivationSmsSender(HttpClient http, IConfiguration configuration, 
             using var faraz = new HttpRequestMessage(HttpMethod.Post, FarazEndpoint);
             faraz.Headers.Add("SOAPAction", "\"SendSMSByPattern\"");
             faraz.Content = new StringContent(FarazEnvelope(configuration["Faraz:Sender"]!, phone,
-                configuration["Faraz:OtpPattern"]!, FarazToken!, code), Encoding.UTF8, "text/xml");
+                configuration["Faraz:OtpPattern"]!, FarazToken!, code, configuration["Faraz:CodeVariable"] ?? "code"), Encoding.UTF8, "text/xml");
             using var reply = await http.SendAsync(faraz, cancellationToken);
             var xml = await reply.Content.ReadAsStringAsync(cancellationToken);
             if (!reply.IsSuccessStatusCode || !FarazAccepted(xml))

@@ -212,6 +212,7 @@ export default function HomePage() {
             <div className="sv-registration-actions">
               <Link href="/register"><b>Register warranty</b><span>For sellers &amp; installers</span><i>↗</i></Link>
               <Link href="/warranty"><b>Check warranty</b><span>Find your installation by code</span><i>↗</i></Link>
+              <Link href="/account"><b>My account</b><span>Cartons, transfers &amp; your warranties</span><i>↗</i></Link>
             </div>
           </div>
         </section>

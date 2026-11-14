@@ -14,6 +14,9 @@ public class AppDbContext(DbContextOptions<AppDbContext> options) : DbContext(op
     public DbSet<ActivationChallenge> ActivationChallenges => Set<ActivationChallenge>();
     public DbSet<WarrantyClaim> WarrantyClaims => Set<WarrantyClaim>();
     public DbSet<AuditEntry> AuditEntries => Set<AuditEntry>();
+    public DbSet<BoxTransfer> BoxTransfers => Set<BoxTransfer>();
+    public DbSet<PortalUser> PortalUsers => Set<PortalUser>();
+    public DbSet<LoginChallenge> LoginChallenges => Set<LoginChallenge>();
 
     protected override void OnModelCreating(ModelBuilder mb)
     {
@@ -26,6 +29,15 @@ public class AppDbContext(DbContextOptions<AppDbContext> options) : DbContext(op
         mb.Entity<BoxLabel>().HasIndex(x => x.WarrantyCode).IsUnique().HasFilter("[WarrantyCode] IS NOT NULL");
         mb.Entity<BoxLabel>().HasOne<Roll>().WithMany().HasForeignKey(x => x.RollId).OnDelete(DeleteBehavior.Restrict);
         mb.Entity<BoxLabel>().HasOne<WarrantyRegistration>().WithMany().HasForeignKey(x => x.WarrantyCode).OnDelete(DeleteBehavior.Restrict);
+        mb.Entity<BoxLabel>().HasIndex(x => x.Holder);
+        mb.Entity<BoxLabel>().HasIndex(x => x.HolderPhone);
+        mb.Entity<BoxLabel>().HasIndex(x => x.CardCode).IsUnique().HasFilter("[CardCode] IS NOT NULL");
+        mb.Entity<BoxTransfer>().HasIndex(x => new { x.FromPhone, x.At });
+        mb.Entity<PortalUser>().HasIndex(x => x.Phone).IsUnique();
+        mb.Entity<LoginChallenge>().HasIndex(x => new { x.Phone, x.CreatedAt });
+        mb.Entity<BoxTransfer>().HasOne<BoxLabel>().WithMany().HasForeignKey(x => x.LabelId).OnDelete(DeleteBehavior.Restrict);
+        mb.Entity<BoxTransfer>().HasIndex(x => new { x.LabelId, x.At });
+        mb.Entity<BoxTransfer>().HasIndex(x => x.BatchId);
         mb.Entity<ActivationChallenge>().HasIndex(x => new { x.Phone, x.CreatedAt });
         mb.Entity<ActivationChallenge>().HasOne<BoxLabel>().WithMany().HasForeignKey(x => x.LabelId).OnDelete(DeleteBehavior.Cascade);
         mb.Entity<WarrantyRegistration>()

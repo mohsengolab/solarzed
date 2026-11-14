@@ -1,9 +1,12 @@
+using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.RateLimiting;
 using Solarzed.Api.Application;
 
 namespace Solarzed.Api.Controllers;
 
+// Scanning the warranty card opens /activate. Reading the card is public; registering the warranty requires the
+// customer to be signed in with their SMS-verified mobile (see PortalController).
 [ApiController, Route("api/activation"), EnableRateLimiting("activation"), RequestSizeLimit(16384)]
 public class ActivationController(BoxLabelService labels) : ControllerBase
 {
@@ -15,28 +18,16 @@ public class ActivationController(BoxLabelService labels) : ControllerBase
         catch (ActivationError ex) { return StatusCode(ex.Status, new { error = ex.Message }); }
     }
 
-    [HttpPost("otp")]
-    public async Task<IActionResult> SendCode(OtpRequest request, CancellationToken cancellationToken)
-    {
-        Response.Headers.CacheControl = "no-store";
-        try
-        {
-            var challenge = await labels.SendCode(request.Token, request.Phone, cancellationToken);
-            return Ok(new { challengeId = challenge.Id, expiresAt = challenge.ExpiresAt, retryAfterSeconds = labels.Policy.ResendSeconds });
-        }
-        catch (ActivationError ex) { return StatusCode(ex.Status, new { error = ex.Message }); }
-        catch (Microsoft.EntityFrameworkCore.DbUpdateConcurrencyException) { return Conflict(new { error = "Please retry the verification request." }); }
-    }
-
-    [HttpPost("complete")]
+    [HttpPost("complete"), Authorize(Policy = "PortalPolicy")]
     public async Task<IActionResult> Complete(ActivateBoxRequest request)
     {
         Response.Headers.CacheControl = "no-store";
-        try { return Ok(await labels.Activate(request)); }
+        var phone = PortalAuth.Phone(User);
+        if (phone == null) return Unauthorized(new { error = "Sign in with your mobile number first." });
+        try { return Ok(await labels.Activate(request, phone)); }
         catch (ActivationError ex) { return StatusCode(ex.Status, new { error = ex.Message }); }
-        catch (Microsoft.EntityFrameworkCore.DbUpdateConcurrencyException) { return Conflict(new { error = "The verification state changed. Please retry." }); }
+        catch (Microsoft.EntityFrameworkCore.DbUpdateConcurrencyException) { return Conflict(new { error = "This box was just changed. Please retry." }); }
     }
 }
 
 public record TokenRequest(string Token);
-public record OtpRequest(string Token, string Phone);
