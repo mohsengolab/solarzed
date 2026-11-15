@@ -5,7 +5,7 @@ import Link from "next/link";
 import QRCode from "qrcode";
 import {
   adminLogin, adminLogout, adminSession, adminOverview, adminWarranties, adminDecision,
-  adminRollsSearch, adminCreateRolls, adminGetSettings, adminSaveSettings,
+  adminRollsSearch, adminCreateRolls, adminUpdateRoll, adminDeleteRoll, adminGetSettings, adminSaveSettings,
   adminBoxLabels, managementFetch, ADMIN_UNAUTHORIZED, fa, qs,
 } from "@/lib/api";
 import styles from "./admin.module.css";
@@ -13,19 +13,25 @@ import labelsStyle from "./labels.module.css";
 import BoxLabelsPanel from "./BoxLabelsPanel";
 import { printQrLabels } from "./qrPrint";
 import { ProductsPanel, CustomersPanel, AccountPanel, UsersPanel } from "./ManagementPanels";
+import TicketsPanel from "./TicketsPanel";
 import SmsSettingsPanel from "./SmsSettingsPanel";
 import { ClaimsPanel, HistoryPanel, WarrantyActivity } from "./ClaimsPanels";
 import { usePaged, SortTh, Pager, FilterBar, countActive, downloadCsv, errorText } from "./AdminKit";
 
-type Role = "admin" | "carton";
-const VIEWS = ["overview", "reports", "warranties", "claims", "rolls", "products", "customers", "labels", "history", "sms", "settings", "account", "users"] as const;
+type Role = "superadmin" | "admin" | "carton";
+const VIEWS = ["overview", "reports", "warranties", "claims", "rolls", "products", "customers", "tickets", "labels", "history", "sms", "settings", "account", "users"] as const;
 type View = typeof VIEWS[number];
 const LABELS: Record<View, string> = {
   overview: "نمای کلی", reports: "گزارش‌ها", warranties: "گارانتی‌ها", claims: "ادعاها", history: "سابقه تغییرات", rolls: "رول‌ها", products: "محصولات",
-  labels: "برچسب‌ها", customers: "مشتریان", sms: "پیامک", settings: "تنظیمات", account: "حساب کاربری", users: "کاربران",
+  labels: "برچسب‌ها", customers: "مشتریان", tickets: "تیکت‌ها", sms: "پیامک", settings: "تنظیمات", account: "حساب کاربری", users: "کاربران",
 };
-// A carton operator only needs the box labels and their own account.
-const VIEWS_BY_ROLE: Record<Role, readonly View[]> = { admin: VIEWS, carton: ["labels", "account"] };
+// The customer list is confidential, and user management belongs to the super administrator alone.
+const VIEWS_BY_ROLE: Record<Role, readonly View[]> = {
+  superadmin: VIEWS,
+  admin: VIEWS.filter(v => v !== "customers" && v !== "users"),
+  carton: ["labels", "account"],
+};
+const roleFromSession = (value: string): Role => value === "superadmin" || value === "carton" ? value : "admin";
 
 // ── SVG Nav Icons ─────────────────────────────────────────────────────────────
 const NavIcons: Record<View, JSX.Element> = {
@@ -38,6 +44,7 @@ const NavIcons: Record<View, JSX.Element> = {
   products: <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"/></svg>,
   labels:   <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M20.59 13.41l-7.17 7.17a2 2 0 0 1-2.83 0L2 12V2h10l8.59 8.59a2 2 0 0 1 0 2.82z"/><line x1="7" y1="7" x2="7.01" y2="7"/></svg>,
   customers:<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>,
+  tickets:  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M21 11.5a2.5 2.5 0 0 1 0 5v2a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-2a2.5 2.5 0 0 0 0-5v-2a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/><line x1="12" y1="6" x2="12" y2="18" strokeDasharray="2 3"/></svg>,
   sms:      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>,
   settings: <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>,
   account:  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>,
@@ -59,7 +66,7 @@ export default function AdminPage() {
     adminSession()
       .then(s => {
         if (!live) return;
-        const r: Role = s.role === "carton" ? "carton" : "admin";
+        const r = roleFromSession(s.role);
         setRole(r);
         const wanted = viewFromHash();
         setView(VIEWS_BY_ROLE[r].includes(wanted) ? wanted : VIEWS_BY_ROLE[r][0]);
@@ -98,7 +105,7 @@ function LoginView({ onLogin }: { onLogin: (role: Role) => void }) {
     try {
       const session = await adminLogin(username.trim(), pw);
       setPw("");
-      onLogin(session.role === "carton" ? "carton" : "admin");
+      onLogin(roleFromSession(session.role));
     } catch (ex: unknown) {
       setErr(fa(errorText(ex, fa("Login failed"))));
     } finally {
@@ -130,7 +137,7 @@ function LoginView({ onLogin }: { onLogin: (role: Role) => void }) {
 
 const NAV_GROUPS: { label?: string; views: View[] }[] = [
   { views: ["overview", "reports"] },
-  { label: "مدیریت", views: ["warranties", "claims", "rolls", "products", "customers", "labels", "history"] },
+  { label: "مدیریت", views: ["warranties", "claims", "tickets", "rolls", "products", "customers", "labels", "history"] },
   { label: "پیکربندی", views: ["sms", "settings"] },
   { label: "حساب", views: ["account", "users"] },
 ];
@@ -188,6 +195,7 @@ function AdminApp({ view, role, onNav, onLogout }: { view: View; role: Role; onN
         {view === "users"     && <UsersPanel />}
         {view === "warranties"&& <WarrantiesPanel />}
         {view === "claims"    && <ClaimsPanel />}
+        {view === "tickets"   && <TicketsPanel />}
         {view === "history"   && <HistoryPanel />}
         {view === "rolls"     && <RollsPanel />}
         {view === "labels"    && <BoxLabelsPanel onSettings={() => onNav("settings")} role={role} />}
@@ -770,6 +778,16 @@ function RollsPanel() {
   const [note, setNote] = useState("");
   const list = usePaged<RollRow>(adminRollsSearch<RollRow>, f, { sort: "receivedAt" });
   const set = (k: keyof typeof R_EMPTY) => (e: { target: { value: string } }) => setF(p => ({ ...p, [k]: e.target.value }));
+  // A QR of the roll ID for every listed roll, drawn right in the registry.
+  const [qrs, setQrs] = useState<Record<string, string>>({});
+  const rowKey = list.items.map(r => r.id).join("|");
+  useEffect(() => {
+    let cancelled = false;
+    Promise.all(rowKey.split("|").filter(Boolean).map(async id =>
+      [id, await QRCode.toDataURL(id, { errorCorrectionLevel: "M", margin: 4, scale: 6 })] as const,
+    )).then(entries => { if (!cancelled) setQrs(Object.fromEntries(entries)); }).catch(() => {});
+    return () => { cancelled = true; };
+  }, [rowKey]);
 
   useEffect(() => {
     managementFetch<{ items: typeof products }>("products?pageSize=200").then(r => setProducts(r.items)).catch(e => setMsg(fa(errorText(e, "بارگذاری محصولات ناموفق بود."))));
@@ -777,8 +795,21 @@ function RollsPanel() {
 
   async function updateRoll(e: FormEvent) {
     e.preventDefault(); if (!edit) return; setSaving(true); setMsg("");
-    try { await managementFetch(`rolls/${encodeURIComponent(edit.id)}`, { qc: edit.qc, status: edit.status, note }); list.reload(); setEdit(null); setMsg("موجودی به‌روزرسانی شد."); }
+    try {
+      await adminUpdateRoll(edit.id, {
+        qc: edit.qc, status: edit.status, note,
+        batch: edit.batch, supplier: edit.supplier, widthCm: edit.widthCm ?? null, lengthM: edit.lengthM ?? null,
+      });
+      list.reload(); setEdit(null); setMsg("موجودی به‌روزرسانی شد.");
+    }
     catch (e) { setMsg(fa(errorText(e, "به‌روزرسانی ناموفق بود."))); } finally { setSaving(false); }
+  }
+
+  async function deleteRoll(id: string) {
+    if (!window.confirm(`رول ${id} حذف شود؟ اگر ثبت گارانتی یا برچسب کارتن داشته باشد حذف نمی‌شود.`)) return;
+    setMsg("");
+    try { await adminDeleteRoll(id); setMsg("رول حذف شد."); list.reload(); }
+    catch (e) { setMsg(fa(errorText(e, "حذف ناموفق بود."))); }
   }
 
   async function onSubmit(e: FormEvent) {
@@ -897,12 +928,13 @@ function RollsPanel() {
       {list.error && <p role="alert" className={styles.errorText}>{list.error}</p>}
       <div className={styles.card}>
         <table className={`${styles.table} ${list.loading ? styles.tableBusy : ""}`}>
-          <thead><tr><SortTh column="id" label="شناسه رول" {...sortProps} /><SortTh column="modelCode" label="مدل" {...sortProps} /><SortTh column="type" label="نوع" {...sortProps} />
+          <thead><tr><th>QR</th><SortTh column="id" label="شناسه رول" {...sortProps} /><SortTh column="modelCode" label="مدل" {...sortProps} /><SortTh column="type" label="نوع" {...sortProps} />
             <SortTh column="batch" label="بچ" {...sortProps} /><th>ابعاد (cm × m)</th><SortTh column="supplier" label="تأمین‌کننده" {...sortProps} /><SortTh column="qc" label="QC" {...sortProps} />
-            <SortTh column="status" label="وضعیت" {...sortProps} /><th>نصب‌ها</th><SortTh column="receivedAt" label="دریافت" {...sortProps} /></tr></thead>
+            <SortTh column="status" label="وضعیت" {...sortProps} /><th>نصب‌ها</th><SortTh column="receivedAt" label="دریافت" {...sortProps} /><th>عملیات</th></tr></thead>
           <tbody>
             {list.items.map(r => (
               <tr key={r.id}>
+                <td>{qrs[r.id] && <img src={qrs[r.id]} alt={`QR رول ${r.id}`} width={44} height={44} style={{ display: "block", background: "#fff", borderRadius: 4, padding: 2 }} />}</td>
                 <td><code dir="ltr">{r.id}</code></td>
                 <td>{r.modelCode}</td>
                 <td>{r.type}</td>
@@ -910,9 +942,13 @@ function RollsPanel() {
                 <td dir="ltr">{r.widthCm != null && r.lengthM != null ? `${r.widthCm} × ${r.lengthM}` : "—"}</td>
                 <td>{r.supplier}</td>
                 <td><Badge value={r.qc} /></td>
-                <td>{fa(r.status)} <button type="button" className={styles.ghost} onClick={() => { setEdit(r); setNote(""); setMsg(""); }}>مدیریت {r.id}</button></td>
+                <td>{fa(r.status)}</td>
                 <td>{r.installs.toLocaleString("fa-IR")}</td>
                 <td>{new Date(r.receivedAt).toLocaleDateString("fa-IR")}</td>
+                <td>
+                  <button type="button" className={styles.ghost} onClick={() => { setEdit(r); setNote(""); setMsg(""); }}>مدیریت</button>
+                  <button type="button" className={styles.danger} disabled={r.installs > 0} title={r.installs > 0 ? "این رول ثبت گارانتی دارد" : undefined} onClick={() => deleteRoll(r.id)}>حذف</button>
+                </td>
               </tr>
             ))}
           </tbody>
@@ -924,8 +960,20 @@ function RollsPanel() {
         <h2 dir="ltr">{edit.id}</h2><button type="button" className={styles.dialogClose} aria-label="بستن موجودی" onClick={() => setEdit(null)}>×</button>
         <label>کنترل کیفیت<select value={edit.qc} onChange={e => setEdit({ ...edit, qc: e.target.value })}>{["pending", "approved", "rejected"].map(v => <option key={v} value={v}>{fa(v)}</option>)}</select></label>
         <label>وضعیت انبار<select value={edit.status} onChange={e => setEdit({ ...edit, status: e.target.value })}>{["instock", "shipped", "consumed", "void"].map(v => <option key={v} value={v}>{fa(v)}</option>)}</select></label>
+        <div className={styles.row2}>
+          <label>بچ<input maxLength={32} value={edit.batch} dir="ltr" onChange={e => setEdit({ ...edit, batch: e.target.value })} /></label>
+          <label>تأمین‌کننده<input maxLength={16} value={edit.supplier} dir="ltr" onChange={e => setEdit({ ...edit, supplier: e.target.value })} /></label>
+          <label>عرض (سانتی‌متر)<input type="number" min={1} max={1000} step="0.1" value={edit.widthCm ?? ""} dir="ltr"
+            onChange={e => setEdit({ ...edit, widthCm: e.target.value === "" ? null : Number(e.target.value) })} /></label>
+          <label>طول (متر)<input type="number" min={1} max={10000} step="0.1" value={edit.lengthM ?? ""} dir="ltr"
+            onChange={e => setEdit({ ...edit, lengthM: e.target.value === "" ? null : Number(e.target.value) })} /></label>
+        </div>
         <label>یادداشت تغییر<textarea maxLength={1000} value={note} onChange={e => setNote(e.target.value)} /></label>
-        <button className={styles.btnPrimary} disabled={saving}>ذخیره موجودی</button>{msg && <p role="alert">{msg}</p>}
+        <div className={styles.filters}>
+          <button className={styles.btnPrimary} disabled={saving}>{saving ? "در حال ذخیره…" : "ذخیره موجودی"}</button>
+          <button type="button" className={styles.danger} disabled={saving} onClick={() => { deleteRoll(edit.id); setEdit(null); }}>حذف رول</button>
+        </div>
+        {msg && <p role="alert">{msg}</p>}
         <h3>تاریخچه</h3><div className={styles.history}>{(JSON.parse(edit.historyJson || "[]") as { at: string; action: string; note: string }[]).map((h, i) => <p key={i}>{h.at} · {h.action} · {h.note}</p>)}</div>
       </form></div>}
     </section>

@@ -4,6 +4,13 @@ const isDev = process.env.NODE_ENV === "development";
 // Server-only: browser goes through Next.js rewrite proxy, avoiding CORS on 127.0.0.1.
 const api = process.env.BACKEND_URL ?? "http://localhost:5296";
 const apiOrigin = (() => { try { return new URL(api).origin; } catch { return ""; } })();
+// The browser calls this origin directly (api.ts BASE); it must be allowed in connect-src.
+const browserApiOrigin = (() => {
+  const url = process.env.NEXT_PUBLIC_API_URL;
+  if (!url) return "";
+  try { return new URL(url).origin; } catch { return ""; }
+})();
+const connectOrigins = [...new Set([apiOrigin, browserApiOrigin].filter(Boolean))].join(" ");
 
 // Static (non-nonce) CSP so pages stay cacheable/prerenderable. Inline scripts are required by
 // Next.js bootstrapping; everything else is restricted to this origin, the API and Google Fonts.
@@ -13,7 +20,7 @@ const csp = [
   "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com",
   "font-src 'self' data: https://fonts.gstatic.com",
   "img-src 'self' data: blob:",
-  `connect-src 'self' ${apiOrigin}${isDev ? " ws: wss:" : ""}`.trim(),
+  `connect-src 'self' ${connectOrigins}${isDev ? " ws: wss:" : ""}`.trim(),
   "object-src 'none'",
   "base-uri 'self'",
   "form-action 'self'",

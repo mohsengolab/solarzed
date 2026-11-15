@@ -138,7 +138,7 @@ const FarsiStrings = {
   // Pager and filters
   "Previous": "قبلی", "Next": "بعدی", "Page ": "صفحه ", "of": "از",
   // Status and flag values returned by the API
-  "pending": "در انتظار", "active": "فعال", "rejected": "رد شده",
+  "pending": "در انتظار", "active": "فعال", "approved": "تأیید شده", "rejected": "رد شده",
   "instock": "موجود در انبار", "shipped": "ارسال شده", "consumed": "مصرف شده", "void": "باطل",
   "roll_unknown": "رول ناشناس", "roll_not_approved": "رول تأیید‌نشده", "roll_not_distributed": "رول توزیع‌نشده",
   "roll_void": "رول باطل", "type_mismatch": "عدم تطابق نوع", "vin_repeat": "تکرار VIN",
@@ -186,8 +186,52 @@ const FarsiStrings = {
   "Box serial not found.": "سریال کارتن یافت نشد.", "Note is too long.": "توضیح خیلی طولانی است.",
   "Enter a valid mobile number.": "شماره موبایل معتبر وارد کنید.", "Enter 1–200 box serials.": "بین ۱ تا ۲۰۰ سریال کارتن وارد کنید.",
   "One of these boxes was changed by someone else. Refresh and try again.": "یکی از این کارتن‌ها هم‌زمان توسط کاربر دیگری تغییر کرد. صفحه را تازه کنید و دوباره تلاش کنید.",
+  // Server messages (products / rolls / tickets / users / email)
+  "Product code already exists.": "این کد محصول از قبل وجود دارد.",
+  "Product name already exists.": "محصولی با این نام از قبل وجود دارد.",
+  "Product code cannot change; delete it and create a new product.": "کد محصول تغییر نمی‌کند؛ آن را حذف و محصول جدید بسازید.",
+  "This product has rolls in inventory; delete or void its rolls first.": "این محصول رول در موجودی دارد؛ ابتدا رول‌های آن را حذف یا باطل کنید.",
+  "Code must be 1–24 letters, numbers or hyphens.": "کد باید ۱ تا ۲۴ حرف، عدد یا خط تیره باشد.",
+  "Product name is required (maximum 120 characters).": "نام محصول الزامی است (حداکثر ۱۲۰ کاراکتر).",
+  "This roll has warranty registrations; it cannot be deleted. Mark it void instead.": "این رول ثبت گارانتی دارد و حذف نمی‌شود؛ آن را باطل کنید.",
+  "This roll has carton labels; it cannot be deleted. Mark it void instead.": "این رول برچسب کارتن دارد و حذف نمی‌شود؛ آن را باطل کنید.",
+  "Ticket not found.": "تیکت یافت نشد.",
+  "Write a reply of up to 4000 characters.": "پاسخی تا ۴۰۰۰ کاراکتر بنویسید.",
+  "Enter a subject of up to 200 characters.": "موضوعی تا ۲۰۰ کاراکتر وارد کنید.",
+  "Write your question (up to 4000 characters).": "پرسش خود را بنویسید (تا ۴۰۰۰ کاراکتر).",
+  "Write your message (up to 4000 characters).": "پیام خود را بنویسید (تا ۴۰۰۰ کاراکتر).",
+  "Please retry saving your profile.": "ذخیره پروفایل ناموفق بود؛ دوباره تلاش کنید.",
+  "Add and verify your mobile number first; cartons are handed over by mobile number.": "ابتدا شماره موبایل خود را ثبت و تأیید کنید؛ تحویل کارتن با موبایل انجام می‌شود.",
+  "Choose the super administrator, manager or carton role.": "نقش مدیر کل، مدیر یا کارتن را انتخاب کنید.",
+  "At least one active super administrator account must remain.": "حداقل یک حساب مدیر کل فعال باید باقی بماند.",
+  "This account is disabled. Please contact Solarzed support.": "این حساب غیرفعال است. با پشتیبانی سولارزد تماس بگیرید.",
+  "Please sign in again.": "لطفاً دوباره وارد شوید.",
+  "Please retry the verification request.": "درخواست تأیید را دوباره ارسال کنید.",
+  "Please retry signing in.": "ورود ناموفق بود؛ دوباره تلاش کنید.",
+  "Enter the SMTP host and a valid sender address.": "میزبان SMTP و آدرس فرستنده معتبر را وارد کنید.",
+  "Enter the SMTP password for the user account, or leave the user empty.": "رمز SMTP حساب کاربری را وارد کنید یا کاربر را خالی بگذارید.",
+  "Email settings saved. No SMTP user set; the server must accept anonymous sending.": "تنظیمات ایمیل ذخیره شد. کاربر SMTP تعیین نشده؛ سرور باید ارسال ناشناس را بپذیرد.",
+  "Email sending is not configured.": "ارسال ایمیل تنظیم نشده است.",
+  "Could not reach the SMTP server.": "اتصال به سرور SMTP ناموفق بود.",
+  "Enter a valid email address.": "یک ایمیل معتبر وارد کنید.",
   "First page": "صفحه اول", "Last page": "صفحه آخر", "filter active": "فیلتر فعال", "filters active": "فیلتر فعال",
   "No filters": "بدون فیلتر", "Clear filters": "پاک کردن فیلترها",
+  // Tickets
+  "Tickets": "تیکت‌ها", "tickets": "تیکت‌ها", "Support tickets": "تیکت‌های پشتیبانی",
+  "Subject": "موضوع", "Replies": "پاسخ‌ها", "User": "کاربر", "Profile": "پروفایل",
+  "open": "باز", "answered": "پاسخ داده شد", "closed": "بسته", "Open": "باز",
+  "Reply": "پاسخ", "Close ticket": "بستن تیکت", "Reopen": "بازگشایی",
+  // Products: name-only edit + hard delete
+  "Rename": "تغییر نام", "Delete product": "حذف محصول", "Delete roll": "حذف رول",
+  // Email settings
+  "Email channel": "کانال ایمیل", "SMTP host": "میزبان SMTP", "Port": "پورت",
+  "Sender address": "آدرس فرستنده", "Sender name": "نام فرستنده",
+  "SMTP user": "کاربر SMTP", "SMTP password": "رمز SMTP", "Use SSL/TLS": "استفاده از SSL/TLS",
+  "Save email settings": "ذخیره تنظیمات ایمیل", "Send test email": "ارسال ایمیل آزمایشی",
+  "Email address": "آدرس ایمیل",
+  // Portal profile
+  "First name": "نام", "Last name": "نام خانوادگی", "Country": "کشور", "City": "شهر", "Job": "شغل",
+  "Bind phone": "ثبت شماره موبایل", "Bind email": "ثبت ایمیل",
 } as const;
 
 export async function apiFetch<T>(
@@ -278,14 +322,15 @@ export function adminLogin(username: string, password: string) {
   });
 }
 
-// ── Users (manager only) ──────────────────────────────────────────────────────
+// ── Users (super administrator only) ─────────────────────────────────────────
 
-export interface AdminUserRow { id: number; username: string; role: "admin" | "carton"; displayName: string | null; active: boolean }
+export type AdminRole = "superadmin" | "admin" | "carton";
+export interface AdminUserRow { id: number; username: string; role: AdminRole; displayName: string | null; active: boolean }
 export function adminUsers() { return apiFetch<{ users: AdminUserRow[] }>("/api/admin/users"); }
-export function adminCreateUser(data: { username: string; password: string; role: "admin" | "carton"; displayName?: string; active: boolean }) {
+export function adminCreateUser(data: { username: string; password: string; role: AdminRole; displayName?: string; active: boolean }) {
   return apiFetch("/api/admin/users", { method: "POST", body: JSON.stringify(data) });
 }
-export function adminUpdateUser(id: number, data: { role?: "admin" | "carton"; displayName?: string; active?: boolean }) {
+export function adminUpdateUser(id: number, data: { role?: AdminRole; displayName?: string; active?: boolean }) {
   return apiFetch(`/api/admin/users/${id}`, { method: "POST", body: JSON.stringify(data) });
 }
 export function adminResetPassword(id: number, password: string) {
@@ -322,6 +367,34 @@ export function adminCreateRolls(data: Record<string, unknown>) {
     body: JSON.stringify(data),
   });
 }
+
+/** Updates a roll's stock fields plus its batch, supplier and physical dimensions. */
+export function adminUpdateRoll(id: string, data: { qc?: string; status?: string; note?: string; batch?: string; supplier?: string; widthCm?: number | null; lengthM?: number | null }) {
+  return apiFetch(`/api/admin/rolls/${encodeURIComponent(id)}`, { method: "POST", body: JSON.stringify(data) });
+}
+
+/** Deletes a roll. The API refuses while warranty registrations or carton labels still reference it. */
+export function adminDeleteRoll(id: string) {
+  return apiFetch<{ ok: boolean }>(`/api/admin/rolls/${encodeURIComponent(id)}`, { method: "DELETE" });
+}
+
+// ── Admin support tickets ────────────────────────────────────────────────────
+
+export interface AdminTicketRow {
+  id: number; code: string; subject: string; status: "open" | "answered" | "closed";
+  createdAt: string; updatedAt: string; replies: number;
+  userPhone: string | null; userEmail: string | null;
+  firstName: string | null; lastName: string | null; country: string | null; city: string | null; job: string | null;
+}
+export interface AdminTicketReply { id: number; author: "user" | "staff"; authorLabel: string | null; message: string; createdAt: string }
+export interface AdminTicketDetail { ticket: AdminTicketRow; profile: { phone: string | null; email: string | null; name: string | null; firstName: string | null; lastName: string | null; country: string | null; city: string | null; job: string | null; createdAt: string; lastLoginAt: string | null } | null; replies: AdminTicketReply[] }
+export function adminTickets<T = AdminTicketRow>(query: string) { return apiFetch<Paged<T>>(`/api/admin/tickets${query}`); }
+export function adminTicketDetail(id: number) { return apiFetch<AdminTicketDetail>(`/api/admin/tickets/${id}`); }
+export function adminTicketReply(id: number, message: string) {
+  return apiFetch<{ ok: boolean; status: string }>(`/api/admin/tickets/${id}/reply`, { method: "POST", body: JSON.stringify({ message }) });
+}
+export function adminTicketClose(id: number) { return apiFetch<{ ok: boolean; status: string }>(`/api/admin/tickets/${id}/close`, { method: "POST", body: JSON.stringify({}) }); }
+export function adminTicketOpen(id: number) { return apiFetch<{ ok: boolean; status: string }>(`/api/admin/tickets/${id}/open`, { method: "POST", body: JSON.stringify({}) }); }
 
 export function adminGetSettings() {
   return apiFetch("/api/admin/settings");
@@ -375,16 +448,50 @@ export function completeActivation(token: string, registration: Record<string, u
   return apiFetch<WarrantyPublic>("/api/activation/complete", { method: "POST", body: JSON.stringify({ token, registration }) });
 }
 
-// ── Public-site account: representatives, shops and customers sign in with mobile + SMS code ──
-export interface PortalUser { phone: string; name: string | null }
+// ── Public-site account: representatives, shops and customers sign in with mobile or email + code ──
+export interface PortalUser {
+  phone: string | null; email: string | null; name: string | null;
+  firstName: string | null; lastName: string | null; country: string | null; city: string | null; job: string | null;
+}
 export function portalMe() { return apiFetch<{ user: PortalUser | null }>("/api/portal/me"); }
-export function portalSendCode(phone: string) {
-  return apiFetch<{ challengeId: string; phone: string; expiresAt: string; retryAfterSeconds: number }>("/api/portal/otp", { method: "POST", body: JSON.stringify({ phone }) });
+export type PortalChannel = "sms" | "email";
+/** Sends a sign-in code by SMS (mobile) or email. `identifier` is the mobile number or email address. */
+export function portalSendCode(identifier: string, channel: PortalChannel = "sms") {
+  const body = channel === "email" ? { email: identifier, channel } : { phone: identifier, channel };
+  return apiFetch<{ challengeId: string; phone: string | null; email: string | null; channel: string; expiresAt: string; retryAfterSeconds: number }>(
+    "/api/portal/otp", { method: "POST", body: JSON.stringify(body) });
 }
 export function portalLogin(challengeId: string, code: string) {
   return apiFetch<PortalUser>("/api/portal/login", { method: "POST", body: JSON.stringify({ challengeId, code }) });
 }
 export function portalLogout() { return apiFetch<{ ok: boolean }>("/api/portal/logout", { method: "POST" }); }
+
+/** Saves the profile: first/last name, country, city and job. */
+export function portalProfile(data: { name?: string; firstName?: string; lastName?: string; country?: string; city?: string; job?: string }) {
+  return apiFetch<PortalUser>("/api/portal/profile", { method: "POST", body: JSON.stringify(data) });
+}
+/** Starts the bind challenge for a new mobile number or email address; complete it with portalBindVerify. */
+export function portalBind(channel: PortalChannel, identifier: string) {
+  return apiFetch<{ challengeId: string; expiresAt: string; retryAfterSeconds: number }>(
+    `/api/portal/bind-${channel === "email" ? "email" : "phone"}`, { method: "POST", body: JSON.stringify({ identifier }) });
+}
+export function portalBindVerify(channel: PortalChannel, challengeId: string, code: string) {
+  return apiFetch<PortalUser>(`/api/portal/bind-${channel === "email" ? "email" : "phone"}/verify`, { method: "POST", body: JSON.stringify({ challengeId, code }) });
+}
+
+// ── Portal support tickets: each ticket carries the writer's verified identity ──
+export interface PortalTicket { id: number; code: string; subject: string; status: "open" | "answered" | "closed"; createdAt: string; updatedAt: string; replies: number }
+export function portalCreateTicket(subject: string, message: string) {
+  return apiFetch<{ ticket: PortalTicket }>("/api/portal/tickets", { method: "POST", body: JSON.stringify({ subject, message }) });
+}
+export function portalTickets() { return apiFetch<{ tickets: PortalTicket[] }>("/api/portal/tickets"); }
+export function portalTicketDetail(id: number) {
+  return apiFetch<{ ticket: { id: number; code: string; subject: string; status: string; createdAt: string; updatedAt: string }; replies: AdminTicketReply[] }>(`/api/portal/tickets/${id}`);
+}
+export function portalTicketReply(id: number, message: string) {
+  return apiFetch<{ ok: boolean }>(`/api/portal/tickets/${id}/replies`, { method: "POST", body: JSON.stringify({ message }) });
+}
+
 export interface HeldBox { id: string; product: string; type: "tint" | "ppf"; rollId: string; heldSince: string | null }
 export function portalBoxes() { return apiFetch<{ boxes: HeldBox[]; outgoing: BoxTransfer[] }>("/api/portal/boxes"); }
 export function portalTransfer(data: { serials: string[]; toPhone: string; toName?: string | null; note?: string | null }) {

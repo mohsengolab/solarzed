@@ -44,7 +44,7 @@ public class AdminController(AppDbContext db, IConfiguration cfg) : ControllerBa
         var admin = await db.AdminUsers.FirstOrDefaultAsync(x => x.Username == username);
         // Always run one bcrypt verification so timing does not reveal unknown usernames.
         var ok = BCrypt.Net.BCrypt.Verify(password, admin?.PasswordHash ?? AdminAuth.DummyHash) &&
-                 admin != null && admin.Active && (admin.Role == "admin" || admin.Role == "carton");
+                 admin != null && admin.Active && (admin.Role == "admin" || admin.Role == "carton" || admin.Role == "superadmin");
         if (!ok)
         {
             throttle?.Fail(username);
@@ -334,9 +334,23 @@ public class AdminController(AppDbContext db, IConfiguration cfg) : ControllerBa
         if ((st == RollStatus.Shipped || st == RollStatus.Consumed) && qc != RollQc.Approved)
             return BadRequest(new { error = "QC approval is required before release." });
         if ((req.Note?.Length ?? 0) > 1000) return BadRequest(new { error = "Note is too long." });
-        AuditLog.Add(db, Actor, "roll", roll.Id, "updated", AuditLog.Diff(("status", roll.Status, st), ("qc", roll.Qc, qc)), req.Note);
+        if (req.Batch is { Length: > 32 }) return BadRequest(new { error = "Batch is limited to 32 characters." });
+        if (req.Supplier is { Length: > 16 }) return BadRequest(new { error = "Supplier is limited to 16 characters." });
+        if (req.WidthCm is { } w && (w <= 0 || w > 1000)) return BadRequest(new { error = "Width must be between 0 and 1000 cm." });
+        if (req.LengthM is { } l && (l <= 0 || l > 10000)) return BadRequest(new { error = "Length must be between 0 and 10000 m." });
+
+        var before = new { roll.Status, roll.Qc, roll.Batch, roll.Supplier, roll.WidthCm, roll.LengthM };
+        AuditLog.Add(db, Actor, "roll", roll.Id, "updated", AuditLog.Diff(
+            ("status", before.Status, st), ("qc", before.Qc, qc),
+            ("batch", before.Batch, string.IsNullOrWhiteSpace(req.Batch) ? before.Batch : req.Batch.Trim()),
+            ("supplier", before.Supplier, string.IsNullOrWhiteSpace(req.Supplier) ? before.Supplier : req.Supplier.Trim()),
+            ("widthCm", before.WidthCm, req.WidthCm), ("lengthM", before.LengthM, req.LengthM)), req.Note);
         roll.Status = st;
         roll.Qc = qc;
+        if (!string.IsNullOrWhiteSpace(req.Batch)) roll.Batch = req.Batch.Trim();
+        if (!string.IsNullOrWhiteSpace(req.Supplier)) roll.Supplier = req.Supplier.Trim();
+        if (req.WidthCm is { } width) roll.WidthCm = width;
+        if (req.LengthM is { } length) roll.LengthM = length;
 
         // append to history
         var history = JsonSerializer.Deserialize<List<JsonElement>>(roll.HistoryJson) ?? [];
@@ -347,6 +361,27 @@ public class AdminController(AppDbContext db, IConfiguration cfg) : ControllerBa
         })).RootElement);
         roll.HistoryJson = JsonSerializer.Serialize(history);
 
+        await db.SaveChangesAsync();
+        return Ok(new { ok = true });
+    }
+
+    /// <summary>Deletes a roll. Blocked while warranty registrations or carton labels still reference it.</summary>
+    [HttpDelete("rolls/{id}")]
+    [Authorize(Policy = "AdminPolicy")]
+    public async Task<IActionResult> DeleteRoll(string id)
+    {
+        var roll = await db.Rolls.FirstOrDefaultAsync(r => r.Id == id);
+        if (roll == null) return NotFound();
+
+        if (await db.WarrantyRegistrations.AnyAsync(w => w.RollId == id))
+            return Conflict(new { error = "This roll has warranty registrations; it cannot be deleted. Mark it void instead." });
+        if (await db.BoxLabels.AnyAsync(b => b.RollId == id))
+            return Conflict(new { error = "This roll has carton labels; it cannot be deleted. Mark it void instead." });
+
+        AuditLog.Add(db, Actor, "roll", roll.Id, "deleted", AuditLog.Diff(
+            ("modelCode", roll.ModelCode, null), ("batch", roll.Batch, null), ("supplier", roll.Supplier, null),
+            ("qc", roll.Qc, null), ("status", roll.Status, null)));
+        db.Rolls.Remove(roll);
         await db.SaveChangesAsync();
         return Ok(new { ok = true });
     }
@@ -445,7 +480,7 @@ public class RollSearch
     public string? Dir { get; set; }
 }
 public record DecisionRequest(string Status, string? Note);
-public record UpdateRollRequest(string? Status, string? Qc, string? Note);
+public record UpdateRollRequest(string? Status, string? Qc, string? Note, string? Batch = null, string? Supplier = null, decimal? WidthCm = null, decimal? LengthM = null);
 public record SettingsRequest(DurationsDto? Durations, int? WarrantyCodeLength);
 public record DurationsDto(PeriodDto? Tint, PeriodDto? Ppf);
 public record PeriodDto(int? Film, int? Install);

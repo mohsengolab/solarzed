@@ -12,10 +12,11 @@ namespace Solarzed.Api.Controllers;
 [ApiController, Route("api/admin/sms"), Authorize(Policy = "AdminPolicy")]
 [ResponseCache(NoStore = true, Location = ResponseCacheLocation.None)]
 public class SmsSettingsController(IConfiguration config, IWebHostEnvironment env, IDataProtectionProvider protection,
-    IHttpClientFactory clients, IActivationSmsSender sender, SmsLog log) : ControllerBase
+    IHttpClientFactory clients, IActivationSmsSender sender, SmsLog log, IEmailSender email) : ControllerBase
 {
     static readonly SemaphoreSlim Gate = new(1, 1);
     const string Protector = "Solarzed.Faraz.Token.v1";
+    const string EmailProtector = "Solarzed.Email.Password.v1";
     const string ProviderBase = "https://api.iranpayamak.com/ws/v1/";
     const string SoapDefault = "http://185.112.33.61/wbs/send.php";
 
@@ -24,6 +25,14 @@ public class SmsSettingsController(IConfiguration config, IWebHostEnvironment en
         var encrypted = config["Faraz:ProtectedToken"];
         if (string.IsNullOrEmpty(encrypted)) return null;
         try { return protection.CreateProtector(Protector).Unprotect(encrypted); }
+        catch (CryptographicException) { return null; }
+    }
+
+    string? StoredEmailPassword()
+    {
+        var encrypted = config["Email:ProtectedPassword"];
+        if (string.IsNullOrEmpty(encrypted)) return null;
+        try { return protection.CreateProtector(EmailProtector).Unprotect(encrypted); }
         catch (CryptographicException) { return null; }
     }
 
@@ -40,6 +49,13 @@ public class SmsSettingsController(IConfiguration config, IWebHostEnvironment en
             line = config["Faraz:Sender"] ?? "",
             endpoint = config["Faraz:Mode"] == "soap" ? config["Faraz:Endpoint"] : null, updatedAt = config["Faraz:UpdatedAt"],
             policy = new { policy.Enabled, policy.OtpMinutes, policy.ResendSeconds, policy.DailyLimit },
+            email = new
+            {
+                configured = email.Configured,
+                host = config["Email:Host"] ?? "", port = int.TryParse(config["Email:Port"], out var p) ? p : 587,
+                from = config["Email:From"] ?? "", senderName = config["Email:Name"] ?? "",
+                user = config["Email:User"] ?? "", passwordStored = StoredEmailPassword() != null,
+            },
         });
     }
 
@@ -121,6 +137,56 @@ public class SmsSettingsController(IConfiguration config, IWebHostEnvironment en
         { log.Add(phone, "test", false, "Provider unreachable"); return StatusCode(503, new { error = "Could not reach the SMS provider." }); }
     }
 
+    // Saves SMTP settings for the email verification channel. An empty password keeps the stored one.
+    [HttpPost("email")]
+    [RequestSizeLimit(4096)]
+    public async Task<IActionResult> SaveEmail(EmailRequest req, CancellationToken ct)
+    {
+        var host = (req.Host ?? "").Trim();
+        var from = (req.From ?? "").Trim();
+        if (host.Length == 0 || host.Length > 253 ||
+            !System.Text.RegularExpressions.Regex.IsMatch(host, @"^[A-Za-z0-9.](?:[A-Za-z0-9.-]*[A-Za-z0-9])?(?::\d+)?$") ||
+            !System.Text.RegularExpressions.Regex.IsMatch(from, @"^[^@\s]{1,64}@[^@\s]{1,190}\.[A-Za-z]{2,63}$"))
+            return BadRequest(new { error = "Enter the SMTP host and a valid sender address." });
+        var port = req.Port is < 1 or > 65535 ? 587 : req.Port;
+        var user = (req.User ?? "").Trim();
+        var password = string.IsNullOrWhiteSpace(req.Password) ? StoredEmailPassword() : req.Password;
+        if (user.Length > 0 && (password == null || password.Length > 512))
+            return BadRequest(new { error = "Enter the SMTP password for the user account, or leave the user empty." });
+
+        var body = new JsonObject {
+            ["Host"] = host, ["Port"] = port.ToString(), ["From"] = from,
+            ["Name"] = (req.Name ?? "").Trim(), ["User"] = user,
+            ["EnableSsl"] = req.EnableSsl ? "true" : "false",
+        };
+        if (!string.IsNullOrWhiteSpace(req.Password))
+            body["ProtectedPassword"] = protection.CreateProtector(EmailProtector).Protect(req.Password);
+        await Update(root => root["Email"] = body, ct);
+        return Ok(new { ok = true, message = "Email settings saved." + (user.Length == 0 ? " No SMTP user set; the server must accept anonymous sending." : "") });
+    }
+
+    // Sends one real verification email to an address the administrator enters.
+    [HttpPost("email/test")]
+    [RequestSizeLimit(1024)]
+    [EnableRateLimiting("sms-test")]
+    public async Task<IActionResult> TestEmail(EmailTestRequest req, CancellationToken ct)
+    {
+        var to = (req.To ?? "").Trim();
+        if (!System.Text.RegularExpressions.Regex.IsMatch(to, @"^[^@\s]{1,64}@[^@\s]{1,190}\.[A-Za-z]{2,63}$"))
+            return BadRequest(new { error = "Enter a valid email address." });
+        if (!email.Configured) return BadRequest(new { error = "Email sending is not configured." });
+        var code = RandomNumberGenerator.GetInt32(0, 1000000).ToString("D6");
+        try
+        {
+            await email.Send(to, code, "admin-test", ct);
+            log.Add(to, "email-test", true);
+            return Ok(new { ok = true, message = $"Test email submitted to {SmsLog.Mask(to)}." });
+        }
+        catch (ActivationError ex) { log.Add(to, "email-test", false, ex.Message); return StatusCode(ex.Status, new { error = ex.Message }); }
+        catch (Exception ex) when (ex is HttpRequestException or TaskCanceledException)
+        { log.Add(to, "email-test", false, "Provider unreachable"); return StatusCode(503, new { error = "Could not reach the SMTP server." }); }
+    }
+
     [HttpGet("log")]
     public IActionResult Log() => Ok(log.Recent());
 
@@ -147,3 +213,5 @@ public class SmsSettingsController(IConfiguration config, IWebHostEnvironment en
 public record SmsRequest(string? Token, string Pattern, string Line, string CodeVariable, string? Mode = null, string? Endpoint = null);
 public record SmsPolicyRequest(bool Enabled, int OtpMinutes, int ResendSeconds, int DailyLimit);
 public record SmsTestRequest(string Phone);
+public record EmailRequest(string? Host, int? Port, string? From, string? Name, string? User, string? Password, bool EnableSsl = true);
+public record EmailTestRequest(string? To);

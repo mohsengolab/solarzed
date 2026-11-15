@@ -59,14 +59,17 @@ public class ManagementController(AppDbContext db) : ControllerBase
     [HttpPost("products")]
     public async Task<IActionResult> Create(ProductRequest req)
     {
-        var error = Validate(req);
+        var error = Validate(req, requireType: true);
         if (error != null) return BadRequest(new { error });
         var code = req.Code.Trim().ToUpperInvariant();
         if (await db.Products.AnyAsync(p => p.Code == code)) return Conflict(new { error = "Product code already exists." });
+        if (await NameTaken(req.Name, null)) return Conflict(new { error = "Product name already exists." });
         var product = new Product { Code = code };
         Apply(product, req);
         db.Products.Add(product);
-        AuditLog.Add(db, AuditLog.Actor(HttpContext?.User), "product", code, "created", Changes(new Product(), product));
+        AuditLog.Add(db, AuditLog.Actor(HttpContext?.User), "product", code, "created", AuditLog.Diff(
+            ("name", null, product.Name), ("type", null, product.Type), ("series", null, product.Series),
+            ("description", null, product.Description), ("archived", null, product.Archived)));
         await db.SaveChangesAsync();
         await EvictCatalog();
         return Ok(product);
@@ -75,29 +78,54 @@ public class ManagementController(AppDbContext db) : ControllerBase
     [HttpPut("products/{code}")]
     public async Task<IActionResult> Update(string code, ProductRequest req)
     {
-        var error = Validate(req);
+        // Rename requests carry only {code, name}: type, series and specs may be absent.
+        var error = Validate(req, requireType: false);
         if (error != null) return BadRequest(new { error });
         var product = await db.Products.FindAsync(code);
         if (product == null) return NotFound();
         if (!string.Equals(code, req.Code.Trim(), StringComparison.OrdinalIgnoreCase))
-            return BadRequest(new { error = "Product code cannot change; archive it and create a new product." });
-        var type = Enum.Parse<WarrantyType>(req.Type, true);
-        if (type != product.Type && await db.Rolls.AnyAsync(r => r.ModelCode == code))
-            return Conflict(new { error = "A product with inventory cannot change warranty type." });
-        var before = (Product)db.Entry(product).CurrentValues.ToObject();
-        Apply(product, req);
-        if (Changes(before, product) is { Count: > 0 } changes)
-            AuditLog.Add(db, AuditLog.Actor(HttpContext?.User), "product", product.Code, product.Archived != before.Archived ? (product.Archived ? "archived" : "restored") : "updated", changes);
+            return BadRequest(new { error = "Product code cannot change; delete it and create a new product." });
+        // Only the product name is editable. Type, series, description and the technical specs are fixed at
+        // creation: to change them, delete the product and create it again.
+        if (await NameTaken(req.Name, product.Code)) return Conflict(new { error = "Product name already exists." });
+        var before = product.Name;
+        product.Name = req.Name.Trim();
+        product.UpdatedAt = DateTime.UtcNow;
+        if (before != product.Name)
+            AuditLog.Add(db, AuditLog.Actor(HttpContext?.User), "product", product.Code, "updated", AuditLog.Diff(("name", before, product.Name)));
         await db.SaveChangesAsync();
         await EvictCatalog();
         return Ok(product);
     }
 
-    static string? Validate(ProductRequest r)
+    /// <summary>Deletes a product. Blocked while any roll still references the model code.</summary>
+    [HttpDelete("products/{code}")]
+    public async Task<IActionResult> Delete(string code)
+    {
+        var product = await db.Products.FindAsync(code);
+        if (product == null) return NotFound();
+        if (await db.Rolls.AnyAsync(r => r.ModelCode == code))
+            return Conflict(new { error = "This product has rolls in inventory; delete or void its rolls first." });
+        AuditLog.Add(db, AuditLog.Actor(HttpContext?.User), "product", code, "deleted", AuditLog.Diff(
+            ("name", product.Name, null), ("type", product.Type, null), ("series", product.Series, null)));
+        db.Products.Remove(product);
+        await db.SaveChangesAsync();
+        await EvictCatalog();
+        return Ok(new { ok = true });
+    }
+
+    /// <summary>Product names are unique too (trimmed, case-insensitive); <paramref name="exceptCode"/> skips the product being renamed.</summary>
+    Task<bool> NameTaken(string name, string? exceptCode)
+    {
+        var normalized = name.Trim().ToLower();
+        return db.Products.AnyAsync(p => p.Code != exceptCode && p.Name.ToLower() == normalized);
+    }
+
+    static string? Validate(ProductRequest r, bool requireType = true)
     {
         if (string.IsNullOrWhiteSpace(r.Code) || !System.Text.RegularExpressions.Regex.IsMatch(r.Code.Trim(), "^[A-Za-z0-9-]{1,24}$")) return "Code must be 1–24 letters, numbers or hyphens.";
         if (string.IsNullOrWhiteSpace(r.Name) || r.Name.Trim().Length > 120) return "Product name is required (maximum 120 characters).";
-        if (!Enum.TryParse<WarrantyType>(r.Type, true, out var type) || !Enum.IsDefined(type)) return "Invalid product type.";
+        if (requireType && (!Enum.TryParse<WarrantyType>(r.Type, true, out var type) || !Enum.IsDefined(type))) return "Invalid product type.";
         if ((r.Series?.Length ?? 0) > 80 || (r.Description?.Length ?? 0) > 2000) return "Series or description is too long.";
         if (r.ThicknessMil is { } thick && (thick <= 0 || thick > 20)) return "Thickness must be between 0 and 20 mil.";
         if (r.Vlt is { } vlt && vlt is < 0 or > 100) return "VLT must be 0–100%.";
@@ -107,11 +135,6 @@ public class ManagementController(AppDbContext db) : ControllerBase
         if (r.WarrantyYears is { } wy && wy is < 1 or > 30) return "Warranty years must be 1–30.";
         return null;
     }
-    static Dictionary<string, object?[]> Changes(Product a, Product b) => AuditLog.Diff(
-        ("name", a.Name, b.Name), ("type", a.Type, b.Type), ("series", a.Series, b.Series), ("description", a.Description, b.Description),
-        ("archived", a.Archived, b.Archived), ("thicknessMil", a.ThicknessMil, b.ThicknessMil), ("vlt", a.Vlt, b.Vlt), ("irr", a.Irr, b.Irr),
-        ("uv", a.Uv, b.Uv), ("tser", a.Tser, b.Tser), ("warrantyYears", a.WarrantyYears, b.WarrantyYears));
-
     static void Apply(Product p, ProductRequest r)
     {
         p.Name = r.Name.Trim(); p.Type = Enum.Parse<WarrantyType>(r.Type, true);
@@ -121,6 +144,8 @@ public class ManagementController(AppDbContext db) : ControllerBase
         p.Uv = r.Uv; p.Tser = r.Tser; p.WarrantyYears = r.WarrantyYears;
     }
 
+    // The customer list is confidential: only the super administrator may read it.
+    [Authorize(Policy = "SuperAdminPolicy")]
     [HttpGet("customers")]
     public async Task<IActionResult> Customers([FromQuery] CustomerSearch f, CancellationToken ct)
     {

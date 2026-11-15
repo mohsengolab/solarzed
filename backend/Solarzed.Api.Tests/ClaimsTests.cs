@@ -135,9 +135,11 @@ public class ClaimsTests
         await admin.UpdateRoll("R", new("shipped", "approved", "QC checked"));
         var mgmt = new ManagementController(db);
         await mgmt.Create(new("P1", "Film", "tint", "S", "D", false));
+        // Updates only rename; the audit entry records the name change, not an archive.
         await mgmt.Update("P1", new("P1", "Film 2", "tint", "S", "D", true));
         Assert.Contains(db.AuditEntries, a => a.EntityType == "roll" && a.Reason == "QC checked" && a.ChangesJson.Contains("Shipped"));
-        Assert.Contains(db.AuditEntries, a => a.EntityType == "product" && a.Action == "archived" && a.ChangesJson.Contains("Film 2"));
+        Assert.Contains(db.AuditEntries, a => a.EntityType == "product" && a.Action == "updated" && a.ChangesJson.Contains("\"name\""));
+        Assert.DoesNotContain(db.AuditEntries, a => a.EntityType == "product" && a.Action == "archived");
     }
 
     [Fact]

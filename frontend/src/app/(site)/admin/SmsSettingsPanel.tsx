@@ -5,7 +5,8 @@ import s from "./admin.module.css";
 import { errorText } from "./AdminKit";
 
 type Policy = { enabled: boolean; otpMinutes: number; resendSeconds: number; dailyLimit: number };
-type Status = { configured: boolean; connected: boolean; keyStored: boolean; mode: string; pattern: string; codeVariable: string; line: string; endpoint: string | null; updatedAt: string | null; policy: Policy };
+type EmailStatus = { configured: boolean; host: string; port: number; from: string; senderName: string; user: string; passwordStored: boolean };
+type Status = { configured: boolean; connected: boolean; keyStored: boolean; mode: string; pattern: string; codeVariable: string; line: string; endpoint: string | null; updatedAt: string | null; policy: Policy; email: EmailStatus };
 type LogEntry = { at: string; phone: string; purpose: string; ok: boolean; error: string | null };
 type Note = { ok: boolean; text: string } | null;
 
@@ -18,6 +19,8 @@ export default function SmsSettingsPanel() {
   const [form, setForm] = useState({ mode: "soap", endpoint: "http://185.112.33.61/wbs/send.php", token: "", pattern: "2675", line: "21000051112", codeVariable: "code1" });
   const [policy, setPolicy] = useState<Policy>({ enabled: true, otpMinutes: 5, resendSeconds: 60, dailyLimit: 10 });
   const [phone, setPhone] = useState("");
+  const [emailForm, setEmailForm] = useState({ host: "", port: "587", from: "", name: "", user: "", password: "", enableSsl: true });
+  const [testEmail, setTestEmail] = useState("");
   const [log, setLog] = useState<LogEntry[]>([]);
   const [busy, setBusy] = useState("");
   const [notes, setNotes] = useState<Record<string, Note>>({});
@@ -27,6 +30,8 @@ export default function SmsSettingsPanel() {
     setStatus(r); setLog(entries); setPolicy(r.policy);
     setForm(f => ({ ...f, pattern: r.pattern, line: r.line || f.line, codeVariable: r.codeVariable,
       ...(r.mode === "rest" || r.mode === "soap" ? { mode: r.mode } : {}), ...(r.endpoint ? { endpoint: r.endpoint } : {}) }));
+    setEmailForm(e => ({ ...e, host: r.email.host || e.host, port: String(r.email.port || 587), from: r.email.from || e.from,
+      name: r.email.senderName || e.name, user: r.email.user || e.user }));
   }, []);
   const load = useCallback(() => fetchAll().then(apply), [apply]);
   useEffect(() => {
@@ -49,6 +54,14 @@ export default function SmsSettingsPanel() {
   }
   function savePolicy(e: FormEvent) { e.preventDefault(); run("policy", () => managementFetch<{ message: string }>("sms/policy", policy)); }
   function sendTest(e: FormEvent) { e.preventDefault(); run("test", () => managementFetch<{ message: string }>("sms/test", { phone: phone.trim() })); }
+  function saveEmail(e: FormEvent) {
+    e.preventDefault();
+    run("email", () => managementFetch<{ message: string }>("sms/email", {
+      host: emailForm.host.trim(), port: Number(emailForm.port) || 587, from: emailForm.from.trim(), name: emailForm.name.trim(),
+      user: emailForm.user.trim(), password: emailForm.password, enableSsl: emailForm.enableSsl,
+    }).then(r => { setEmailForm(f => ({ ...f, password: "" })); return r; }));
+  }
+  function sendTestEmail(e: FormEvent) { e.preventDefault(); run("emailTest", () => managementFetch<{ message: string }>("sms/email/test", { to: testEmail.trim() })); }
   function disconnect() {
     if (!window.confirm("اتصال پیامک قطع و کلید API ذخیره‌شده حذف شود؟ فعال‌سازی مشتری تا اتصال دوباره متوقف می‌شود.")) return;
     run("connection", () => managementFetch<{ message: string }>("sms", undefined, "DELETE"));
@@ -105,6 +118,36 @@ export default function SmsSettingsPanel() {
           <label>شماره موبایل<input required inputMode="tel" pattern="(09[0-9]{9}|\+?989[0-9]{9})" placeholder="09123456789" value={phone} onChange={e => setPhone(e.target.value)} dir="ltr" /></label>
           <button disabled={!!busy || !status?.configured} className={s.ghost}>{busy === "test" ? "در حال ارسال…" : "ارسال پیامک آزمایشی"}</button>
           <Msg note={notes.test ?? null} />
+        </form>
+
+        <form onSubmit={saveEmail} className={`${s.card} ${s.adminForm}`}>
+          <h2>کانال ایمیل</h2>
+          <p className={s.empty}>کاربرانی که ایمیل ثبت کرده‌اند کد ورود را با ایمیل دریافت می‌کنند (به‌جای یا در کنار پیامک).</p>
+          <div className={s.statusGrid} style={{ marginBottom: 14 }}>
+            <div className={s.kpi}><span>وضعیت</span><b><span className={s.badge} data-tone={status?.email.configured ? "active" : "muted"}>{status?.email.configured ? "فعال" : "تنظیم نشده"}</span></b></div>
+            <div className={s.kpi}><span>میزبان</span><b style={{ fontSize: 14 }} dir="ltr">{status?.email.host || "—"}</b></div>
+          </div>
+          <div className={s.row2}>
+            <label>میزبان SMTP<input required maxLength={253} placeholder="smtp.example.com" value={emailForm.host} dir="ltr" onChange={e => setEmailForm({ ...emailForm, host: e.target.value })} /></label>
+            <label>پورت<input type="number" min={1} max={65535} required value={emailForm.port} dir="ltr" onChange={e => setEmailForm({ ...emailForm, port: e.target.value })} /></label>
+            <label>آدرس فرستنده<input required maxLength={254} type="email" placeholder="no-reply@example.com" value={emailForm.from} dir="ltr" onChange={e => setEmailForm({ ...emailForm, from: e.target.value })} /></label>
+            <label>نام فرستنده<input maxLength={100} value={emailForm.name} onChange={e => setEmailForm({ ...emailForm, name: e.target.value })} /></label>
+            <label>کاربر SMTP<input autoComplete="off" maxLength={254} value={emailForm.user} dir="ltr" placeholder="برای ارسال ناشناس خالی بگذارید" onChange={e => setEmailForm({ ...emailForm, user: e.target.value })} /></label>
+            <label>رمز SMTP<input type="password" autoComplete="new-password" maxLength={512} value={emailForm.password} dir="ltr"
+              placeholder={status?.email.passwordStored ? "به‌صورت امن ذخیره شده — برای حفظ آن خالی بگذارید" : ""}
+              onChange={e => setEmailForm({ ...emailForm, password: e.target.value })} /></label>
+          </div>
+          <label className={s.switch}><input type="checkbox" checked={emailForm.enableSsl} onChange={e => setEmailForm({ ...emailForm, enableSsl: e.target.checked })} /> استفاده از SSL/TLS</label>
+          <button disabled={!!busy} className={s.btnPrimary}>{busy === "email" ? "در حال ذخیره…" : "ذخیره تنظیمات ایمیل"}</button>
+          <Msg note={notes.email ?? null} />
+        </form>
+
+        <form onSubmit={sendTestEmail} className={`${s.card} ${s.adminForm}`}>
+          <h2>ارسال ایمیل آزمایشی</h2>
+          <p className={s.empty}>یک ایمیل واقعی با کد تصادفی ارسال می‌کند. حداکثر ۵ آزمون در ۱۰ دقیقه.</p>
+          <label>آدرس ایمیل<input required type="email" maxLength={254} placeholder="you@example.com" value={testEmail} dir="ltr" onChange={e => setTestEmail(e.target.value)} /></label>
+          <button disabled={!!busy || !status?.email.configured} className={s.ghost}>{busy === "emailTest" ? "در حال ارسال…" : "ارسال ایمیل آزمایشی"}</button>
+          <Msg note={notes.emailTest ?? null} />
         </form>
       </div>
     </div>

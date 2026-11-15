@@ -56,12 +56,22 @@ public class ActivationChallenge
     [ConcurrencyCheck] public int Revision { get; set; }
 }
 
-/// <summary>A representative, shop or customer who signs in to the public site with an SMS code.</summary>
+/// <summary>A representative, shop or customer who signs in to the public site with an SMS or email code.</summary>
 public class PortalUser
 {
     [Key] public int Id { get; set; }
-    [MaxLength(30)] public string Phone { get; set; } = default!;
+    [MaxLength(30)] public string? Phone { get; set; }
+    // Email is a second sign-in identifier; at least one of Phone/Email is always set.
+    [MaxLength(254)] public string? Email { get; set; }
     [MaxLength(200)] public string? Name { get; set; }
+
+    // Self-service profile: who the user is, where they are and what they do.
+    [MaxLength(100)] public string? FirstName { get; set; }
+    [MaxLength(100)] public string? LastName { get; set; }
+    [MaxLength(100)] public string? Country { get; set; }
+    [MaxLength(100)] public string? City { get; set; }
+    [MaxLength(100)] public string? Job { get; set; }
+
     public bool Active { get; set; } = true;
     public DateTime CreatedAt { get; set; } = DateTime.UtcNow;
     public DateTime? LastLoginAt { get; set; }
@@ -70,7 +80,8 @@ public class PortalUser
 public class LoginChallenge
 {
     [Key, MaxLength(64)] public string Id { get; set; } = default!;
-    [MaxLength(30)] public string Phone { get; set; } = default!;
+    [MaxLength(30)] public string? Phone { get; set; }
+    [MaxLength(254)] public string? Email { get; set; }
     [MaxLength(100)] public string CodeHash { get; set; } = default!;
     public DateTime CreatedAt { get; set; } = DateTime.UtcNow;
     public DateTime ExpiresAt { get; set; }

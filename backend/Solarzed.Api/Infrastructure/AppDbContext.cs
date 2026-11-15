@@ -17,6 +17,8 @@ public class AppDbContext(DbContextOptions<AppDbContext> options) : DbContext(op
     public DbSet<BoxTransfer> BoxTransfers => Set<BoxTransfer>();
     public DbSet<PortalUser> PortalUsers => Set<PortalUser>();
     public DbSet<LoginChallenge> LoginChallenges => Set<LoginChallenge>();
+    public DbSet<Ticket> Tickets => Set<Ticket>();
+    public DbSet<TicketReply> TicketReplies => Set<TicketReply>();
 
     protected override void OnModelCreating(ModelBuilder mb)
     {
@@ -34,7 +36,14 @@ public class AppDbContext(DbContextOptions<AppDbContext> options) : DbContext(op
         mb.Entity<BoxLabel>().HasIndex(x => x.CardCode).IsUnique().HasFilter("[CardCode] IS NOT NULL");
         mb.Entity<BoxTransfer>().HasIndex(x => new { x.FromPhone, x.At });
         mb.Entity<PortalUser>().HasIndex(x => x.Phone).IsUnique();
+        mb.Entity<PortalUser>().HasIndex(x => x.Email).IsUnique().HasFilter("[Email] IS NOT NULL");
         mb.Entity<LoginChallenge>().HasIndex(x => new { x.Phone, x.CreatedAt });
+        mb.Entity<LoginChallenge>().HasIndex(x => new { x.Email, x.CreatedAt });
+        mb.Entity<Ticket>().HasIndex(x => new { x.Status, x.CreatedAt });
+        mb.Entity<Ticket>().HasIndex(x => new { x.UserId, x.CreatedAt });
+        mb.Entity<Ticket>().HasIndex(x => x.Code).IsUnique();
+        mb.Entity<TicketReply>().HasIndex(x => new { x.TicketId, x.CreatedAt });
+        mb.Entity<Ticket>().HasMany(x => x.Replies).WithOne(r => r.Ticket!).HasForeignKey(r => r.TicketId).OnDelete(DeleteBehavior.Cascade);
         mb.Entity<BoxTransfer>().HasOne<BoxLabel>().WithMany().HasForeignKey(x => x.LabelId).OnDelete(DeleteBehavior.Restrict);
         mb.Entity<BoxTransfer>().HasIndex(x => new { x.LabelId, x.At });
         mb.Entity<BoxTransfer>().HasIndex(x => x.BatchId);

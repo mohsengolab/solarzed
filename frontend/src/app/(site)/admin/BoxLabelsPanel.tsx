@@ -9,14 +9,14 @@ import BoxTransfers, { holderName } from "./BoxTransfers";
 import { printQrLabels } from "./qrPrint";
 import { printBarcodeLabels } from "./barcode";
 
-type Role = "admin" | "carton";
+type Role = "superadmin" | "admin" | "carton";
 type Roll = { id: string; modelCode: string; type: "tint" | "ppf"; qc: string; status: string };
 type CoverageSettings = { durations: Record<"tint" | "ppf", { film: number | null; install: number | null }> };
 const message = (error: unknown) => error instanceof Error ? fa(error.message) : fa("The request failed.");
 const FACTORY_KEY = "solarzed:factory-code";
 
 export default function BoxLabelsPanel({ onSettings, role }: { onSettings: () => void; role: Role }) {
-  const canManage = role === "admin";
+  const canManage = role !== "carton";
   const [labels, setLabels] = useState<BoxLabel[]>([]);
   const [rolls, setRolls] = useState<Roll[]>([]);
   const [rollId, setRollId] = useState("");

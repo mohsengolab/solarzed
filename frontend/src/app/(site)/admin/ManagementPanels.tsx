@@ -1,7 +1,7 @@
 "use client";
 
 import { FormEvent, useCallback, useEffect, useState } from "react";
-import { adminSession, adminUsers, adminCreateUser, adminUpdateUser, adminResetPassword, managementFetch, fa, type AdminUserRow, type Paged } from "@/lib/api";
+import { adminSession, adminUsers, adminCreateUser, adminUpdateUser, adminResetPassword, managementFetch, fa, type AdminUserRow, type AdminRole, type Paged } from "@/lib/api";
 import s from "./admin.module.css";
 import { usePaged, SortTh, Pager, FilterBar, countActive, errorText as message } from "./AdminKit";
 
@@ -29,34 +29,46 @@ export function ProductsPanel() {
   async function save(e: FormEvent) {
     e.preventDefault(); setBusy(true); setMsg("");
     try {
-      await managementFetch(editing ? `products/${encodeURIComponent(form.code)}` : "products", form, editing ? "PUT" : "POST");
+      // Only the name is editable on an existing product: type, series, description and the
+      // technical specs are fixed at creation. To change them, delete and create again.
+      await managementFetch(editing ? `products/${encodeURIComponent(form.code)}` : "products",
+        editing ? { code: form.code, name: form.name } : form, editing ? "PUT" : "POST");
       list.reload(); setForm(empty); setEditing(false); setMsg("محصول ذخیره شد.");
     } catch (e) { setMsg(message(e)); } finally { setBusy(false); }
+  }
+
+  async function remove(code: string) {
+    if (!window.confirm(`محصول ${code} برای همیشه حذف شود؟ حذف ممکن نیست اگر رولی در موجودی داشته باشد.`)) return;
+    setMsg("");
+    try { await managementFetch(`products/${encodeURIComponent(code)}`, undefined, "DELETE"); setMsg("محصول حذف شد."); list.reload(); if (editing && form.code === code) { setEditing(false); setForm(empty); } }
+    catch (e) { setMsg(message(e)); }
   }
   const sortProps = { sort: list.sort, onSort: list.toggleSort };
   return <section>
     <header className={s.panelHead}><div><span className={s.eyebrow}>کاتالوگ محصولات</span><h1>محصولات</h1></div></header>
-    <p className={s.empty}>محصولات فعال به‌صورت خودکار و بر اساس نوع و سری در وب‌سایت نمایش داده می‌شوند. بایگانی کردن، محصول را از کاتالوگ عمومی و موجودی جدید حذف می‌کند اما گارانتی‌های موجود حفظ می‌شوند.</p>
+    <p className={s.empty}>محصولات فعال به‌صورت خودکار و بر اساس نوع و سری در وب‌سایت نمایش داده می‌شوند. پس از تعریف، فقط نام محصول قابل ویرایش است؛ برای تغییر نوع، سری یا مشخصات فنی، محصول را حذف و دوباره بسازید (حذف وقتی ممکن است که رولی در موجودی نداشته باشد).</p>
     <form className={`${s.card} ${s.adminForm}`} onSubmit={save}>
       <h2>{editing ? "ویرایش محصول" : "تعریف محصول"}</h2>
       <div className={s.row2}>
         <label>کد محصول<input required maxLength={24} pattern="[A-Za-z0-9-]+" disabled={editing} value={form.code} onChange={e => setForm({ ...form, code: e.target.value.toUpperCase() })} dir="ltr" /></label>
         <label>نام محصول<input required maxLength={120} value={form.name} onChange={e => setForm({ ...form, name: e.target.value })} /></label>
-        <label>نوع محصول<select value={form.type} onChange={e => setForm({ ...form, type: e.target.value })}><option value="tint">فیلم شیشه</option><option value="ppf">فیلم محافظ رنگ (شامل Color PPF)</option></select></label>
-        <label>سری<input maxLength={80} list="series-options" value={form.series} onChange={e => setForm({ ...form, series: e.target.value })} /></label>
+        <label>نوع محصول<select value={form.type} disabled={editing} onChange={e => setForm({ ...form, type: e.target.value })}><option value="tint">فیلم شیشه</option><option value="ppf">فیلم محافظ رنگ (شامل Color PPF)</option></select></label>
+        <label>سری<input maxLength={80} disabled={editing} list="series-options" value={form.series} onChange={e => setForm({ ...form, series: e.target.value })} /></label>
       </div>
       <datalist id="series-options">{seriesList.map(x => <option key={x} value={x} />)}</datalist>
-      <label>توضیحات<textarea maxLength={2000} value={form.description} onChange={e => setForm({ ...form, description: e.target.value })} /></label>
+      <label>توضیحات<textarea maxLength={2000} disabled={editing} value={form.description} onChange={e => setForm({ ...form, description: e.target.value })} /></label>
       <details style={{ marginTop: 8 }}><summary style={{ cursor: "pointer", fontWeight: 600 }}>مشخصات فنی (اختیاری)</summary>
       <div className={s.row2} style={{ marginTop: 8 }}>
-        <label>ضخامت (Mil)<input type="number" step="0.1" min="0" max="20" placeholder="مثلاً ۲" value={form.thicknessMil ?? ""} onChange={e => setForm({ ...form, thicknessMil: e.target.value ? Number(e.target.value) : null })} dir="ltr" /></label>
-        <label>VLT%<input type="number" min="0" max="100" placeholder="درصد عبور نور مرئی" value={form.vlt ?? ""} onChange={e => setForm({ ...form, vlt: e.target.value ? Number(e.target.value) : null })} dir="ltr" /></label>
-        <label>IRR% (950nm)<input type="number" min="0" max="100" placeholder="درصد رد مادون قرمز" value={form.irr ?? ""} onChange={e => setForm({ ...form, irr: e.target.value ? Number(e.target.value) : null })} dir="ltr" /></label>
-        <label>UV%<input type="number" min="0" max="100" placeholder="درصد رد UV" value={form.uv ?? ""} onChange={e => setForm({ ...form, uv: e.target.value ? Number(e.target.value) : null })} dir="ltr" /></label>
-        <label>TSER%<input type="number" min="0" max="100" placeholder="رد کل انرژی خورشیدی" value={form.tser ?? ""} onChange={e => setForm({ ...form, tser: e.target.value ? Number(e.target.value) : null })} dir="ltr" /></label>
-        <label>گارانتی (سال)<input type="number" min="1" max="30" placeholder="مثلاً ۷" value={form.warrantyYears ?? ""} onChange={e => setForm({ ...form, warrantyYears: e.target.value ? Number(e.target.value) : null })} dir="ltr" /></label>
+        <label>ضخامت (Mil)<input type="number" step="0.1" min="0" max="20" disabled={editing} placeholder="مثلاً ۲" value={form.thicknessMil ?? ""} onChange={e => setForm({ ...form, thicknessMil: e.target.value ? Number(e.target.value) : null })} dir="ltr" /></label>
+        <label>VLT%<input type="number" min="0" max="100" disabled={editing} placeholder="درصد عبور نور مرئی" value={form.vlt ?? ""} onChange={e => setForm({ ...form, vlt: e.target.value ? Number(e.target.value) : null })} dir="ltr" /></label>
+        <label>IRR% (950nm)<input type="number" min="0" max="100" disabled={editing} placeholder="درصد رد مادون قرمز" value={form.irr ?? ""} onChange={e => setForm({ ...form, irr: e.target.value ? Number(e.target.value) : null })} dir="ltr" /></label>
+        <label>UV%<input type="number" min="0" max="100" disabled={editing} placeholder="درصد رد UV" value={form.uv ?? ""} onChange={e => setForm({ ...form, uv: e.target.value ? Number(e.target.value) : null })} dir="ltr" /></label>
+        <label>TSER%<input type="number" min="0" max="100" disabled={editing} placeholder="رد کل انرژی خورشیدی" value={form.tser ?? ""} onChange={e => setForm({ ...form, tser: e.target.value ? Number(e.target.value) : null })} dir="ltr" /></label>
+        <label>گارانتی (سال)<input type="number" min="1" max="30" disabled={editing} placeholder="مثلاً ۷" value={form.warrantyYears ?? ""} onChange={e => setForm({ ...form, warrantyYears: e.target.value ? Number(e.target.value) : null })} dir="ltr" /></label>
       </div></details>
-      <label>وضعیت عرضه<select value={String(form.archived)} onChange={e => setForm({ ...form, archived: e.target.value === "true" })}><option value="false">فعال</option><option value="true">بایگانی — برای موجودی جدید در دسترس نیست</option></select></label>
+      {editing
+        ? <p className={s.empty}>در حالت ویرایش فقط نام ذخیره می‌شود. برای تغییر بقیه مشخصات، محصول را حذف و دوباره بسازید.</p>
+        : <label>وضعیت عرضه<select value={String(form.archived)} onChange={e => setForm({ ...form, archived: e.target.value === "true" })}><option value="false">فعال</option><option value="true">بایگانی — برای موجودی جدید در دسترس نیست</option></select></label>}
       <div className={s.filters}><button className={s.btnPrimary} disabled={busy}>{busy ? "در حال ذخیره…" : "ذخیره محصول"}</button>{editing && <button type="button" className={s.ghost} onClick={() => { setEditing(false); setForm(empty); }}>لغو ویرایش</button>}</div>
       {msg && <p role="status">{msg}</p>}
     </form>
@@ -75,7 +87,10 @@ export function ProductsPanel() {
         <td dir="ltr">{p.tser != null ? p.tser : "—"}</td><td dir="ltr">{p.warrantyYears != null ? `${p.warrantyYears}Y` : "—"}</td>
         <td><span className={s.badge} data-tone={p.archived ? "muted" : "active"}>{p.archived ? "بایگانی" : "فعال"}</span></td>
         <td>{p.updatedAt ? new Date(p.updatedAt).toLocaleDateString("fa-IR") : "—"}</td>
-        <td><button type="button" className={s.ghost} onClick={() => { setForm({ ...empty, ...p }); setEditing(true); setMsg(""); window.scrollTo({ top: 0, behavior: "smooth" }); }}>ویرایش {p.code}</button></td></tr>)}
+        <td>
+          <button type="button" className={s.ghost} onClick={() => { setForm({ ...empty, ...p }); setEditing(true); setMsg(""); window.scrollTo({ top: 0, behavior: "smooth" }); }}>ویرایش {p.code}</button>
+          <button type="button" className={s.danger} disabled={busy} onClick={() => remove(p.code)}>حذف</button>
+        </td></tr>)}
     </tbody></table>
       {!list.loading && list.items.length === 0 && <p className={s.empty}>{countActive(f) ? "محصولی با این فیلترها یافت نشد." : "هنوز محصولی تعریف نشده است."}</p>}
       <Pager page={list.page} pageSize={list.pageSize} total={list.total} loading={list.loading} onPage={list.setPage} />
@@ -120,7 +135,7 @@ export function CustomersPanel() {
   </section>;
 }
 
-export function AccountPanel(_props: { role?: "admin" | "carton" }) {
+export function AccountPanel(_props: { role?: "superadmin" | "admin" | "carton" }) {
   const [form, setForm] = useState({ username: "admin", currentPassword: "", newPassword: "", confirm: "" });
   const [msg, setMsg] = useState(""); const [busy, setBusy] = useState(false);
   useEffect(() => { adminSession().then(r => setForm(f => ({ ...f, username: r.username }))).catch(() => {}); }, []);
@@ -145,9 +160,9 @@ export function AccountPanel(_props: { role?: "admin" | "carton" }) {
   </form></section>;
 }
 
-// ── Users (manager only) ─────────────────────────────────────────────────────
+// ── Users (super administrator only) ─────────────────────────────────────────
 
-const U_EMPTY = { username: "", displayName: "", password: "", role: "carton" as "admin" | "carton", active: true };
+const U_EMPTY = { username: "", displayName: "", password: "", role: "carton" as AdminRole, active: true };
 
 export function UsersPanel() {
   const [rows, setRows] = useState<AdminUserRow[]>([]);
@@ -168,7 +183,7 @@ export function UsersPanel() {
     } catch (ex) { setMsg(message(ex)); } finally { setBusy(false); }
   }
 
-  async function update(user: AdminUserRow, patch: { role?: "admin" | "carton"; active?: boolean }) {
+  async function update(user: AdminUserRow, patch: { role?: AdminRole; active?: boolean }) {
     setMsg("");
     try { await adminUpdateUser(user.id, patch); setMsg("کاربر به‌روزرسانی شد."); await load(); }
     catch (ex) { setMsg(message(ex)); }
@@ -180,17 +195,18 @@ export function UsersPanel() {
     catch (ex) { setMsg(message(ex)); }
   }
 
-  const roleName = (r: string) => (r === "admin" ? "مدیر" : "کارتن");
+  const roleName = (r: string) => (r === "superadmin" ? "مدیر کل" : r === "admin" ? "مدیر" : "کارتن");
   return <section>
     <header className={s.panelHead}><div><span className={s.eyebrow}>کاربران</span><h1>مدیریت کاربران</h1></div></header>
     <form className={`${s.card} ${s.adminForm}`} onSubmit={create}>
       <h2>ساخت کاربر</h2>
-      <p className={s.empty}>یک مدیر یا اپراتور کارتن/سریال اضافه کنید.</p>
+      <p className={s.empty}>مدیر کل (دسترسی کامل و لیست مشتریان)، مدیر یا اپراتور کارتن/سریال اضافه کنید.</p>
       <div className={s.row2}>
         <label>نام کاربری<input required minLength={3} maxLength={50} pattern="[A-Za-z0-9._-]+" autoComplete="off" value={form.username} onChange={e => setForm({ ...form, username: e.target.value })} dir="ltr" /></label>
         <label>نام (اختیاری)<input maxLength={100} value={form.displayName} onChange={e => setForm({ ...form, displayName: e.target.value })} /></label>
         <label>رمز عبور<input required minLength={12} maxLength={72} type="password" autoComplete="new-password" value={form.password} onChange={e => setForm({ ...form, password: e.target.value })} dir="ltr" /></label>
-        <label>نقش<select value={form.role} onChange={e => setForm({ ...form, role: e.target.value as "admin" | "carton" })}>
+        <label>نقش<select value={form.role} onChange={e => setForm({ ...form, role: e.target.value as AdminRole })}>
+          <option value="superadmin">مدیر کل — همه چیز + لیست مشتریان</option>
           <option value="admin">مدیر — همه چیز</option>
           <option value="carton">کارتن — فقط سریال روی جعبه</option>
         </select></label>
@@ -204,8 +220,10 @@ export function UsersPanel() {
         <tbody>{rows.map(u => <tr key={u.id}>
           <td><code dir="ltr">{u.username}</code></td>
           <td>{u.displayName ?? "—"}</td>
-          <td><select value={u.role} onChange={e => update(u, { role: e.target.value as "admin" | "carton" })}>
-            <option value="admin">{roleName("admin")}</option><option value="carton">{roleName("carton")}</option>
+          <td><select value={u.role} onChange={e => update(u, { role: e.target.value as AdminRole })}>
+            <option value="superadmin">{roleName("superadmin")}</option>
+            <option value="admin">{roleName("admin")}</option>
+            <option value="carton">{roleName("carton")}</option>
           </select></td>
           <td><span className={s.badge} data-tone={u.active ? "active" : "muted"}>{u.active ? "فعال" : "غیرفعال"}</span></td>
           <td>

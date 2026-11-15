@@ -1,6 +1,7 @@
 using System.IO.Compression;
 using System.Security.Claims;
 using System.Text;
+using System.IdentityModel.Tokens.Jwt;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.AspNetCore.HttpOverrides;
 using Microsoft.AspNetCore.ResponseCompression;
@@ -28,6 +29,11 @@ builder.Services.AddScoped<BoxLabelService>();
 builder.Services.AddScoped<BoxTransferService>();
 builder.Services.AddScoped<PortalService>();
 builder.Services.AddHttpClient<IActivationSmsSender, ActivationSmsSender>(client => client.Timeout = TimeSpan.FromSeconds(15));
+// Verification codes by email, alongside SMS. Configured in .local-sms.json under "Email".
+if (builder.Environment.IsDevelopment() && builder.Configuration.GetValue<bool>("Email:DevConsole"))
+    builder.Services.AddSingleton<IEmailSender, DevConsoleEmail>();
+else
+    builder.Services.AddSingleton<IEmailSender, SmtpEmailSender>();
 // Local testing without a provider: codes are written to the API log. Never active outside Development.
 if (builder.Environment.IsDevelopment() && builder.Configuration.GetValue<bool>("Sms:DevConsole"))
     builder.Services.AddSingleton<IActivationSmsSender, DevConsoleSms>();
@@ -146,21 +152,24 @@ authentication.AddJwtBearer(PortalAuth.Scheme, o =>
             ctx.Token = ctx.Request.Cookies.TryGetValue(PortalAuth.Cookie, out var cookie) ? cookie : null;
             return Task.CompletedTask;
         },
-        // A disabled account loses access immediately.
+        // A disabled account loses access immediately. The token identifies the account by its stable id,
+        // so it keeps working after a mobile or email is added or replaced on the same account.
         OnTokenValidated = async ctx =>
         {
-            var phone = PortalAuth.Phone(ctx.Principal);
+            var id = PortalAuth.Id(ctx.Principal);
             var db = ctx.HttpContext.RequestServices.GetRequiredService<AppDbContext>();
-            if (phone == null || !await db.PortalUsers.AnyAsync(u => u.Phone == phone && u.Active)) ctx.Fail("Session revoked.");
+            if (id == null || !await db.PortalUsers.AnyAsync(u => u.Id == id && u.Active)) ctx.Fail("Session revoked.");
         },
     };
 });
 builder.Services.AddAuthorization(opt =>
 {
-    opt.AddPolicy("PortalPolicy", p => p.AddAuthenticationSchemes(PortalAuth.Scheme).RequireAuthenticatedUser().RequireClaim(PortalAuth.PhoneClaim));
-    opt.AddPolicy("AdminPolicy", p => p.RequireRole("admin"));
+    opt.AddPolicy("PortalPolicy", p => p.AddAuthenticationSchemes(PortalAuth.Scheme).RequireAuthenticatedUser().RequireClaim(JwtRegisteredClaimNames.Sub));
+    // "admin" covers full management; "superadmin" (مدیر کل) is admin plus the confidential customer list and user management.
+    opt.AddPolicy("AdminPolicy", p => p.RequireRole("admin", "superadmin"));
+    opt.AddPolicy("SuperAdminPolicy", p => p.RequireRole("superadmin"));
     opt.AddPolicy("CartonPolicy", p => p.RequireRole("carton"));
-    opt.AddPolicy("StaffPolicy", p => p.RequireRole("admin", "carton"));
+    opt.AddPolicy("StaffPolicy", p => p.RequireRole("admin", "superadmin", "carton"));
 });
 
 // ── Controllers & CORS ───────────────────────────────────────────────────────
@@ -222,6 +231,19 @@ using (var scope = app.Services.CreateScope())
     {
         db.CoverageSettings.Add(new CoverageSetting());
         db.SaveChanges();
+    }
+
+    // Every installation has exactly one super administrator (مدیر کل). If none exists, the first active
+    // admin account is promoted, so the confidential customer list always has an owner.
+    if (!db.AdminUsers.Any(u => u.Role == "superadmin" && u.Active))
+    {
+        var first = db.AdminUsers.Where(u => u.Role == "admin" && u.Active).OrderBy(u => u.Id).FirstOrDefault();
+        if (first != null)
+        {
+            first.Role = "superadmin";
+            db.SaveChanges();
+            Console.WriteLine($"\n  SUPER ADMIN: '{first.Username}' was promoted to super administrator (مدیر کل).\n");
+        }
     }
 }
 

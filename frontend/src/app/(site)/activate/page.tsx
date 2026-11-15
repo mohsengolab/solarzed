@@ -84,7 +84,8 @@ export default function ActivationPage() {
         {!info.released && <p role="status" className={styles.error}>This product has not been released for customer activation yet. Please contact your seller. Your warranty card has not been used.</p>}
         {checked && !user && <PortalSignIn smsAvailable={info.smsAvailable} onSignedIn={setUser}
           intro="Sign in with your mobile number. We send you a code by SMS; the warranty is registered to this mobile." />}
-        {user && <form onSubmit={activate}>
+        {user && !user.phone && <p role="status" className={styles.error}>Your account has no verified mobile number yet. Add one in <Link href="/account">my account</Link> first — warranty cards are registered to a mobile number.</p>}
+        {user && user.phone && <form onSubmit={activate}>
           <p>Signed in as <b dir="ltr">{user.phone}</b>. Enter the installation details. Coverage starts from the installation date under the approved product terms.</p>
           <div className={styles.grid}>{fields.map(([key, label, max]) => <label key={key}>{label}<input required maxLength={max} value={form[key]} type={key === "installed" ? "date" : key === "sellerPhone" ? "tel" : "text"} autoComplete={key === "owner" ? "name" : "off"} onChange={event => setForm(value => ({ ...value, [key]: event.target.value }))} /></label>)}</div>
           <fieldset><legend>{info.type === "tint" ? "Installed windows" : "Protected panels"}</legend><div className={styles.areas}>{(info.type === "tint" ? windows : panels).map(area => <label key={area}><input type="checkbox" checked={areas.includes(area)} onChange={event => setAreas(current => event.target.checked ? [...current, area] : current.filter(item => item !== area))} />{area.replaceAll("-", " ")}</label>)}</div></fieldset>
