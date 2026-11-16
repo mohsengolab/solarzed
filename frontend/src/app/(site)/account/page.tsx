@@ -279,8 +279,8 @@ export default function AccountPage() {
               {openTicket.replies.map(r => (
                 <div key={r.id} style={{
                   maxWidth: 620, padding: "10px 14px", borderRadius: 12,
-                  background: r.author === "staff" ? "rgba(31,195,207,.08)" : "rgba(255,255,255,.04)",
-                  border: `1px solid ${r.author === "staff" ? "rgba(31,195,207,.35)" : "rgba(255,255,255,.12)"}`,
+                  background: r.author === "staff" ? "rgba(31,195,207,.08)" : "rgb(var(--sz-tint) / .04)",
+                  border: `1px solid ${r.author === "staff" ? "rgba(31,195,207,.35)" : "rgb(var(--sz-tint) / .12)"}`,
                 }}>
                   <b style={{ fontSize: 12 }}>{r.author === "staff" ? "Solarzed support" : "You"}</b>
                   <p style={{ margin: "6px 0", whiteSpace: "pre-wrap" }}>{r.message}</p>

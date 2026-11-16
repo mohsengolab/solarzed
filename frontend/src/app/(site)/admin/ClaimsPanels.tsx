@@ -197,14 +197,14 @@ function ClaimDialog({ id, onClose, onSaved }: { id: string; onClose: () => void
             <label>راهکار<select aria-label="راهکار" value={form.remedy} onChange={set("remedy")} disabled={form.decision === "rejected"}>{Object.entries(REMEDIES).map(([k, v]) => <option key={k} value={k}>{v}</option>)}</select></label>
           </div>
           <label>مدارک موردنیاز (اعلام‌شده به مشتری)<input maxLength={1000} value={form.requiredDocuments} onChange={set("requiredDocuments")} /></label>
-          <label>دلیل تصمیم {form.decision === "rejected" && <span style={{ color: "#f87171" }}>(الزامی)</span>}<textarea maxLength={1000} rows={2} value={form.decisionNote} onChange={set("decisionNote")} /></label>
+          <label>دلیل تصمیم {form.decision === "rejected" && <span style={{ color: "var(--sz-red)" }}>(الزامی)</span>}<textarea maxLength={1000} rows={2} value={form.decisionNote} onChange={set("decisionNote")} /></label>
           <label>شرح اجرای راهکار<textarea maxLength={1000} rows={2} value={form.remedyNote} onChange={set("remedyNote")} /></label>
           <div className={s.row2}>
             <label>هزینه نیروی کار<input type="number" min={0} step="any" dir="ltr" value={form.laborCost} onChange={set("laborCost")} /></label>
             <label>هزینه قطعه / فیلم<input type="number" min={0} step="any" dir="ltr" value={form.partsCost} onChange={set("partsCost")} /></label>
             <label>سایر (حمل، بازکردن…)<input type="number" min={0} step="any" dir="ltr" value={form.otherCost} onChange={set("otherCost")} /></label>
           </div>
-          <label>دلیل این تغییر {goingBack && <span style={{ color: "#f87171" }}>(برای بازگشت به مرحله قبل الزامی)</span>}<input maxLength={1000} value={form.reason} onChange={set("reason")} /></label>
+          <label>دلیل این تغییر {goingBack && <span style={{ color: "var(--sz-red)" }}>(برای بازگشت به مرحله قبل الزامی)</span>}<input maxLength={1000} value={form.reason} onChange={set("reason")} /></label>
           <div className={s.filters}><button className={s.btnPrimary} disabled={busy}>{busy ? "در حال ذخیره…" : "ذخیره پرونده"}</button></div>
           {msg && <p role="status">{msg}</p>}
         </form>

@@ -9,7 +9,88 @@
   --sz-ink: #04122a;
   --sz-grad: linear-gradient(135deg, #1fc3cf 0%, #0ec3b5 100%);
   --sz-font: "Vazirmatn", "Plus Jakarta Sans", system-ui, sans-serif;
+
+  /* Theme tokens — night (default) */
+  --sz-scheme: dark;
+  --sz-bg: #040b1c;
+  --sz-bg-rgb: 4 11 28;
+  --sz-panel: #040e21;
+  --sz-raised: #0d2040;
+  --sz-tint: 255 255 255;
+  --sz-fg: #fff;
+  --sz-fg-1: #e2eaf2;
+  --sz-fg-2: #c3d4e3;
+  --sz-fg-3: #93aac0;
+  --sz-fg-4: #7d97ad;
+  --sz-fg-4-rgb: 125 151 173;
+  --sz-accent-fg: #8ff3f6;
+  --sz-red: #f87171;
+  --sz-red-soft: #fca5a5;
+  --sz-green: #34d399;
+  --sz-amber: #fbbf24;
+  --sz-blue: #60a5fa;
+  --sz-violet: #a78bfa;
+  color-scheme: var(--sz-scheme);
 }
+
+/* Day theme — white and bright */
+html[data-theme="light"] {
+  --sz-scheme: light;
+  --sz-navy-deep: #f4f8fb;
+  --sz-bg: #f4f8fb;
+  --sz-bg-rgb: 244 248 251;
+  --sz-panel: #ffffff;
+  --sz-raised: #ffffff;
+  --sz-tint: 11 29 58;
+  --sz-fg: #0b1d3a;
+  --sz-fg-1: #1b2f4b;
+  --sz-fg-2: #3e566a;
+  --sz-fg-3: #5a7186;
+  --sz-fg-4: #6b8193;
+  --sz-fg-4-rgb: 107 129 147;
+  --sz-accent-fg: #07737f;
+  --sz-red: #dc2626;
+  --sz-red-soft: #b91c1c;
+  --sz-green: #059669;
+  --sz-amber: #b45309;
+  --sz-blue: #2563eb;
+  --sz-violet: #7c3aed;
+}
+
+/* The logo artwork has white lettering, so in day mode it sits on a navy plate. */
+html[data-theme="light"] img[src$="solarzed-original.png"] {
+  background: var(--sz-navy);
+  padding: 6px 12px;
+  border-radius: 10px;
+  box-sizing: content-box;
+}
+
+.sz-theme-toggle {
+  position: fixed;
+  top: 84px;
+  right: 16px;
+  z-index: 1000;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 40px;
+  height: 40px;
+  padding: 0;
+  border-radius: 50%;
+  border: 1px solid rgb(var(--sz-tint) / 0.18);
+  background: rgb(var(--sz-bg-rgb) / 0.85);
+  backdrop-filter: blur(8px);
+  color: var(--sz-fg);
+  font: 600 13px var(--sz-font);
+  cursor: pointer;
+  box-shadow: 0 4px 14px rgb(0 0 0 / 0.15);
+}
+.sz-theme-toggle:hover { border-color: var(--sz-teal); }
+.sz-theme-toggle span { font-size: 18px; line-height: 1; }
+.sz-theme-toggle .sz-icon-moon,
+html[data-theme="light"] .sz-theme-toggle .sz-icon-sun { display: none; }
+html[data-theme="light"] .sz-theme-toggle .sz-icon-moon { display: inline; }
+@media print { .sz-theme-toggle { display: none; } }
 
 * { box-sizing: border-box; margin: 0; padding: 0; }
 
@@ -18,7 +99,7 @@ html { scroll-behavior: smooth; }
 body {
   font-family: var(--sz-font);
   background: var(--sz-navy-deep);
-  color: #fff;
+  color: var(--sz-fg);
   -webkit-font-smoothing: antialiased;
 }
 
@@ -59,7 +140,7 @@ a { color: inherit; text-decoration: none; }
 
 .sz-btn-ghost {
   background: transparent;
-  border: 1.5px solid rgba(255,255,255,0.2);
-  color: #c3d4e3;
+  border: 1.5px solid rgb(var(--sz-tint) / 0.2);
+  color: var(--sz-fg-2);
 }
-.sz-btn-ghost:hover { border-color: var(--sz-teal); color: #fff; }
+.sz-btn-ghost:hover { border-color: var(--sz-teal); color: var(--sz-fg); }

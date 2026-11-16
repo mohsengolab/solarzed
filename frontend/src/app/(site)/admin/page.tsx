@@ -237,7 +237,7 @@ function OverviewPanel({ onNav }: { onNav: (v: View) => void }) {
           <span>ادعاهای باز</span><b>{Number(d.openClaims ?? 0).toLocaleString("fa-IR")}</b>
         </button>
         <button type="button" className={styles.kpi} onClick={() => onNav("claims")} style={{ textAlign: "inherit", cursor: "pointer" }}>
-          <span>ادعاهای دارای تأخیر</span><b style={d.overdueClaims ? { color: "#f87171" } : undefined}>{Number(d.overdueClaims ?? 0).toLocaleString("fa-IR")}</b>
+          <span>ادعاهای دارای تأخیر</span><b style={d.overdueClaims ? { color: "var(--sz-red)" } : undefined}>{Number(d.overdueClaims ?? 0).toLocaleString("fa-IR")}</b>
         </button>
       </div>
       <div className={styles.card}>
@@ -406,7 +406,7 @@ function ReportWarranties() {
       <p className={styles.empty}>فیلترها را تنظیم کنید، سپس خروجی CSV بگیرید (حداکثر ۱۰۰۰ ردیف).</p>
 
       <div className={styles.filters}>
-        <span style={{ fontSize: 12, color: "#7d97ad", marginInlineEnd: 4 }}>گزارش سریع:</span>
+        <span style={{ fontSize: 12, color: "var(--sz-fg-4)", marginInlineEnd: 4 }}>گزارش سریع:</span>
         <button type="button" className={styles.ghost} onClick={() => preset("thisMonth")}>این ماه</button>
         <button type="button" className={styles.ghost} onClick={() => preset("lastMonth")}>ماه گذشته ({lmr.from.slice(0,7)})</button>
         <button type="button" className={styles.ghost} onClick={() => preset("allActive")}>همه فعال‌ها</button>
@@ -416,35 +416,35 @@ function ReportWarranties() {
 
       <div className={styles.row2}>
         <label className={styles.adminForm.toString()}>وضعیت
-          <select value={f.status} onChange={set("status")} className="" style={{ padding: "9px 12px", background: "rgba(255,255,255,0.05)", border: "1.5px solid rgba(255,255,255,0.12)", borderRadius: 10, color: "#fff", fontFamily: "var(--sz-font)", fontSize: 14 }}>
+          <select value={f.status} onChange={set("status")} className="" style={{ padding: "9px 12px", background: "rgb(var(--sz-tint) / 0.05)", border: "1.5px solid rgb(var(--sz-tint) / 0.12)", borderRadius: 10, color: "var(--sz-fg)", fontFamily: "var(--sz-font)", fontSize: 14 }}>
             <option value="">همه وضعیت‌ها</option><option value="active">فعال</option><option value="pending">در انتظار</option><option value="rejected">رد شده</option>
           </select>
         </label>
         <label>نوع محصول
-          <select value={f.type} onChange={set("type")} style={{ padding: "9px 12px", background: "rgba(255,255,255,0.05)", border: "1.5px solid rgba(255,255,255,0.12)", borderRadius: 10, color: "#fff", fontFamily: "var(--sz-font)", fontSize: 14 }}>
+          <select value={f.type} onChange={set("type")} style={{ padding: "9px 12px", background: "rgb(var(--sz-tint) / 0.05)", border: "1.5px solid rgb(var(--sz-tint) / 0.12)", borderRadius: 10, color: "var(--sz-fg)", fontFamily: "var(--sz-font)", fontSize: 14 }}>
             <option value="">همه انواع</option><option value="tint">فیلم شیشه</option><option value="ppf">PPF</option>
           </select>
         </label>
-        <label style={{ display: "flex", flexDirection: "column", gap: 6, fontSize: 13, fontWeight: 600, color: "#c3d4e3" }}>نصّاب / فروشنده
-          <input value={f.installer} onChange={set("installer")} placeholder="نام نصّاب یا فروشنده" style={{ padding: "9px 12px", background: "rgba(255,255,255,0.05)", border: "1.5px solid rgba(255,255,255,0.12)", borderRadius: 10, color: "#fff", fontFamily: "var(--sz-font)", fontSize: 14 }} />
+        <label style={{ display: "flex", flexDirection: "column", gap: 6, fontSize: 13, fontWeight: 600, color: "var(--sz-fg-2)" }}>نصّاب / فروشنده
+          <input value={f.installer} onChange={set("installer")} placeholder="نام نصّاب یا فروشنده" style={{ padding: "9px 12px", background: "rgb(var(--sz-tint) / 0.05)", border: "1.5px solid rgb(var(--sz-tint) / 0.12)", borderRadius: 10, color: "var(--sz-fg)", fontFamily: "var(--sz-font)", fontSize: 14 }} />
         </label>
-        <label style={{ display: "flex", flexDirection: "column", gap: 6, fontSize: 13, fontWeight: 600, color: "#c3d4e3" }}>برند / مدل خودرو
-          <input value={f.make} onChange={set("make")} placeholder="مثلاً تویوتا یا پراید" style={{ padding: "9px 12px", background: "rgba(255,255,255,0.05)", border: "1.5px solid rgba(255,255,255,0.12)", borderRadius: 10, color: "#fff", fontFamily: "var(--sz-font)", fontSize: 14 }} />
+        <label style={{ display: "flex", flexDirection: "column", gap: 6, fontSize: 13, fontWeight: 600, color: "var(--sz-fg-2)" }}>برند / مدل خودرو
+          <input value={f.make} onChange={set("make")} placeholder="مثلاً تویوتا یا پراید" style={{ padding: "9px 12px", background: "rgb(var(--sz-tint) / 0.05)", border: "1.5px solid rgb(var(--sz-tint) / 0.12)", borderRadius: 10, color: "var(--sz-fg)", fontFamily: "var(--sz-font)", fontSize: 14 }} />
         </label>
-        <label style={{ display: "flex", flexDirection: "column", gap: 6, fontSize: 13, fontWeight: 600, color: "#c3d4e3" }}>ثبت از
-          <input type="date" value={f.createdFrom} onChange={set("createdFrom")} style={{ padding: "9px 12px", background: "rgba(255,255,255,0.05)", border: "1.5px solid rgba(255,255,255,0.12)", borderRadius: 10, color: "#fff", fontFamily: "var(--sz-font)", fontSize: 14, colorScheme: "dark" }} />
+        <label style={{ display: "flex", flexDirection: "column", gap: 6, fontSize: 13, fontWeight: 600, color: "var(--sz-fg-2)" }}>ثبت از
+          <input type="date" value={f.createdFrom} onChange={set("createdFrom")} style={{ padding: "9px 12px", background: "rgb(var(--sz-tint) / 0.05)", border: "1.5px solid rgb(var(--sz-tint) / 0.12)", borderRadius: 10, color: "var(--sz-fg)", fontFamily: "var(--sz-font)", fontSize: 14, colorScheme: "dark" }} />
         </label>
-        <label style={{ display: "flex", flexDirection: "column", gap: 6, fontSize: 13, fontWeight: 600, color: "#c3d4e3" }}>ثبت تا
-          <input type="date" value={f.createdTo} onChange={set("createdTo")} style={{ padding: "9px 12px", background: "rgba(255,255,255,0.05)", border: "1.5px solid rgba(255,255,255,0.12)", borderRadius: 10, color: "#fff", fontFamily: "var(--sz-font)", fontSize: 14, colorScheme: "dark" }} />
+        <label style={{ display: "flex", flexDirection: "column", gap: 6, fontSize: 13, fontWeight: 600, color: "var(--sz-fg-2)" }}>ثبت تا
+          <input type="date" value={f.createdTo} onChange={set("createdTo")} style={{ padding: "9px 12px", background: "rgb(var(--sz-tint) / 0.05)", border: "1.5px solid rgb(var(--sz-tint) / 0.12)", borderRadius: 10, color: "var(--sz-fg)", fontFamily: "var(--sz-font)", fontSize: 14, colorScheme: "dark" }} />
         </label>
-        <label style={{ display: "flex", flexDirection: "column", gap: 6, fontSize: 13, fontWeight: 600, color: "#c3d4e3" }}>نصب از
-          <input type="date" value={f.installedFrom} onChange={set("installedFrom")} style={{ padding: "9px 12px", background: "rgba(255,255,255,0.05)", border: "1.5px solid rgba(255,255,255,0.12)", borderRadius: 10, color: "#fff", fontFamily: "var(--sz-font)", fontSize: 14, colorScheme: "dark" }} />
+        <label style={{ display: "flex", flexDirection: "column", gap: 6, fontSize: 13, fontWeight: 600, color: "var(--sz-fg-2)" }}>نصب از
+          <input type="date" value={f.installedFrom} onChange={set("installedFrom")} style={{ padding: "9px 12px", background: "rgb(var(--sz-tint) / 0.05)", border: "1.5px solid rgb(var(--sz-tint) / 0.12)", borderRadius: 10, color: "var(--sz-fg)", fontFamily: "var(--sz-font)", fontSize: 14, colorScheme: "dark" }} />
         </label>
-        <label style={{ display: "flex", flexDirection: "column", gap: 6, fontSize: 13, fontWeight: 600, color: "#c3d4e3" }}>نصب تا
-          <input type="date" value={f.installedTo} onChange={set("installedTo")} style={{ padding: "9px 12px", background: "rgba(255,255,255,0.05)", border: "1.5px solid rgba(255,255,255,0.12)", borderRadius: 10, color: "#fff", fontFamily: "var(--sz-font)", fontSize: 14, colorScheme: "dark" }} />
+        <label style={{ display: "flex", flexDirection: "column", gap: 6, fontSize: 13, fontWeight: 600, color: "var(--sz-fg-2)" }}>نصب تا
+          <input type="date" value={f.installedTo} onChange={set("installedTo")} style={{ padding: "9px 12px", background: "rgb(var(--sz-tint) / 0.05)", border: "1.5px solid rgb(var(--sz-tint) / 0.12)", borderRadius: 10, color: "var(--sz-fg)", fontFamily: "var(--sz-font)", fontSize: 14, colorScheme: "dark" }} />
         </label>
-        <label style={{ display: "flex", flexDirection: "column", gap: 6, fontSize: 13, fontWeight: 600, color: "#c3d4e3" }}>انقضای گارانتی فیلم
-          <select value={f.expiringDays} onChange={set("expiringDays")} style={{ padding: "9px 12px", background: "rgba(255,255,255,0.05)", border: "1.5px solid rgba(255,255,255,0.12)", borderRadius: 10, color: "#fff", fontFamily: "var(--sz-font)", fontSize: 14 }}>
+        <label style={{ display: "flex", flexDirection: "column", gap: 6, fontSize: 13, fontWeight: 600, color: "var(--sz-fg-2)" }}>انقضای گارانتی فیلم
+          <select value={f.expiringDays} onChange={set("expiringDays")} style={{ padding: "9px 12px", background: "rgb(var(--sz-tint) / 0.05)", border: "1.5px solid rgb(var(--sz-tint) / 0.12)", borderRadius: 10, color: "var(--sz-fg)", fontFamily: "var(--sz-font)", fontSize: 14 }}>
             <option value="">هر زمان</option><option value="30">تا ۳۰ روز</option><option value="90">تا ۹۰ روز</option><option value="365">تا ۱ سال</option>
           </select>
         </label>
@@ -496,7 +496,7 @@ function ReportRolls() {
       <p className={styles.empty}>فیلترها را تنظیم کنید، سپس خروجی CSV بگیرید (حداکثر ۱۰۰۰ ردیف).</p>
 
       <div className={styles.filters}>
-        <span style={{ fontSize: 12, color: "#7d97ad", marginInlineEnd: 4 }}>گزارش سریع:</span>
+        <span style={{ fontSize: 12, color: "var(--sz-fg-4)", marginInlineEnd: 4 }}>گزارش سریع:</span>
         <button type="button" className={styles.ghost} onClick={() => setF({ ...R_RPT_EMPTY, receivedFrom: thisMonthStart() })}>دریافت این ماه</button>
         <button type="button" className={styles.ghost} onClick={() => setF({ ...R_RPT_EMPTY, receivedFrom: lmr.from, receivedTo: lmr.to })}>دریافت ماه گذشته</button>
         <button type="button" className={styles.ghost} onClick={() => setF({ ...R_RPT_EMPTY, status: "instock" })}>موجود در انبار</button>
@@ -505,34 +505,34 @@ function ReportRolls() {
       </div>
 
       <div className={styles.row2}>
-        <label style={{ display: "flex", flexDirection: "column", gap: 6, fontSize: 13, fontWeight: 600, color: "#c3d4e3" }}>محصول
-          <select value={f.model} onChange={set("model")} style={{ padding: "9px 12px", background: "rgba(255,255,255,0.05)", border: "1.5px solid rgba(255,255,255,0.12)", borderRadius: 10, color: "#fff", fontFamily: "var(--sz-font)", fontSize: 14 }}>
+        <label style={{ display: "flex", flexDirection: "column", gap: 6, fontSize: 13, fontWeight: 600, color: "var(--sz-fg-2)" }}>محصول
+          <select value={f.model} onChange={set("model")} style={{ padding: "9px 12px", background: "rgb(var(--sz-tint) / 0.05)", border: "1.5px solid rgb(var(--sz-tint) / 0.12)", borderRadius: 10, color: "var(--sz-fg)", fontFamily: "var(--sz-font)", fontSize: 14 }}>
             <option value="">همه محصولات</option>{products.map(p => <option key={p.code} value={p.code}>{p.code}</option>)}
           </select>
         </label>
-        <label style={{ display: "flex", flexDirection: "column", gap: 6, fontSize: 13, fontWeight: 600, color: "#c3d4e3" }}>نوع
-          <select value={f.type} onChange={set("type")} style={{ padding: "9px 12px", background: "rgba(255,255,255,0.05)", border: "1.5px solid rgba(255,255,255,0.12)", borderRadius: 10, color: "#fff", fontFamily: "var(--sz-font)", fontSize: 14 }}>
+        <label style={{ display: "flex", flexDirection: "column", gap: 6, fontSize: 13, fontWeight: 600, color: "var(--sz-fg-2)" }}>نوع
+          <select value={f.type} onChange={set("type")} style={{ padding: "9px 12px", background: "rgb(var(--sz-tint) / 0.05)", border: "1.5px solid rgb(var(--sz-tint) / 0.12)", borderRadius: 10, color: "var(--sz-fg)", fontFamily: "var(--sz-font)", fontSize: 14 }}>
             <option value="">همه انواع</option><option value="tint">فیلم شیشه</option><option value="ppf">PPF</option>
           </select>
         </label>
-        <label style={{ display: "flex", flexDirection: "column", gap: 6, fontSize: 13, fontWeight: 600, color: "#c3d4e3" }}>کنترل کیفیت
-          <select value={f.qc} onChange={set("qc")} style={{ padding: "9px 12px", background: "rgba(255,255,255,0.05)", border: "1.5px solid rgba(255,255,255,0.12)", borderRadius: 10, color: "#fff", fontFamily: "var(--sz-font)", fontSize: 14 }}>
+        <label style={{ display: "flex", flexDirection: "column", gap: 6, fontSize: 13, fontWeight: 600, color: "var(--sz-fg-2)" }}>کنترل کیفیت
+          <select value={f.qc} onChange={set("qc")} style={{ padding: "9px 12px", background: "rgb(var(--sz-tint) / 0.05)", border: "1.5px solid rgb(var(--sz-tint) / 0.12)", borderRadius: 10, color: "var(--sz-fg)", fontFamily: "var(--sz-font)", fontSize: 14 }}>
             <option value="">همه</option><option value="pending">در انتظار</option><option value="approved">تأیید شده</option><option value="rejected">رد شده</option>
           </select>
         </label>
-        <label style={{ display: "flex", flexDirection: "column", gap: 6, fontSize: 13, fontWeight: 600, color: "#c3d4e3" }}>وضعیت انبار
-          <select value={f.status} onChange={set("status")} style={{ padding: "9px 12px", background: "rgba(255,255,255,0.05)", border: "1.5px solid rgba(255,255,255,0.12)", borderRadius: 10, color: "#fff", fontFamily: "var(--sz-font)", fontSize: 14 }}>
+        <label style={{ display: "flex", flexDirection: "column", gap: 6, fontSize: 13, fontWeight: 600, color: "var(--sz-fg-2)" }}>وضعیت انبار
+          <select value={f.status} onChange={set("status")} style={{ padding: "9px 12px", background: "rgb(var(--sz-tint) / 0.05)", border: "1.5px solid rgb(var(--sz-tint) / 0.12)", borderRadius: 10, color: "var(--sz-fg)", fontFamily: "var(--sz-font)", fontSize: 14 }}>
             <option value="">همه</option><option value="instock">موجود</option><option value="shipped">ارسال شده</option><option value="consumed">مصرف شده</option><option value="void">باطل</option>
           </select>
         </label>
-        <label style={{ display: "flex", flexDirection: "column", gap: 6, fontSize: 13, fontWeight: 600, color: "#c3d4e3" }}>تأمین‌کننده شامل
-          <input value={f.supplier} onChange={set("supplier")} placeholder="کد یا نام تأمین‌کننده" style={{ padding: "9px 12px", background: "rgba(255,255,255,0.05)", border: "1.5px solid rgba(255,255,255,0.12)", borderRadius: 10, color: "#fff", fontFamily: "var(--sz-font)", fontSize: 14 }} />
+        <label style={{ display: "flex", flexDirection: "column", gap: 6, fontSize: 13, fontWeight: 600, color: "var(--sz-fg-2)" }}>تأمین‌کننده شامل
+          <input value={f.supplier} onChange={set("supplier")} placeholder="کد یا نام تأمین‌کننده" style={{ padding: "9px 12px", background: "rgb(var(--sz-tint) / 0.05)", border: "1.5px solid rgb(var(--sz-tint) / 0.12)", borderRadius: 10, color: "var(--sz-fg)", fontFamily: "var(--sz-font)", fontSize: 14 }} />
         </label>
-        <label style={{ display: "flex", flexDirection: "column", gap: 6, fontSize: 13, fontWeight: 600, color: "#c3d4e3" }}>دریافت از
-          <input type="date" value={f.receivedFrom} onChange={set("receivedFrom")} style={{ padding: "9px 12px", background: "rgba(255,255,255,0.05)", border: "1.5px solid rgba(255,255,255,0.12)", borderRadius: 10, color: "#fff", fontFamily: "var(--sz-font)", fontSize: 14, colorScheme: "dark" }} />
+        <label style={{ display: "flex", flexDirection: "column", gap: 6, fontSize: 13, fontWeight: 600, color: "var(--sz-fg-2)" }}>دریافت از
+          <input type="date" value={f.receivedFrom} onChange={set("receivedFrom")} style={{ padding: "9px 12px", background: "rgb(var(--sz-tint) / 0.05)", border: "1.5px solid rgb(var(--sz-tint) / 0.12)", borderRadius: 10, color: "var(--sz-fg)", fontFamily: "var(--sz-font)", fontSize: 14, colorScheme: "dark" }} />
         </label>
-        <label style={{ display: "flex", flexDirection: "column", gap: 6, fontSize: 13, fontWeight: 600, color: "#c3d4e3" }}>دریافت تا
-          <input type="date" value={f.receivedTo} onChange={set("receivedTo")} style={{ padding: "9px 12px", background: "rgba(255,255,255,0.05)", border: "1.5px solid rgba(255,255,255,0.12)", borderRadius: 10, color: "#fff", fontFamily: "var(--sz-font)", fontSize: 14, colorScheme: "dark" }} />
+        <label style={{ display: "flex", flexDirection: "column", gap: 6, fontSize: 13, fontWeight: 600, color: "var(--sz-fg-2)" }}>دریافت تا
+          <input type="date" value={f.receivedTo} onChange={set("receivedTo")} style={{ padding: "9px 12px", background: "rgb(var(--sz-tint) / 0.05)", border: "1.5px solid rgb(var(--sz-tint) / 0.12)", borderRadius: 10, color: "var(--sz-fg)", fontFamily: "var(--sz-font)", fontSize: 14, colorScheme: "dark" }} />
         </label>
       </div>
 
@@ -734,7 +734,7 @@ function WarrantiesPanel() {
                 <option value="pending">در انتظار بمان</option>
               </select>
             </label>
-            <label>یادداشت {decStatus === "rejected" && <span style={{ color: "#f87171" }}>(الزامی)</span>}
+            <label>یادداشت {decStatus === "rejected" && <span style={{ color: "var(--sz-red)" }}>(الزامی)</span>}
               <textarea value={decNote} maxLength={500} onChange={e => setDecNote(e.target.value)} rows={3} />
             </label>
             <button type="button" className={styles.btnPrimary} onClick={decide} disabled={saving}>
