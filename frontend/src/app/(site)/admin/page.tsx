@@ -11,7 +11,7 @@ import {
 import styles from "./admin.module.css";
 import labelsStyle from "./labels.module.css";
 import BoxLabelsPanel from "./BoxLabelsPanel";
-import { printQrLabels } from "./qrPrint";
+import { printQrLabels, printQrImage } from "./qrPrint";
 import { ProductsPanel, CustomersPanel, AccountPanel, UsersPanel } from "./ManagementPanels";
 import TicketsPanel from "./TicketsPanel";
 import SmsSettingsPanel from "./SmsSettingsPanel";
@@ -788,6 +788,14 @@ function RollsPanel() {
     )).then(entries => { if (!cancelled) setQrs(Object.fromEntries(entries)); }).catch(() => {});
     return () => { cancelled = true; };
   }, [rowKey]);
+  // Clicked QR: shown large in a dialog, drawn at high resolution so it prints sharply.
+  const [qrView, setQrView] = useState<{ roll: RollRow; src: string } | null>(null);
+  const [qrViewError, setQrViewError] = useState("");
+  async function openQr(roll: RollRow) {
+    setQrViewError("");
+    try { setQrView({ roll, src: await QRCode.toDataURL(roll.id, { errorCorrectionLevel: "M", margin: 4, scale: 16 }) }); }
+    catch (e) { setMsg(fa(errorText(e, "ساخت QR ناموفق بود."))); }
+  }
 
   useEffect(() => {
     managementFetch<{ items: typeof products }>("products?pageSize=200").then(r => setProducts(r.items)).catch(e => setMsg(fa(errorText(e, "بارگذاری محصولات ناموفق بود."))));
@@ -934,7 +942,10 @@ function RollsPanel() {
           <tbody>
             {list.items.map(r => (
               <tr key={r.id}>
-                <td>{qrs[r.id] && <img src={qrs[r.id]} alt={`QR رول ${r.id}`} width={44} height={44} style={{ display: "block", background: "#fff", borderRadius: 4, padding: 2 }} />}</td>
+                <td>{qrs[r.id] && <button type="button" onClick={() => openQr(r)} title="نمایش بزرگ و چاپ QR" aria-label={`نمایش بزرگ QR رول ${r.id}`}
+                  style={{ display: "block", padding: 0, border: 0, background: "none", cursor: "zoom-in" }}>
+                  <img src={qrs[r.id]} alt={`QR رول ${r.id}`} width={44} height={44} style={{ display: "block", background: "#fff", borderRadius: 4, padding: 2 }} />
+                </button>}</td>
                 <td><code dir="ltr">{r.id}</code></td>
                 <td>{r.modelCode}</td>
                 <td>{r.type}</td>
@@ -976,6 +987,22 @@ function RollsPanel() {
         {msg && <p role="alert">{msg}</p>}
         <h3>تاریخچه</h3><div className={styles.history}>{(JSON.parse(edit.historyJson || "[]") as { at: string; action: string; note: string }[]).map((h, i) => <p key={i}>{h.at} · {h.action} · {h.note}</p>)}</div>
       </form></div>}
+      {qrView && <div className={styles.dialog} role="dialog" aria-modal="true" aria-label={`QR رول ${qrView.roll.id}`} onClick={e => { if (e.target === e.currentTarget) setQrView(null); }}
+        onKeyDown={e => { if (e.key === "Escape") setQrView(null); }}>
+        <div className={styles.dialogInner} style={{ textAlign: "center" }}>
+          <h2 dir="ltr">{qrView.roll.id}</h2>
+          <button type="button" className={styles.dialogClose} aria-label="بستن QR" onClick={() => setQrView(null)}>×</button>
+          <img src={qrView.src} alt={`QR رول ${qrView.roll.id}`}
+            style={{ display: "block", width: "min(360px, 100%)", height: "auto", margin: "12px auto", background: "#fff", borderRadius: 8, imageRendering: "pixelated" }} />
+          <p style={{ margin: "0 0 12px", opacity: .75 }}>{qrView.roll.modelCode} · {qrView.roll.batch}</p>
+          {qrViewError && <p role="alert" className={styles.errorText}>{qrViewError}</p>}
+          <div className={styles.filters} style={{ justifyContent: "center" }}>
+            <button type="button" className={styles.btnPrimary} autoFocus
+              onClick={() => { printQrImage(`QR ${qrView.roll.id}`, qrView.src, qrView.roll.id).catch(ex => setQrViewError(fa(errorText(ex, "چاپ ناموفق بود.")))); }}>چاپ QR</button>
+            <button type="button" className={styles.ghost} onClick={() => setQrView(null)}>بستن</button>
+          </div>
+        </div>
+      </div>}
     </section>
   );
 }
