@@ -1,15 +1,15 @@
 .stack{display:flex;flex-direction:column;gap:30px}
-.stack section{border-top:1px solid #ffffff15;padding-top:24px}
+.stack section{border-top:1px solid rgb(var(--sz-tint) / 0.082);padding-top:24px}
 .head{display:flex;justify-content:space-between;align-items:center;gap:16px;flex-wrap:wrap}
 .head h1{margin:0!important;font-size:clamp(20px,4vw,28px)!important}
-.ghost{background:transparent;border:1px solid #ffffff33;color:#d8e4ee;border-radius:9px;padding:10px 16px;font:inherit;font-size:13px;cursor:pointer;align-self:flex-start}
+.ghost{background:transparent;border:1px solid rgb(var(--sz-tint) / 0.2);color:var(--sz-fg-1);border-radius:9px;padding:10px 16px;font:inherit;font-size:13px;cursor:pointer;align-self:flex-start}
 .ghost:hover{border-color:#1fc3cf}
-.notice{background:#1fc3cf12;border:1px solid #1fc3cf55;padding:14px;border-radius:10px;color:#b8fff8!important}
+.notice{background:#1fc3cf12;border:1px solid #1fc3cf55;padding:14px;border-radius:10px;color:var(--sz-accent-fg)!important}
 .form{display:flex;flex-direction:column;gap:18px}
-.form textarea{width:100%;background:#ffffff05;border:1px solid #ffffff29;border-radius:9px;padding:13px;color:white;font:inherit;box-sizing:border-box;color-scheme:dark;resize:vertical}
+.form textarea{width:100%;background:rgb(var(--sz-tint) / 0.02);border:1px solid rgb(var(--sz-tint) / 0.161);border-radius:9px;padding:13px;color:var(--sz-fg);font:inherit;box-sizing:border-box;color-scheme:var(--sz-scheme);resize:vertical}
 .scroll{overflow-x:auto;margin-bottom:18px}
 .table{width:100%;border-collapse:collapse;font-size:13px;min-width:480px}
-.table th{text-align:left;color:#9bb3c8;font-weight:600;padding:9px 10px;border-bottom:1px solid #ffffff20}
-.table td{padding:10px;border-bottom:1px solid #ffffff10;color:#d8e4ee}
-.table code{color:#92e9e5;font-size:12px}
-.table a{color:#92e9e5}
+.table th{text-align:left;color:var(--sz-fg-3);font-weight:600;padding:9px 10px;border-bottom:1px solid rgb(var(--sz-tint) / 0.125)}
+.table td{padding:10px;border-bottom:1px solid rgb(var(--sz-tint) / 0.063);color:var(--sz-fg-1)}
+.table code{color:var(--sz-accent-fg);font-size:12px}
+.table a{color:var(--sz-accent-fg)}

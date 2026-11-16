@@ -1,5 +1,9 @@
 import type { Metadata } from "next";
 import "./globals.css";
+import ThemeToggle from "@/components/ThemeToggle";
+
+// Applies the saved day/night choice before first paint so it never flashes.
+const THEME_INIT = `try{if(localStorage.getItem("sz-theme")==="light")document.documentElement.dataset.theme="light"}catch(e){}`;
 
 export const metadata: Metadata = {
   metadataBase: new URL("https://solarzed.com"),
@@ -43,8 +47,9 @@ export default function RootLayout({
   children: React.ReactNode;
 }) {
   return (
-    <html lang="en">
+    <html lang="en" suppressHydrationWarning>
       <head>
+        <script dangerouslySetInnerHTML={{ __html: THEME_INIT }} />
         <link rel="preconnect" href="https://fonts.googleapis.com" />
         <link rel="preconnect" href="https://fonts.gstatic.com" crossOrigin="" />
         <link
@@ -52,7 +57,10 @@ export default function RootLayout({
           rel="stylesheet"
         />
       </head>
-      <body>{children}</body>
+      <body>
+        <ThemeToggle />
+        {children}
+      </body>
     </html>
   );
 }
