@@ -20,7 +20,7 @@ export default function BoxLabelsPanel({ onSettings, role }: { onSettings: () =>
   const [labels, setLabels] = useState<BoxLabel[]>([]);
   const [rolls, setRolls] = useState<Roll[]>([]);
   const [rollId, setRollId] = useState("");
-  const [quantity, setQuantity] = useState(1);
+  const [serialText, setSerialText] = useState("");
   const [factory, setFactory] = useState("");
   const [site, setSite] = useState("https://solarzed.com");
   const [smsReady, setSmsReady] = useState(false);
@@ -60,8 +60,9 @@ export default function BoxLabelsPanel({ onSettings, role }: { onSettings: () =>
   async function create(event: FormEvent) {
     event.preventDefault(); setError(""); setBusy(true);
     try {
-      const result = await issueBoxLabels(rollId, quantity, factory);
+      const result = await issueBoxLabels(rollId, serials, factory);
       try { localStorage.setItem(FACTORY_KEY, factory.trim().toUpperCase()); } catch { /* storage unavailable */ }
+      setSerialText("");
       await load(); setSelected(result.labels.map(label => label.id));
     } catch (ex) { setError(message(ex)); } finally { setBusy(false); }
   }
@@ -82,7 +83,7 @@ export default function BoxLabelsPanel({ onSettings, role }: { onSettings: () =>
     await printBarcodeLabels(width, height, validSelection.map(label => ({ serial: label.id, lines: [`${label.product} · ${label.type.toUpperCase()}`] })));
   }
 
-  // Inside the carton: warranty card with the QR (factory + serial + warranty code). Only the box opener sees it.
+  // Inside the carton: warranty card with the QR (carton roll number + 7-digit warranty code). Only the box opener sees it.
   async function printCards() {
     setError("");
     if (!sizeOk()) return;
@@ -90,12 +91,14 @@ export default function BoxLabelsPanel({ onSettings, role }: { onSettings: () =>
     if (!chosen.length || chosen.some(label => !previews[label.id])) { setError(fa("Select unused labels and wait for their QR previews.")); return; }
     await printQrLabels("Solarzed warranty cards", width, height, chosen.map(label => ({
       qr: previews[label.id], alt: `Warranty card ${label.id}`, title: "Scan to activate your warranty",
-      lines: [label.fullCode ?? label.id, `${label.product} · ${label.type.toUpperCase()}`,
-        ...(label.factoryCode ? [`Factory ${label.factoryCode} · Serial ${label.id}`, `Warranty ${label.cardCode}`] : [])],
+      lines: [`${label.product} · ${label.type.toUpperCase()}`, `Roll No ${label.id}`,
+        ...(label.cardCode ? [`Warranty code ${label.cardCode}`] : [label.fullCode ?? label.id])],
       footer: `${new URL(label.activationUrl!).host}/activate`,
     })));
   }
 
+  // One roll number per line (a barcode scanner types the number and presses Enter).
+  const serials = [...new Set(serialText.split(/[\s,]+/).map(item => item.trim().toUpperCase()).filter(Boolean))];
   const roll = rolls.find(item => item.id === rollId);
   const period = roll && coverage?.durations[roll.type];
   const selectBox = (label: BoxLabel) => <input aria-label={`${fa("Select")} ${label.id}`} type="checkbox" disabled={!!label.activatedAt} checked={selected.includes(label.id)} onChange={event => setSelected(items => event.target.checked ? [...items, label.id] : items.filter(id => id !== label.id))} />;
@@ -141,20 +144,20 @@ export default function BoxLabelsPanel({ onSettings, role }: { onSettings: () =>
       <div className={labelsStyle.columns}>
         <form className={`${styles.card} ${styles.adminForm}`} onSubmit={create}>
           <h2>ساخت برچسب برای کارتن‌ها</h2>
-          <p className={labelsStyle.help}>برای هر کارتن یک سریال (بارکد روی کارتن) و یک کارت گارانتی (QR داخل کارتن) ساخته می‌شود. دورهٔ گارانتی از تنظیمات کپی می‌شود.</p>
+          <p className={labelsStyle.help}>بارکد Roll No روی هر کارتن را اسکن کنید (مثلاً CPT30614374). برای هر کارتن یک کارت گارانتی با کد ۷ رقمی ساخته می‌شود که داخل همان کارتن قرار می‌گیرد. دورهٔ گارانتی از تنظیمات کپی می‌شود.</p>
           <label>{fa("Product roll")}<select required value={rollId} onChange={event => setRollId(event.target.value)}><option value="">{fa("Select a roll")}</option>{rolls.map(item => <option key={item.id} value={item.id}>{item.id} · {item.qc} · {item.status}</option>)}</select></label>
           {roll && !period?.film && <div className={labelsStyle.notice}>{fa("Set the approved warranty period for")} {roll.type === "tint" ? fa("Window film") : "PPF"} {fa("before generating labels.")} <button type="button" className={styles.ghost} onClick={onSettings}>{fa("Open coverage settings")}</button></div>}
           {roll?.qc === "approved" && roll.status === "instock" && <><p className={labelsStyle.help}>{fa("You can generate and print QR labels now. Mark the roll as shipped when it is ready for customers to activate.")}</p><button type="button" className={styles.ghost} disabled={busy} onClick={async () => { setBusy(true); setError(""); try { await releaseRoll(roll.id); await load(); } catch (ex) { setError(message(ex)); } finally { setBusy(false); } }}>{fa("Mark roll as shipped — enable customer activation")}</button></>}
-          <label>کد کارخانه (۱ تا ۴ حرف انگلیسی، مثلاً SA یا BF)<input dir="ltr" required maxLength={4} pattern="[A-Za-z]{1,4}" value={factory} onChange={event => setFactory(event.target.value.replace(/[^A-Za-z]/g, "").toUpperCase())} /></label>
-          <label>{fa("Number of boxes")}<input type="number" min={1} max={200} required value={quantity} onChange={event => setQuantity(Number(event.target.value))} /></label>
-          <button className={styles.btnPrimary} disabled={busy || !loaded || !roll || !period?.film || roll.qc !== "approved" || roll.status === "void" || !factory}>{busy ? fa("Working…") : "ساخت برچسب و کارت گارانتی"}</button>
+          <label>کد کارخانه — محرمانه، روی کارت چاپ نمی‌شود (۱ تا ۴ حرف انگلیسی، مثلاً SA یا BF)<input dir="ltr" required maxLength={4} pattern="[A-Za-z]{1,4}" value={factory} onChange={event => setFactory(event.target.value.replace(/[^A-Za-z]/g, "").toUpperCase())} /></label>
+          <label>Roll No کارتن‌ها (هر خط یکی، با بارکدخوان) — {serials.length.toLocaleString("fa-IR")} کارتن<textarea dir="ltr" rows={5} required value={serialText} onChange={event => setSerialText(event.target.value)} placeholder={"CPT30614374\nCPT30614375"} /></label>
+          <button className={styles.btnPrimary} disabled={busy || !loaded || !roll || !period?.film || roll.qc !== "approved" || roll.status === "void" || !factory || !serials.length || serials.length > 200}>{busy ? fa("Working…") : "ساخت برچسب و کارت گارانتی"}</button>
         </form>
         <div className={`${styles.card} ${styles.adminForm}`}>
           <h2>{fa("Print setup")}</h2>
           <label>{fa("Public website")}<input type="url" dir="ltr" value={site} onChange={event => setSite(event.target.value)} /></label>
           <button type="button" className={styles.ghost} disabled={busy || !loaded} onClick={async () => { setBusy(true); setError(""); try { await saveLabelSite(site); await load(); } catch (ex) { setError(message(ex)); } finally { setBusy(false); } }}>{fa("Save QR website")}</button>
           {sizeFields}
-          <p className={labelsStyle.help}>بارکد روی کارتن فقط سریال را دارد و برای انتقال به نماینده و نفرات بعدی است. کارت گارانتی داخل کارتن گذاشته می‌شود؛ QR آن کد کارخانه + سریال + کد گارانتی است و سایت {site.replace(/^https:\/\//, "")} را باز می‌کند. کاغذ هم‌اندازه، مقیاس ۱۰۰٪ و بدون سربرگ/پاورقی مرورگر چاپ کنید.</p>
+          <p className={labelsStyle.help}>بارکد Roll No که روی کارتن چاپ شده برای انتقال به نماینده و نفرات بعدی است؛ برای کارتن‌هایی که این بارکد را ندارند می‌توانید بارکد چاپ کنید. کارت گارانتی داخل کارتن گذاشته می‌شود؛ QR آن Roll No + کد ۷ رقمی گارانتی است و سایت {site.replace(/^https:\/\//, "")} را باز می‌کند. کاغذ هم‌اندازه، مقیاس ۱۰۰٪ و بدون سربرگ/پاورقی مرورگر چاپ کنید.</p>
           {barcodeButton}
           <button type="button" className={styles.btnPrimary} onClick={() => { printCards().catch(ex => setError(message(ex))); }} disabled={busy || !validSelection.length || validSelection.some(label => !previews[label.id])}>چاپ کارت گارانتی داخل کارتن ({validSelection.length.toLocaleString("fa-IR")})</button>
         </div>

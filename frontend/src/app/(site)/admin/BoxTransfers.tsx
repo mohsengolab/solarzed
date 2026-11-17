@@ -71,7 +71,7 @@ export default function BoxTransfers({ selected = [], onChanged }: { selected?: 
       <div className={labelsStyle.columns}>
         <form className={`${styles.card} ${styles.adminForm}`} onSubmit={submit}>
           <label>{fa("Box serials (scan or type, one per line)")}
-            <textarea dir="ltr" rows={5} required value={serials} onChange={e => setSerials(e.target.value)} placeholder="SZB-…" />
+            <textarea dir="ltr" rows={5} required value={serials} onChange={e => setSerials(e.target.value)} placeholder="CPT30614374" />
           </label>
           {selected.length > 0 && <button type="button" className={styles.ghost} onClick={() => setSerials(selected.join("\n"))}>{fa("Use selected boxes")} ({selected.length.toLocaleString("fa-IR")})</button>}
           <label>{fa("Current holder (safety check)")}
@@ -101,7 +101,7 @@ export default function BoxTransfers({ selected = [], onChanged }: { selected?: 
       <div className={`${styles.card} ${labelsStyle.list}`}>
         <h2>{fa("Box history")}</h2>
         <form className={labelsStyle.sizes} onSubmit={e => { e.preventDefault(); showHistory(lookup); }}>
-          <input dir="ltr" required placeholder="SZB-…" value={lookup} onChange={e => setLookup(e.target.value)} />
+          <input dir="ltr" required placeholder="CPT30614374" value={lookup} onChange={e => setLookup(e.target.value)} />
           <button className={styles.ghost}>{fa("Show history")}</button>
         </form>
         {history && <>
