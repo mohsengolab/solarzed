@@ -122,7 +122,7 @@ public class BoxTransferTests
     {
         using var f = new Fixture();
         var ids = await f.Issue(3);
-        await Error(400, () => f.Transfers.Transfer(To(RepA, "NOT-A-SERIAL"), "admin"));
+        await Error(400, () => f.Transfers.Transfer(To(RepA, "NOT/A_SERIAL"), "admin"));
         await Error(404, () => f.Transfers.Transfer(To(RepA, "SZB-0000000000000000"), "admin"));
         await Error(400, () => f.Transfers.Transfer(To("  ", ids[0]), "admin"));
         await Error(400, () => f.Transfers.Transfer(To("not a phone", ids[0]), "admin"));

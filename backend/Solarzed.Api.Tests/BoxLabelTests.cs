@@ -61,7 +61,7 @@ public class BoxLabelTests
     static async Task Error(int status, Func<Task> action) => Assert.Equal(status, (await Assert.ThrowsAsync<ActivationError>(action)).Status);
 
     [Fact]
-    public async Task CardsCarryFactorySerialAndWarrantyCodeAndAreUnique()
+    public async Task CardsCarrySerialAndSevenDigitWarrantyCodeAndAreUnique()
     {
         using var f = new Fixture();
         var labels = await f.Service.Issue("SZ-TEST-26-000001", 3, " sa ");
@@ -69,10 +69,10 @@ public class BoxLabelTests
         Assert.Equal(3, labels.Select(x => x.CardCode).Distinct().Count());
         Assert.All(labels, x =>
         {
-            Assert.Equal("SA", x.FactoryCode);
-            Assert.Equal($"SA-{x.Id}-{x.CardCode}", x.FullCode);
+            Assert.Equal("SA", x.FactoryCode);   // stored for the admin, never printed on the card
+            Assert.Equal($"{x.Id}-{x.CardCode}", x.FullCode);
             Assert.Equal($"https://solarzed.com/activate#{x.FullCode}", x.ActivationUrl);
-            Assert.Matches("^SZ-[A-Z0-9]{16}$", x.CardCode!);
+            Assert.Matches("^[1-9][0-9]{6}$", x.CardCode!);
         });
         var stored = await f.Db.BoxLabels.FirstAsync();
         Assert.Equal(labels.Single(x => x.Id == stored.Id).ActivationUrl, f.Service.View(stored, "https://solarzed.com").ActivationUrl);
@@ -87,7 +87,8 @@ public class BoxLabelTests
         var (label, code) = await f.Issue();
         Assert.Equal(label.Id, (await f.Service.Info(code.ToLowerInvariant())).Id);
         Assert.Equal(label.CardCode, (await f.Service.Info($" {code} ")).WarrantyCode);
-        await Error(404, () => f.Service.Info($"BF-{label.Id}-{label.CardCode}"));
+        Assert.Null((await f.Service.Info(code)).FactoryCode);
+        await Error(404, () => f.Service.Info($"{label.Id}-{(label.CardCode == "1234567" ? "7654321" : "1234567")}"));
         await Error(404, () => f.Service.Info($"SA-{label.Id}-SZ-AAAAAAAAAAAAAAAA"));
         await Error(404, () => f.Service.Info(label.Id));
 
@@ -98,6 +99,37 @@ public class BoxLabelTests
         Assert.Matches("^[a-f0-9]{64}$", token);
         Assert.Equal(label.Id, (await f.Service.Info(token)).Id);
         await Error(404, () => f.Service.Info(code));
+    }
+
+    [Fact]
+    public async Task CartonsAreKeyedByThePrintedRollNumber()
+    {
+        using var f = new Fixture();
+        var labels = await f.Service.Issue("SZ-TEST-26-000001", [" cpt30614374 ", "CPT30614375"], "SA");
+        Assert.Equal(["CPT30614374", "CPT30614375"], labels.Select(x => x.Id).ToArray());
+        var first = labels[0];
+        Assert.Equal($"CPT30614374-{first.CardCode}", first.FullCode);
+        Assert.Equal("CPT30614374", (await f.Service.Info($"cpt30614374-{first.CardCode}")).Id);
+        // Another carton's warranty number does not open this carton.
+        await Error(404, () => f.Service.Info($"CPT30614374-{labels[1].CardCode}"));
+        // A carton gets one card only; duplicates and malformed numbers are refused.
+        await Error(409, () => f.Service.Issue("SZ-TEST-26-000001", ["CPT30614374"], "SA"));
+        await Error(400, () => f.Service.Issue("SZ-TEST-26-000001", ["CPT1", "cpt1"], "SA"));
+        await Error(400, () => f.Service.Issue("SZ-TEST-26-000001", ["CPT/1"], "SA"));
+        await Error(400, () => f.Service.Issue("SZ-TEST-26-000001", Array.Empty<string>(), "SA"));
+    }
+
+    [Fact]
+    public async Task LegacyFactorySerialWarrantyCardsStillOpen()
+    {
+        using var f = new Fixture();
+        var (label, _) = await f.Issue();
+        var stored = await f.Db.BoxLabels.SingleAsync();
+        stored.CardCode = "SZ-ABCDEFGHJKLMNPQR"; await f.Db.SaveChangesAsync();
+        var legacy = $"SA-{label.Id}-SZ-ABCDEFGHJKLMNPQR";
+        Assert.Equal(legacy, BoxLabelService.FullCode(stored));
+        Assert.Equal(label.Id, (await f.Service.Info(legacy)).Id);
+        await Error(404, () => f.Service.Info($"BF-{label.Id}-SZ-ABCDEFGHJKLMNPQR"));
     }
 
     [Theory]

@@ -412,15 +412,17 @@ export interface BoxLabel {
   filmYears: number; installYears: number | null; createdAt: string;
   activatedAt: string | null; warrantyCode?: string | null; activationUrl?: string;
   holder: string | null; holderPhone: string | null; heldSince: string | null;
-  // Warranty card inside the carton (manager view only): factory code + box serial + card warranty number.
+  // Warranty card inside the carton (manager view only). fullCode = carton roll number + 7-digit warranty number.
+  // factoryCode is internal and is never printed on the card.
   factoryCode?: string | null; cardCode?: string | null; fullCode?: string | null;
 }
 export interface BoxLabelsResult { labels: BoxLabel[]; siteUrl: string; smsConfigured: boolean }
 export function adminBoxLabels() { return apiFetch<BoxLabelsResult>("/api/admin/box-labels"); }
-export function issueBoxLabels(rollId: string, quantity: number, factoryCode: string) {
-  return apiFetch<{ labels: BoxLabel[] }>("/api/admin/box-labels", { method: "POST", body: JSON.stringify({ rollId, quantity, factoryCode }) });
+/** One warranty card per carton, keyed by the roll number printed on each box (e.g. CPT30614374). */
+export function issueBoxLabels(rollId: string, serials: string[], factoryCode: string) {
+  return apiFetch<{ labels: BoxLabel[] }>("/api/admin/box-labels", { method: "POST", body: JSON.stringify({ rollId, quantity: serials.length, serials, factoryCode }) });
 }
-// ── Box transfers: the barcode serial on the carton (SZB-…) moves boxes from mobile to mobile ──
+// ── Box transfers: the roll number printed on the carton (e.g. CPT30614374) moves boxes from mobile to mobile ──
 export interface BoxTransfer { id: number; labelId: string; batchId: string; fromHolder: string | null; fromPhone: string | null; toHolder: string | null; toPhone: string | null; note: string | null; actor: string; at: string }
 export interface BoxHistory { id: string; product: string; rollId: string; activated: boolean; holder: string | null; holderPhone: string | null; heldSince: string | null; transfers: BoxTransfer[] }
 export interface TransferInput { serials: string[]; toHolder?: string | null; toPhone?: string | null; note?: string | null; expectedFrom?: string | null; toWarehouse?: boolean }

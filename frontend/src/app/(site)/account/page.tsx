@@ -221,7 +221,7 @@ export default function AccountPage() {
           <h2>Pass cartons on</h2>
           <p>Scan the barcode on each carton (or type the serial), enter the next person&apos;s mobile and record the transfer. The cartons then appear in their account.</p>
           <form onSubmit={transfer} className={own.form}>
-            <label>Box serials (one per line)<textarea dir="ltr" rows={4} required value={serials} onChange={event => setSerials(event.target.value)} placeholder="SZB-…" /></label>
+            <label>Box serials (one per line)<textarea dir="ltr" rows={4} required value={serials} onChange={event => setSerials(event.target.value)} placeholder="CPT30614374" /></label>
             {selected.length > 0 && <button type="button" className={own.ghost} onClick={() => setSerials(selected.join("\n"))}>Use selected cartons ({selected.length})</button>}
             <div className={styles.grid}>
               <label>Receiver mobile<input type="tel" dir="ltr" required maxLength={20} value={toPhone} onChange={event => setToPhone(event.target.value)} placeholder="09…" /></label>

@@ -19,9 +19,10 @@ public record ActivationInfo(string Id, string Product, string Type, bool Activa
 public record ActivateBoxRequest(string Token, RegisterRequest Registration);
 
 /// <summary>
-/// Every carton gets two printed items: a barcode of the box serial on the outside (used to hand the carton
-/// from the company to representatives and onward), and a warranty card inside the box whose QR holds the
-/// card code Factory-Serial-Warranty. Only the person who opens the box can activate its warranty.
+/// Every carton is identified by the roll number already printed (with its barcode) on the box, e.g. CPT30614374,
+/// which is used to hand the carton from the company to representatives and onward. Inside the box is one warranty
+/// card whose QR holds Serial-Warranty, where Warranty is a 7-digit number. Only the person who opens the box can
+/// activate its warranty. The factory code is kept internally and is never printed on the card.
 /// </summary>
 public class BoxLabelService(AppDbContext db, IDataProtectionProvider protection, IActivationSmsSender sms, IConfiguration? config = null)
 {
@@ -29,10 +30,21 @@ public class BoxLabelService(AppDbContext db, IDataProtectionProvider protection
     static string Hash(string value) => Convert.ToHexString(SHA256.HashData(Encoding.UTF8.GetBytes(value)));
     static readonly Regex TokenPattern = new("^[a-fA-F0-9]{64}$");
     static readonly Regex FactoryPattern = new("^[A-Z]{1,4}$");
-    static readonly Regex CardPattern = new(@"^([A-Z]{1,4})-(SZB-[0-9A-F]{16})-(SZ-[A-Z0-9]{6,29})$");
+    // Cards printed before 7-digit codes: Factory-SZB…-SZ…
+    static readonly Regex LegacyCardPattern = new(@"^([A-Z]{1,4})-(SZB-[0-9A-F]{16})-(SZ-[A-Z0-9]{6,29})$");
+    // Current cards: CartonSerial-1234567 (the serial may itself contain dashes; the last 7 digits are the warranty).
+    static readonly Regex CardPattern = new(@"^(.+)-([1-9][0-9]{6})$");
+    /// <summary>Carton serial: the roll number printed on the box (letters, digits, inner dashes; 4–32 chars), or a legacy SZB-… serial.</summary>
+    public static readonly Regex SerialPattern = new(@"^[A-Z0-9][A-Z0-9-]{2,30}[A-Z0-9]$");
+    public const int MaxBatch = 200;
 
-    public static string? FullCode(BoxLabel label) =>
-        label.FactoryCode != null && label.CardCode != null ? $"{label.FactoryCode}-{label.Id}-{label.CardCode}" : null;
+    static bool Legacy(string cardCode) => cardCode.StartsWith("SZ-", StringComparison.Ordinal);
+
+    public static string? FullCode(BoxLabel label) => label.CardCode == null ? null
+        : Legacy(label.CardCode) ? (label.FactoryCode == null ? null : $"{label.FactoryCode}-{label.Id}-{label.CardCode}")
+        : $"{label.Id}-{label.CardCode}";
+
+    public static string NormalizeSerial(string? raw) => Regex.Replace(raw ?? "", @"\s+", "").ToUpperInvariant();
 
     public static string NormalizeFactory(string? raw)
     {
@@ -66,9 +78,29 @@ public class BoxLabelService(AppDbContext db, IDataProtectionProvider protection
     public static LabelSerialView Restricted(BoxLabel label) => new(label.Id, label.RollId, label.Product,
         label.Type.ToString().ToLowerInvariant(), label.CreatedAt, label.ActivatedAt, label.Holder, label.HolderPhone, label.HeldSince);
 
-    public async Task<LabelView[]> Issue(string rollId, int quantity, string? factoryCode)
+    /// <summary>Issues labels with generated SZB-… serials (for cartons that carry no printed roll number).</summary>
+    public Task<LabelView[]> Issue(string rollId, int quantity, string? factoryCode)
     {
-        if (quantity is < 1 or > 200) throw new ActivationError(400, "Quantity must be 1–200 boxes.");
+        if (quantity is < 1 or > MaxBatch) throw new ActivationError(400, $"Quantity must be 1–{MaxBatch} boxes.");
+        return Create(rollId, Enumerable.Range(0, quantity).Select(_ => "SZB-" + Convert.ToHexString(RandomNumberGenerator.GetBytes(8))).ToArray(), factoryCode);
+    }
+
+    /// <summary>Issues one label per carton, keyed by the roll number printed on each box (scanned or typed).</summary>
+    public async Task<LabelView[]> Issue(string rollId, IEnumerable<string>? serials, string? factoryCode)
+    {
+        var list = (serials ?? []).Select(NormalizeSerial).Where(x => x.Length > 0).ToArray();
+        if (list.Length is 0 or > MaxBatch) throw new ActivationError(400, $"Scan 1–{MaxBatch} carton roll numbers.");
+        var repeated = list.GroupBy(x => x).Where(g => g.Count() > 1).Select(g => g.Key).ToArray();
+        if (repeated.Length > 0) throw new ActivationError(400, $"Roll number entered twice: {string.Join(", ", repeated.Take(10))}");
+        var malformed = list.Where(x => !SerialPattern.IsMatch(x)).ToArray();
+        if (malformed.Length > 0) throw new ActivationError(400, $"Invalid roll number: {string.Join(", ", malformed.Take(10))}");
+        var existing = await db.BoxLabels.Where(x => list.Contains(x.Id)).Select(x => x.Id).ToListAsync();
+        if (existing.Count > 0) throw new ActivationError(409, $"These cartons already have a warranty card: {string.Join(", ", existing.Take(10))}");
+        return await Create(rollId, list, factoryCode);
+    }
+
+    async Task<LabelView[]> Create(string rollId, string[] serials, string? factoryCode)
+    {
         var factory = NormalizeFactory(factoryCode);
         var roll = await db.Rolls.FindAsync(rollId) ?? throw new ActivationError(404, "Roll not found.");
         if (roll.Qc != RollQc.Approved || roll.Status == RollStatus.Void)
@@ -79,17 +111,35 @@ public class BoxLabelService(AppDbContext db, IDataProtectionProvider protection
         if (film is not (3 or 5 or 7 or 10) || install is not (null or 1 or 2 or 3))
             throw new ActivationError(400, "Set the approved film and installation periods in Settings before issuing labels.");
         var site = await Site();
-        var labels = Enumerable.Range(0, quantity).Select(_ =>
+        var codes = await NewCardCodes(serials.Length);
+        var labels = serials.Select((serial, i) =>
         {
             var token = Convert.ToHexString(RandomNumberGenerator.GetBytes(32)).ToLowerInvariant();
-            return new BoxLabel { Id = "SZB-" + Convert.ToHexString(RandomNumberGenerator.GetBytes(8)),
+            return new BoxLabel { Id = serial,
                 TokenHash = Hash(token), ProtectedToken = protector.Protect(token), RollId = roll.Id,
                 Product = roll.ModelCode, Type = roll.Type, FilmYears = film.Value, InstallYears = install,
-                FactoryCode = factory, CardCode = WarrantyService.GenerateCode(setting.WarrantyCodeLength) };
+                FactoryCode = factory, CardCode = codes[i] };
         }).ToArray();
         db.BoxLabels.AddRange(labels);
-        await db.SaveChangesAsync();
+        try { await db.SaveChangesAsync(); }
+        // A concurrent issue of the same carton or card code trips the unique indexes.
+        catch (DbUpdateException) { throw new ActivationError(409, "Some of these cartons were just issued by another request. Refresh and try again."); }
         return labels.Select(x => View(x, site)).ToArray();
+    }
+
+    /// <summary>Random 7-digit warranty numbers, unique across cards and existing warranties.</summary>
+    async Task<string[]> NewCardCodes(int count)
+    {
+        var codes = new HashSet<string>();
+        while (codes.Count < count)
+        {
+            var batch = Enumerable.Range(0, (count - codes.Count) * 2)
+                .Select(_ => RandomNumberGenerator.GetInt32(1_000_000, 10_000_000).ToString()).Where(x => !codes.Contains(x)).Distinct().ToList();
+            var taken = await db.BoxLabels.Where(x => x.CardCode != null && batch.Contains(x.CardCode)).Select(x => x.CardCode!).ToListAsync();
+            taken.AddRange(await db.WarrantyRegistrations.Where(x => batch.Contains(x.Code)).Select(x => x.Code).ToListAsync());
+            foreach (var code in batch.Except(taken)) if (codes.Count < count) codes.Add(code);
+        }
+        return codes.ToArray();
     }
 
     static void Eligible(Roll roll)
@@ -98,7 +148,10 @@ public class BoxLabelService(AppDbContext db, IDataProtectionProvider protection
             throw new ActivationError(409, "The product must pass QC and be released for distribution before customer activation.");
     }
 
-    /// <summary>Accepts the card code (Factory-Serial-Warranty, scanned or typed) or a legacy 64-hex label token.</summary>
+    /// <summary>
+    /// Accepts the card code (Serial-1234567, scanned or typed), a legacy Factory-Serial-Warranty card code,
+    /// or a legacy 64-hex label token.
+    /// </summary>
     async Task<BoxLabel> Find(string token)
     {
         var value = Regex.Replace(token ?? "", @"\s+", "");
@@ -108,12 +161,21 @@ public class BoxLabelService(AppDbContext db, IDataProtectionProvider protection
             return await db.BoxLabels.SingleOrDefaultAsync(x => x.TokenHash == hash)
                 ?? throw new ActivationError(404, "This activation label is invalid.");
         }
-        var card = CardPattern.Match(value.ToUpperInvariant());
-        if (!card.Success) throw new ActivationError(404, "This activation label is invalid.");
-        var label = await db.BoxLabels.SingleOrDefaultAsync(x => x.Id == card.Groups[2].Value);
+        value = value.ToUpperInvariant();
+        string serial, secret; string? factory = null;
+        var legacy = LegacyCardPattern.Match(value);
+        if (legacy.Success) { factory = legacy.Groups[1].Value; serial = legacy.Groups[2].Value; secret = legacy.Groups[3].Value; }
+        else
+        {
+            var card = CardPattern.Match(value);
+            if (!card.Success || !SerialPattern.IsMatch(card.Groups[1].Value)) throw new ActivationError(404, "This activation label is invalid.");
+            serial = card.Groups[1].Value; secret = card.Groups[2].Value;
+        }
+        var label = await db.BoxLabels.SingleOrDefaultAsync(x => x.Id == serial);
         // The warranty part is the secret printed only inside the box; compare it in constant time.
-        if (label?.CardCode == null || label.FactoryCode != card.Groups[1].Value ||
-            !CryptographicOperations.FixedTimeEquals(Encoding.UTF8.GetBytes(label.CardCode), Encoding.UTF8.GetBytes(card.Groups[3].Value)))
+        // A legacy card must name its factory; a 7-digit card never does.
+        if (label?.CardCode == null || (factory == null ? Legacy(label.CardCode) : label.FactoryCode != factory) ||
+            !CryptographicOperations.FixedTimeEquals(Encoding.UTF8.GetBytes(label.CardCode), Encoding.UTF8.GetBytes(secret)))
             throw new ActivationError(404, "This activation label is invalid.");
         return label;
     }
@@ -124,7 +186,7 @@ public class BoxLabelService(AppDbContext db, IDataProtectionProvider protection
         var roll = await db.Rolls.FindAsync(label.RollId);
         var released = roll?.Qc == RollQc.Approved && roll.Status is RollStatus.Shipped or RollStatus.Consumed;
         return new(label.Id, label.Product, label.Type.ToString().ToLowerInvariant(), label.ActivatedAt.HasValue,
-            label.FilmYears, label.InstallYears, sms.Configured, released, label.FactoryCode, label.CardCode);
+            label.FilmYears, label.InstallYears, sms.Configured, released, null, label.CardCode);   // the factory stays internal
     }
 
     public SmsPolicy Policy => SmsPolicy.From(config);

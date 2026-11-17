@@ -6,7 +6,7 @@ using Solarzed.Api.Infrastructure;
 
 namespace Solarzed.Api.Application;
 
-/// <param name="Serials">Box serials as printed (barcode) on the carton (SZB-…), scanned or typed.</param>
+/// <param name="Serials">Carton serials as printed (barcode) on the box — the roll number, e.g. CPT30614374 — scanned or typed.</param>
 /// <param name="ToHolder">Optional display name of the receiving representative/shop.</param>
 /// <param name="ToPhone">Mobile of the receiver. Required unless <paramref name="ToWarehouse"/> is true; the receiver
 /// signs in with this mobile to see and pass on the boxes.</param>
@@ -31,9 +31,9 @@ public class BoxTransferService(AppDbContext db)
 {
     public const int MaxBatch = 200;
     public const string Warehouse = "central warehouse";
-    static readonly Regex SerialPattern = new("^SZB-[0-9A-F]{16}$");
+    static Regex SerialPattern => BoxLabelService.SerialPattern;
 
-    public static string NormalizeSerial(string raw) => Regex.Replace(raw ?? "", @"\s+", "").ToUpperInvariant();
+    public static string NormalizeSerial(string raw) => BoxLabelService.NormalizeSerial(raw);
 
     /// <summary>Trims and collapses whitespace so "Ali  Rezaei " and "Ali Rezaei" are the same holder.</summary>
     public static string? NormalizeHolder(string? raw)

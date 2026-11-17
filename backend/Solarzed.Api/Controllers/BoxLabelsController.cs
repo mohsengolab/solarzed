@@ -46,7 +46,10 @@ public class BoxLabelsController(AppDbContext db, BoxLabelService labels, BoxTra
     {
         try
         {
-            var created = await labels.Issue(request.RollId, request.Quantity, request.FactoryCode);
+            // Cartons normally arrive with the roll number printed on the box; generated serials are the fallback.
+            var created = request.Serials is { Length: > 0 }
+                ? await labels.Issue(request.RollId, request.Serials, request.FactoryCode)
+                : await labels.Issue(request.RollId, request.Quantity, request.FactoryCode);
             return Ok(new { labels = created });
         }
         catch (ActivationError ex) { return StatusCode(ex.Status, new { error = ex.Message }); }
@@ -71,5 +74,5 @@ public class BoxLabelsController(AppDbContext db, BoxLabelService labels, BoxTra
     }
 }
 
-public record IssueLabelsRequest(string RollId, int Quantity, string? FactoryCode);
+public record IssueLabelsRequest(string RollId, int Quantity, string? FactoryCode, string[]? Serials = null);
 public record SiteUrlRequest(string SiteUrl);

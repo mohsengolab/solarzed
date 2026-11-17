@@ -14,10 +14,12 @@ const fields = [
   ["invoiceNumber", "Invoice number", 60], ["installer", "Installer / shop", 200], ["sellerName", "Seller name", 200], ["sellerPhone", "Seller mobile", 30],
 ] as const;
 const initial = { owner: "", make: "", model: "", vin: "", plate: "", installed: "", invoiceNumber: "", installer: "", sellerName: "", sellerPhone: "" };
-// Warranty card code: Factory-Serial-Warranty (e.g. SA-SZB-0123456789ABCDEF-SZ-…), or a legacy 64-hex label token.
-const CARD = /^[A-Za-z]{1,4}-SZB-[0-9A-Fa-f]{16}-SZ-[A-Za-z0-9]{6,29}$/;
+// Warranty card code: carton roll number + 7-digit warranty number (e.g. CPT30614374-4827153).
+// Older cards: Factory-Serial-Warranty (SA-SZB-…-SZ-…) or a 64-hex label token.
+const CARD = /^[A-Za-z0-9][A-Za-z0-9-]{2,30}[A-Za-z0-9]-[1-9][0-9]{6}$/;
+const OLD_CARD = /^[A-Za-z]{1,4}-SZB-[0-9A-Fa-f]{16}-SZ-[A-Za-z0-9]{6,29}$/;
 const LEGACY = /^[a-f0-9]{64}$/i;
-const valid = (value: string) => CARD.test(value) || LEGACY.test(value);
+const valid = (value: string) => CARD.test(value) || OLD_CARD.test(value) || LEGACY.test(value);
 
 export default function ActivationPage() {
   const [token, setToken] = useState("");
@@ -58,8 +60,7 @@ export default function ActivationPage() {
   const card = info && <div className={styles.product}>
     <b>{info.product} · {info.type === "tint" ? "Window film" : "Paint protection film"}</b>
     <dl>
-      {info.factoryCode && <><dt>Factory code</dt><dd><code dir="ltr">{info.factoryCode}</code></dd></>}
-      <dt>Serial</dt><dd><code dir="ltr">{info.id}</code></dd>
+      <dt>Roll No</dt><dd><code dir="ltr">{info.id}</code></dd>
       {info.warrantyCode && <><dt>Warranty code</dt><dd><code dir="ltr">{info.warrantyCode}</code></dd></>}
     </dl>
     <span>{info.filmYears}-year film warranty{info.installYears ? ` · ${info.installYears}-year installation warranty` : ""}</span>
@@ -74,7 +75,7 @@ export default function ActivationPage() {
 
       {!info && <form onSubmit={event => { event.preventDefault(); open(typed.trim()); }}>
         <p>Scan the QR code on the warranty card inside your Solarzed box, or type the code printed under it.</p>
-        <label>Warranty card code<input dir="ltr" required placeholder="SA-SZB-…-SZ-…" value={typed} onChange={event => setTyped(event.target.value.toUpperCase())} /></label>
+        <label>Warranty card code<input dir="ltr" required placeholder="CPT30614374-4827153" value={typed} onChange={event => setTyped(event.target.value.toUpperCase())} /></label>
         <p />
         <button className={styles.button} disabled={!valid(typed.trim())}>Check card</button>
       </form>}
