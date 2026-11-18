@@ -35,6 +35,9 @@ public class WarrantyRegistration
     [MaxLength(40)]
     public string FilmSerial { get; set; } = default!;
 
+    [Column(TypeName = "decimal(7,2)")]
+    public decimal? UsedLengthM { get; set; }
+
     [MaxLength(60)]
     public string InvoiceNumber { get; set; } = default!;
 

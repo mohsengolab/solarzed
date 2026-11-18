@@ -44,13 +44,13 @@ public class BoxLabelTests
             Options = new DbContextOptionsBuilder<AppDbContext>().UseSqlite(Connection).Options;
             Db = new SqliteDb(Options); Db.Database.EnsureCreated();
             Db.Rolls.Add(new Roll { Id = "SZ-TEST-26-000001", ModelCode = "TEST", Type = WarrantyType.Tint,
-                Batch = "TEST", Supplier = "TEST", Qc = RollQc.Approved, Status = RollStatus.Shipped });
+                Batch = "TEST", Supplier = " abc ", LengthM = 150, Qc = RollQc.Approved, Status = RollStatus.Shipped });
             Db.CoverageSettings.Add(new CoverageSetting { TintFilmYears = 5, TintInstallYears = 2 });
             Db.SaveChanges(); Service = new(Db, Protection, Sms);
         }
         public async Task<(LabelView Label, string Code)> Issue()
         {
-            var label = Assert.Single(await Service.Issue("SZ-TEST-26-000001", 1, "SA"));
+            var label = Assert.Single(await Service.Issue("SZ-TEST-26-000001", 1));
             return (label, label.FullCode!);
         }
         public void Dispose() { Db.Dispose(); Connection.Dispose(); }
@@ -64,20 +64,22 @@ public class BoxLabelTests
     public async Task CardsCarrySerialAndSevenDigitWarrantyCodeAndAreUnique()
     {
         using var f = new Fixture();
-        var labels = await f.Service.Issue("SZ-TEST-26-000001", 3, " sa ");
+        var labels = await f.Service.Issue("SZ-TEST-26-000001", 3);
         Assert.Equal(3, labels.Select(x => x.Id).Distinct().Count());
         Assert.Equal(3, labels.Select(x => x.CardCode).Distinct().Count());
         Assert.All(labels, x =>
         {
-            Assert.Equal("SA", x.FactoryCode);   // stored for the admin, never printed on the card
+            Assert.Equal("ABC", x.FactoryCode);   // copied from the roll and never printed on the card
+            Assert.Equal(150m, x.RemainingLengthM);
             Assert.Equal($"{x.Id}-{x.CardCode}", x.FullCode);
             Assert.Equal($"https://solarzed.com/activate#{x.FullCode}", x.ActivationUrl);
             Assert.Matches("^[1-9][0-9]{6}$", x.CardCode!);
         });
         var stored = await f.Db.BoxLabels.FirstAsync();
         Assert.Equal(labels.Single(x => x.Id == stored.Id).ActivationUrl, f.Service.View(stored, "https://solarzed.com").ActivationUrl);
-        await Error(400, () => f.Service.Issue("SZ-TEST-26-000001", 1, "S1"));
-        await Error(400, () => f.Service.Issue("SZ-TEST-26-000001", 1, null));
+        (await f.Db.Rolls.SingleAsync()).Supplier = "S1";
+        await f.Db.SaveChangesAsync();
+        await Error(400, () => f.Issue());
     }
 
     [Fact]
@@ -105,7 +107,7 @@ public class BoxLabelTests
     public async Task CartonsAreKeyedByThePrintedRollNumber()
     {
         using var f = new Fixture();
-        var labels = await f.Service.Issue("SZ-TEST-26-000001", [" cpt30614374 ", "CPT30614375"], "SA");
+        var labels = await f.Service.Issue("SZ-TEST-26-000001", [" cpt30614374 ", "CPT30614375"]);
         Assert.Equal(["CPT30614374", "CPT30614375"], labels.Select(x => x.Id).ToArray());
         var first = labels[0];
         Assert.Equal($"CPT30614374-{first.CardCode}", first.FullCode);
@@ -113,10 +115,10 @@ public class BoxLabelTests
         // Another carton's warranty number does not open this carton.
         await Error(404, () => f.Service.Info($"CPT30614374-{labels[1].CardCode}"));
         // A carton gets one card only; duplicates and malformed numbers are refused.
-        await Error(409, () => f.Service.Issue("SZ-TEST-26-000001", ["CPT30614374"], "SA"));
-        await Error(400, () => f.Service.Issue("SZ-TEST-26-000001", ["CPT1", "cpt1"], "SA"));
-        await Error(400, () => f.Service.Issue("SZ-TEST-26-000001", ["CPT/1"], "SA"));
-        await Error(400, () => f.Service.Issue("SZ-TEST-26-000001", Array.Empty<string>(), "SA"));
+        await Error(409, () => f.Service.Issue("SZ-TEST-26-000001", ["CPT30614374"]));
+        await Error(400, () => f.Service.Issue("SZ-TEST-26-000001", ["CPT1", "cpt1"]));
+        await Error(400, () => f.Service.Issue("SZ-TEST-26-000001", ["CPT/1"]));
+        await Error(400, () => f.Service.Issue("SZ-TEST-26-000001", Array.Empty<string>()));
     }
 
     [Fact]
@@ -125,7 +127,7 @@ public class BoxLabelTests
         using var f = new Fixture();
         var (label, _) = await f.Issue();
         var stored = await f.Db.BoxLabels.SingleAsync();
-        stored.CardCode = "SZ-ABCDEFGHJKLMNPQR"; await f.Db.SaveChangesAsync();
+        stored.CardCode = "SZ-ABCDEFGHJKLMNPQR"; stored.FactoryCode = "SA"; await f.Db.SaveChangesAsync();
         var legacy = $"SA-{label.Id}-SZ-ABCDEFGHJKLMNPQR";
         Assert.Equal(legacy, BoxLabelService.FullCode(stored));
         Assert.Equal(label.Id, (await f.Service.Info(legacy)).Id);
@@ -159,15 +161,21 @@ public class BoxLabelTests
     }
 
     [Fact]
-    public async Task SignedInActivationUsesSessionMobileServerProductAndCardWarrantyCodeOnce()
+    public async Task SignedInInstallerRegistersSeparateVehiclesFromTheSameRollAndInvoice()
     {
         using var f = new Fixture();
         var (label, code) = await f.Issue();
         await new BoxTransferService(f.Db).Transfer(new([label.Id], "Rep", "09125555555", null, null), "admin");
         (await f.Db.CoverageSettings.SingleAsync()).TintFilmYears = 10; await f.Db.SaveChangesAsync();
         // The form's phone is ignored; the signed-in, SMS-verified mobile is the warranty owner.
-        var request = new ActivateBoxRequest(code, Registration("09129999999"));
-        var warranty = await f.Service.Activate(request, Customer);
+        var request = new ActivateBoxRequest(code, Registration("09129999999"), 30m);
+        await Error(400, () => f.Service.Activate(request with { UsedLengthM = null }, Customer));
+        await Error(400, () => f.Service.Activate(request with { UsedLengthM = 0 }, Customer));
+        await Error(400, () => f.Service.Activate(request with { UsedLengthM = 30.001m }, Customer));
+        var first = await f.Service.Activate(request, Customer);
+        var warranty = first.Warranty;
+        Assert.Equal(30m, warranty.UsedLengthM);
+        Assert.Equal(120m, first.RemainingLengthM);
         Assert.Equal("active", warranty.Status);
         Assert.Equal("tint", warranty.Type);
         Assert.Equal(label.Id, warranty.FilmSerial);
@@ -184,9 +192,19 @@ public class BoxLabelTests
         Assert.Equal("09125555555", last.FromPhone);
         Assert.Equal(Customer, last.ToPhone);
         await Error(409, () => f.Service.Activate(request, Customer));
-        Assert.Single(await f.Db.WarrantyRegistrations.ToListAsync());
-        Assert.True((await f.Service.Info(code)).Activated);
-        Assert.Single(await new PortalService(f.Db, f.Sms).Warranties(Customer));
+        var another = request with { Registration = request.Registration with { Vin = "JTDBE32K123456788", Plate = "OTHER123" }, UsedLengthM = 120m };
+        await Error(409, () => f.Service.Activate(another, "09124444444"));
+        await Error(409, () => f.Service.Activate(another with { UsedLengthM = 120.01m }, Customer));
+        Assert.False((await f.Service.Info(code)).CanRegister);
+        Assert.Null((await f.Service.Info(code)).RemainingLengthM);
+        Assert.Equal(120m, (await f.Service.Info(code, Customer)).RemainingLengthM);
+        var second = await f.Service.Activate(another, Customer);
+        Assert.NotEqual(warranty.Code, second.Warranty.Code);
+        Assert.Equal("OTHER123", second.Warranty.Plate);
+        Assert.Equal(0m, second.RemainingLengthM);
+        Assert.False((await f.Service.Info(code, Customer)).CanRegister);
+        Assert.Equal(2, await f.Db.BoxTransfers.CountAsync());
+        Assert.Equal(2, (await new PortalService(f.Db, f.Sms).Warranties(Customer)).Length);
     }
 
     [Fact]
@@ -198,11 +216,12 @@ public class BoxLabelTests
         using var stale = new SqliteDb(f.Options);
         await stale.BoxLabels.SingleAsync(x => x.Id == label.Id);
         var staleService = new BoxLabelService(stale, f.Protection, f.Sms);
-        var request = new ActivateBoxRequest(code, Registration());
+        var request = new ActivateBoxRequest(code, Registration(), 100m);
         await f.Service.Activate(request, Customer);
         // Both callers saw unused snapshots; the DB revision guard rolls back the loser.
-        await Error(409, () => staleService.Activate(request, "09124444444"));
+        await Error(409, () => staleService.Activate(request with { Registration = Registration() with { Vin = "JTDBE32K123456788" } }, Customer));
         Assert.Single(await f.Db.WarrantyRegistrations.ToListAsync());
+        Assert.Equal(50m, (await f.Service.Info(code, Customer)).RemainingLengthM);
     }
 
     [Fact]

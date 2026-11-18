@@ -12,11 +12,12 @@ namespace Solarzed.Api.Application;
 public class ActivationError(int status, string message) : Exception(message) { public int Status => status; }
 public record LabelView(string Id, string RollId, string Product, string Type, int FilmYears, int? InstallYears,
     DateTime CreatedAt, DateTime? ActivatedAt, string? WarrantyCode, string ActivationUrl, string? Holder, string? HolderPhone, DateTime? HeldSince,
-    string? FactoryCode, string? CardCode, string? FullCode);
+    string? FactoryCode, string? CardCode, string? FullCode, decimal? RemainingLengthM);
 public record LabelSerialView(string Id, string RollId, string Product, string Type, DateTime CreatedAt, DateTime? ActivatedAt, string? Holder, string? HolderPhone, DateTime? HeldSince);
 public record ActivationInfo(string Id, string Product, string Type, bool Activated, int FilmYears, int? InstallYears, bool SmsAvailable, bool Released,
-    string? FactoryCode, string? WarrantyCode);
-public record ActivateBoxRequest(string Token, RegisterRequest Registration);
+    string? FactoryCode, string? WarrantyCode, bool CanRegister, decimal? RemainingLengthM);
+public record ActivateBoxRequest(string Token, RegisterRequest Registration, decimal? UsedLengthM = null);
+public record ActivationResult(WarrantyPublic Warranty, decimal? RemainingLengthM);
 
 /// <summary>
 /// Every carton is identified by the roll number already printed (with its barcode) on the box, e.g. CPT30614374,
@@ -29,7 +30,6 @@ public class BoxLabelService(AppDbContext db, IDataProtectionProvider protection
     readonly IDataProtector protector = protection.CreateProtector("Solarzed.BoxLabels.v1");
     static string Hash(string value) => Convert.ToHexString(SHA256.HashData(Encoding.UTF8.GetBytes(value)));
     static readonly Regex TokenPattern = new("^[a-fA-F0-9]{64}$");
-    static readonly Regex FactoryPattern = new("^[A-Z]{1,4}$");
     // Cards printed before 7-digit codes: Factory-SZB…-SZ…
     static readonly Regex LegacyCardPattern = new(@"^([A-Z]{1,4})-(SZB-[0-9A-F]{16})-(SZ-[A-Z0-9]{6,29})$");
     // Current cards: CartonSerial-1234567 (the serial may itself contain dashes; the last 7 digits are the warranty).
@@ -45,13 +45,6 @@ public class BoxLabelService(AppDbContext db, IDataProtectionProvider protection
         : $"{label.Id}-{label.CardCode}";
 
     public static string NormalizeSerial(string? raw) => Regex.Replace(raw ?? "", @"\s+", "").ToUpperInvariant();
-
-    public static string NormalizeFactory(string? raw)
-    {
-        var value = (raw ?? "").Trim().ToUpperInvariant();
-        if (!FactoryPattern.IsMatch(value)) throw new ActivationError(400, "Factory code must be 1–4 English letters, for example SA or BF.");
-        return value;
-    }
 
     public static string ValidateSite(string value)
     {
@@ -72,21 +65,21 @@ public class BoxLabelService(AppDbContext db, IDataProtectionProvider protection
     public LabelView View(BoxLabel label, string site) => new(label.Id, label.RollId, label.Product,
         label.Type.ToString().ToLowerInvariant(), label.FilmYears, label.InstallYears, label.CreatedAt,
         label.ActivatedAt, label.WarrantyCode, $"{site}/activate#{FullCode(label) ?? protector.Unprotect(label.ProtectedToken)}",
-        label.Holder, label.HolderPhone, label.HeldSince, label.FactoryCode, label.CardCode, FullCode(label));
+        label.Holder, label.HolderPhone, label.HeldSince, label.FactoryCode, label.CardCode, FullCode(label), label.RemainingLengthM);
 
     // The carton role may only see the serial printed on the box: no QR, no card code and no warranty code.
     public static LabelSerialView Restricted(BoxLabel label) => new(label.Id, label.RollId, label.Product,
         label.Type.ToString().ToLowerInvariant(), label.CreatedAt, label.ActivatedAt, label.Holder, label.HolderPhone, label.HeldSince);
 
     /// <summary>Issues labels with generated SZB-… serials (for cartons that carry no printed roll number).</summary>
-    public Task<LabelView[]> Issue(string rollId, int quantity, string? factoryCode)
+    public Task<LabelView[]> Issue(string rollId, int quantity)
     {
         if (quantity is < 1 or > MaxBatch) throw new ActivationError(400, $"Quantity must be 1–{MaxBatch} boxes.");
-        return Create(rollId, Enumerable.Range(0, quantity).Select(_ => "SZB-" + Convert.ToHexString(RandomNumberGenerator.GetBytes(8))).ToArray(), factoryCode);
+        return Create(rollId, Enumerable.Range(0, quantity).Select(_ => "SZB-" + Convert.ToHexString(RandomNumberGenerator.GetBytes(8))).ToArray());
     }
 
     /// <summary>Issues one label per carton, keyed by the roll number printed on each box (scanned or typed).</summary>
-    public async Task<LabelView[]> Issue(string rollId, IEnumerable<string>? serials, string? factoryCode)
+    public async Task<LabelView[]> Issue(string rollId, IEnumerable<string>? serials)
     {
         var list = (serials ?? []).Select(NormalizeSerial).Where(x => x.Length > 0).ToArray();
         if (list.Length is 0 or > MaxBatch) throw new ActivationError(400, $"Scan 1–{MaxBatch} carton roll numbers.");
@@ -96,15 +89,16 @@ public class BoxLabelService(AppDbContext db, IDataProtectionProvider protection
         if (malformed.Length > 0) throw new ActivationError(400, $"Invalid roll number: {string.Join(", ", malformed.Take(10))}");
         var existing = await db.BoxLabels.Where(x => list.Contains(x.Id)).Select(x => x.Id).ToListAsync();
         if (existing.Count > 0) throw new ActivationError(409, $"These cartons already have a warranty card: {string.Join(", ", existing.Take(10))}");
-        return await Create(rollId, list, factoryCode);
+        return await Create(rollId, list);
     }
 
-    async Task<LabelView[]> Create(string rollId, string[] serials, string? factoryCode)
+    async Task<LabelView[]> Create(string rollId, string[] serials)
     {
-        var factory = NormalizeFactory(factoryCode);
         var roll = await db.Rolls.FindAsync(rollId) ?? throw new ActivationError(404, "Roll not found.");
         if (roll.Qc != RollQc.Approved || roll.Status == RollStatus.Void)
             throw new ActivationError(409, "Only QC-approved, non-void products can have box labels.");
+        var factory = RollService.SupplierCode(roll.Supplier) ?? throw new ActivationError(400, "Supplier code must be exactly 3 English letters.");
+        if (roll.LengthM is not > 0) throw new ActivationError(400, "Set the roll length before issuing labels.");
         var setting = await db.CoverageSettings.FirstOrDefaultAsync() ?? new CoverageSetting();
         int? film = roll.Type == WarrantyType.Tint ? setting.TintFilmYears : setting.PpfFilmYears;
         int? install = roll.Type == WarrantyType.Tint ? setting.TintInstallYears : setting.PpfInstallYears;
@@ -118,7 +112,7 @@ public class BoxLabelService(AppDbContext db, IDataProtectionProvider protection
             return new BoxLabel { Id = serial,
                 TokenHash = Hash(token), ProtectedToken = protector.Protect(token), RollId = roll.Id,
                 Product = roll.ModelCode, Type = roll.Type, FilmYears = film.Value, InstallYears = install,
-                FactoryCode = factory, CardCode = codes[i] };
+                FactoryCode = factory, CardCode = codes[i], RemainingLengthM = roll.LengthM };
         }).ToArray();
         db.BoxLabels.AddRange(labels);
         try { await db.SaveChangesAsync(); }
@@ -180,13 +174,22 @@ public class BoxLabelService(AppDbContext db, IDataProtectionProvider protection
         return label;
     }
 
-    public async Task<ActivationInfo> Info(string token)
+    // Unused older cards can start tracking if their roll has a known length. Previously activated cards
+    // have no recorded usage, so they keep their original single-use behavior.
+    static decimal? Remaining(BoxLabel label, Roll? roll) => label.RemainingLengthM
+        ?? (label.ActivatedAt == null && roll?.LengthM is > 0 ? roll.LengthM : null);
+
+    public async Task<ActivationInfo> Info(string token, string? phone = null)
     {
         var label = await Find(token);
         var roll = await db.Rolls.FindAsync(label.RollId);
         var released = roll?.Qc == RollQc.Approved && roll.Status is RollStatus.Shipped or RollStatus.Consumed;
-        return new(label.Id, label.Product, label.Type.ToString().ToLowerInvariant(), label.ActivatedAt.HasValue,
-            label.FilmYears, label.InstallYears, sms.Configured, released, null, label.CardCode);   // the factory stays internal
+        var started = label.ActivatedAt.HasValue;
+        var remaining = Remaining(label, roll);
+        var canRegister = remaining is > 0 && (!started || (phone != null && label.HolderPhone == phone));
+        return new(label.Id, label.Product, label.Type.ToString().ToLowerInvariant(), started,
+            label.FilmYears, label.InstallYears, sms.Configured, released, null, label.CardCode,
+            canRegister, !started || canRegister ? remaining : null);
     }
 
     public SmsPolicy Policy => SmsPolicy.From(config);
@@ -195,12 +198,19 @@ public class BoxLabelService(AppDbContext db, IDataProtectionProvider protection
     /// Registers the warranty for the signed-in mobile. The mobile was verified by SMS when the customer signed in,
     /// so the registration phone is always the session's, never the form's.
     /// </summary>
-    public async Task<WarrantyPublic> Activate(ActivateBoxRequest req, string phone)
+    public async Task<ActivationResult> Activate(ActivateBoxRequest req, string phone)
     {
         var label = await Find(req.Token);
-        if (label.ActivatedAt.HasValue) throw new ActivationError(409, "This box warranty has already been activated.");
+        var first = !label.ActivatedAt.HasValue;
+        if (!first && (label.RemainingLengthM == null || label.HolderPhone != phone))
+            throw new ActivationError(409, "This card has already been activated. Sign in with the mobile used for the first activation.");
         var roll = await db.Rolls.FindAsync(label.RollId) ?? throw new ActivationError(409, "Product unavailable.");
         Eligible(roll);
+        var remaining = Remaining(label, roll) ?? throw new ActivationError(409, "The roll length is unavailable. Contact your seller.");
+        if (req.UsedLengthM is not > 0 || decimal.Round(req.UsedLengthM.Value, 2) != req.UsedLengthM.Value)
+            throw new ActivationError(400, "Enter a positive used length in meters with up to two decimal places.");
+        if (req.UsedLengthM.Value > remaining)
+            throw new ActivationError(409, "The used length exceeds the remaining roll length.");
         // Product type/serial are always server-bound, never trusted from the form.
         var request = req.Registration with { Type = label.Type.ToString().ToLowerInvariant(), FilmSerial = label.Id, Phone = phone };
         var coverage = await db.CoverageSettings.AsNoTracking().FirstOrDefaultAsync();
@@ -211,10 +221,14 @@ public class BoxLabelService(AppDbContext db, IDataProtectionProvider protection
             request.Plate.Length > 20 || request.InvoiceNumber.Length > 60 || request.SellerName.Length > 200 || request.Installer.Length > 200)
             throw new ActivationError(400, "One or more fields are too long.");
         var registration = entity!;
-        // The warranty number printed on the card becomes the warranty code.
-        if (label.CardCode != null && !await db.WarrantyRegistrations.AnyAsync(x => x.Code == label.CardCode))
+        if (await db.WarrantyRegistrations.AnyAsync(x =>
+            x.FilmSerial == label.Id && x.Vin == registration.Vin && x.UsedLengthM != null))
+            throw new ActivationError(409, "This vehicle already has a warranty from this roll.");
+        // The printed number remains the first vehicle's warranty code. Later vehicles get their own code.
+        if (first && label.CardCode != null && !await db.WarrantyRegistrations.AnyAsync(x => x.Code == label.CardCode))
             registration.Code = label.CardCode;
         registration.RollId = roll.Id;
+        registration.UsedLengthM = req.UsedLengthM;
         registration.Status = WarrantyStatus.Active;
         registration.ReviewedAt = DateTime.UtcNow;
         registration.ReviewNote = "Customer activation by a signed-in, SMS-verified mobile with the warranty card from the box.";
@@ -222,24 +236,29 @@ public class BoxLabelService(AppDbContext db, IDataProtectionProvider protection
         registration.InstallEnds = label.InstallYears is int years ? WarrantyService.AddYears(registration.Installed, years) : null;
         registration.FlagsJson = JsonSerializer.Serialize(await db.WarrantyRegistrations.AnyAsync(x => x.Vin == registration.Vin && x.Type == registration.Type && x.Status != WarrantyStatus.Rejected) ? new[] { "vin_repeat" } : Array.Empty<string>());
         var now = DateTime.UtcNow;
-        // The carton's journey ends with the customer who activated it.
-        db.BoxTransfers.Add(new BoxTransfer { LabelId = label.Id, BatchId = "ACT-" + Convert.ToHexString(RandomNumberGenerator.GetBytes(8)),
-            FromHolder = label.Holder, FromPhone = label.HolderPhone, ToHolder = registration.Owner, ToPhone = phone,
-            Note = "Warranty activated", Actor = "customer:" + phone, At = now });
-        label.WarrantyCode = registration.Code;
-        label.ActivatedAt = now;
-        label.Holder = registration.Owner;
-        label.HolderPhone = phone;
-        label.HeldSince = now;
+        if (first)
+        {
+            // The carton's journey ends with the account that first uses it.
+            db.BoxTransfers.Add(new BoxTransfer { LabelId = label.Id, BatchId = "ACT-" + Convert.ToHexString(RandomNumberGenerator.GetBytes(8)),
+                FromHolder = label.Holder, FromPhone = label.HolderPhone, ToHolder = registration.Owner, ToPhone = phone,
+                Note = "Warranty activated", Actor = "customer:" + phone, At = now });
+            label.WarrantyCode = registration.Code;
+            label.ActivatedAt = now;
+            label.Holder = registration.Owner;
+            label.HolderPhone = phone;
+            label.HeldSince = now;
+        }
+        label.RemainingLengthM = remaining - req.UsedLengthM.Value;
         label.Revision++;
         db.WarrantyRegistrations.Add(registration);
         AuditLog.Add(db, "customer:" + phone, "warranty", registration.Code, "activated", AuditLog.Diff(
             ("status", null, registration.Status), ("label", null, label.Id), ("roll", null, roll.Id),
+            ("usedLengthM", null, registration.UsedLengthM), ("remainingLengthM", remaining, label.RemainingLengthM),
             ("filmEnds", null, registration.FilmEnds), ("installEnds", null, registration.InstallEnds), ("flags", null, registration.FlagsJson)));
         try { await db.SaveChangesAsync(); }
         // A concurrent winner trips either the label revision guard or the unique serial/warranty indexes.
-        catch (DbUpdateException) { throw new ActivationError(409, "This box was already activated. Refresh and try again."); }
+        catch (DbUpdateException) { throw new ActivationError(409, "The roll balance or warranty just changed. Refresh and try again."); }
         // EF's single SaveChanges transaction commits the label, transfer and warranty atomically.
-        return WarrantyService.ToPublic(registration);
+        return new(WarrantyService.ToPublic(registration), label.RemainingLengthM);
     }
 }

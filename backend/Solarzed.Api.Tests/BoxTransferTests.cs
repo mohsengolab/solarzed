@@ -36,13 +36,13 @@ public class BoxTransferTests
             Db = new SqliteDb(new DbContextOptionsBuilder<AppDbContext>().UseSqlite(connection).Options);
             Db.Database.EnsureCreated();
             Db.Rolls.Add(new Roll { Id = "SZ-TEST-26-000001", ModelCode = "TEST", Type = WarrantyType.Tint,
-                Batch = "TEST", Supplier = "TEST", Qc = RollQc.Approved, Status = RollStatus.Shipped });
+                Batch = "TEST", Supplier = "ABC", LengthM = 150, Qc = RollQc.Approved, Status = RollStatus.Shipped });
             Db.CoverageSettings.Add(new CoverageSetting { TintFilmYears = 5, TintInstallYears = 2 });
             Db.SaveChanges();
             Labels = new(Db, new EphemeralDataProtectionProvider(), new NoSms());
             Transfers = new(Db);
         }
-        public async Task<string[]> Issue(int n) => (await Labels.Issue("SZ-TEST-26-000001", n, "SA")).Select(x => x.Id).ToArray();
+        public async Task<string[]> Issue(int n) => (await Labels.Issue("SZ-TEST-26-000001", n)).Select(x => x.Id).ToArray();
         public void Dispose() { Db.Dispose(); connection.Dispose(); }
     }
     const string RepA = "09121111111", RepB = "09122222222", Shop = "09123333333";

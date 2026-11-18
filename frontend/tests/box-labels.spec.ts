@@ -9,21 +9,24 @@ test("real QR generation and print dimensions, then customer activation form wit
   const headers = { Authorization: `Bearer ${adminToken}` };
   expect((await request.get(`${api}/api/admin/box-labels`)).status()).toBe(401);
   await request.post(`${api}/api/admin/settings`, { headers, data: { durations: { tint: { film: 5, install: 2 }, ppf: { film: 7, install: 3 } } } });
-  const received = await request.post(`${api}/api/admin/rolls`, { headers, data: { modelCode: "QRE2E", type: "tint", batch: `QR-${Date.now()}`, supplier: "TEST", qc: "approved", quantity: 1 } });
+  const suffix = Date.now().toString(36).toUpperCase();
+  const received = await request.post(`${api}/api/admin/rolls`, { headers, data: { modelCode: "QRE2E", type: "tint", batch: `QR-${suffix}`, supplier: "ABC", qc: "approved", quantity: 1, lengthM: 150 } });
   expect(received.ok()).toBeTruthy();
   const [roll] = await received.json();
   await context.addInitScript(() => { window.print = () => {}; });
   await page.goto("/admin");
-  await page.getByLabel("Username", { exact: true }).fill("admin");
-  await page.getByLabel("Admin password").fill("local-browser-tests-only");
-  await page.getByRole("button", { name: "Sign in" }).click();
-  await page.getByRole("button", { name: "Labels", exact: true }).click();
-  await page.getByLabel("Product roll").selectOption(roll.id);
-  await page.getByLabel("Number of boxes").fill("2");
-  await page.getByRole("button", { name: "Generate QR labels" }).click();
-  const qrs = page.getByRole("img", { name: /^QR for SZB-/ });
+  await page.getByLabel("نام کاربری", { exact: true }).fill("admin");
+  await page.getByLabel("رمز عبور", { exact: true }).fill("local-browser-tests-only");
+  await page.getByRole("button", { name: "ورود ↗" }).click();
+  await page.getByRole("button", { name: "برچسب‌ها", exact: true }).click();
+  await page.getByLabel("رول محصول").selectOption(roll.id);
+  await expect(page.getByText(/کد کارخانه \(از تأمین‌کنندهٔ رول\)/)).toContainText("ABC");
+  await page.getByLabel(/Roll No کارتن‌ها/).fill(`CPT-${suffix}-1\nCPT-${suffix}-2`);
+  await page.getByRole("button", { name: "ساخت برچسب و کارت گارانتی" }).click();
+  const qrs = page.getByRole("img", { name: /^QR CPT-/ });
   await expect(qrs).toHaveCount(2);
-  await expect(page.getByRole("button", { name: "Print selected labels (2)" })).toBeEnabled();
+  const print = page.getByRole("button", { name: /چاپ کارت گارانتی داخل کارتن/ });
+  await expect(print).toBeEnabled();
   const pixels = await qrs.first().evaluate(image => {
     const img = image as HTMLImageElement;
     const canvas = document.createElement("canvas"); canvas.width = img.naturalWidth; canvas.height = img.naturalHeight;
@@ -32,56 +35,69 @@ test("real QR generation and print dimensions, then customer activation form wit
   });
   const decoded = jsQR(new Uint8ClampedArray(pixels.data), pixels.width, pixels.height);
   expect(decoded).not.toBeNull();
-  expect(decoded!.data).toMatch(/^https:\/\/solarzed\.com\/activate#[a-f0-9]{64}$/);
+  expect(decoded!.data).toMatch(/^https:\/\/solarzed\.com\/activate#CPT-[A-Z0-9]+-[12]-[1-9][0-9]{6}$/);
   const boxToken = new URL(decoded!.data).hash.slice(1);
   let metadata = await (await request.post(`${api}/api/activation/inspect`, { data: { token: boxToken } })).json();
   expect(metadata.activated).toBe(false);
   expect(metadata.released).toBe(false);
+  expect(metadata.remainingLengthM).toBe(150);
+  expect(metadata.factoryCode).toBeNull();
   expect(metadata.phone).toBeUndefined();
   expect(metadata.owner).toBeUndefined();
   await page.screenshot({ path: testInfo.outputPath("box-labels-admin.png"), fullPage: true });
   const popupPromise = page.waitForEvent("popup");
-  await page.getByRole("button", { name: "Print selected labels (2)" }).click();
+  await print.click();
   const popup = await popupPromise;
   await expect(popup.locator(".label")).toHaveCount(2);
   expect(await popup.locator("style").textContent()).toContain("size:80mm 50mm");
   await popup.setViewportSize({ width: 650, height: 500 });
   await popup.screenshot({ path: testInfo.outputPath("box-labels-print.png") });
   await popup.close();
-  await page.getByRole("button", { name: "Mark roll as shipped" }).click();
-  await expect(page.getByRole("button", { name: "Mark roll as shipped" })).toBeHidden();
+  const release = page.getByRole("button", { name: /علامت‌گذاری رول به‌عنوان ارسال‌شده/ });
+  await release.click();
+  await expect(release).toBeHidden();
   metadata = await (await request.post(`${api}/api/activation/inspect`, { data: { token: boxToken } })).json();
   expect(metadata.released).toBe(true);
 
   // Browser form behavior is tested with explicit simulated provider responses.
   // Real OTP/DB verification is covered by BoxLabelTests, without sending SMS.
   await page.route("**/api/activation/inspect", route => route.fulfill({ json: { ...metadata, smsAvailable: true } }));
-  await page.route("**/api/activation/otp", async route => {
+  await page.route("**/api/portal/me", route => route.fulfill({ json: { user: null } }));
+  await page.route("**/api/portal/otp", async route => {
     expect(route.request().postDataJSON().phone).toBe("09121111111");
     await route.fulfill({ json: { challengeId: "browser-test-only", expiresAt: new Date(Date.now() + 300000).toISOString(), retryAfterSeconds: 60 } });
   });
+  await page.route("**/api/portal/login", async route => {
+    if (route.request().postDataJSON().code !== "123456") { await route.fulfill({ status: 400, json: { error: "The verification code is incorrect." } }); return; }
+    await route.fulfill({ json: { phone: "09121111111" } });
+  });
   await page.route("**/api/activation/complete", async route => {
     const body = route.request().postDataJSON();
-    if (body.otp !== "123456") { await route.fulfill({ status: 400, json: { error: "The verification code is incorrect." } }); return; }
     expect(body.token).toBe(boxToken);
     expect(body.registration.phone).toBe("09121111111");
-    await route.fulfill({ json: { code: "SZ-browser-test-only", type: "tint", make: "Toyota", model: "Camry", status: "active", coverage: { filmEnds: "2031-01-14", installEnds: "2028-01-14" } } });
+    expect(body.usedLengthM).toBe(30);
+    await route.fulfill({ json: { remainingLengthM: 120, warranty: { code: "SZ-browser-test-only", type: "tint", make: "Toyota", model: "Camry", usedLengthM: 30, status: "active", coverage: { filmEnds: "2031-01-14", installEnds: "2028-01-14" } } } });
   });
   await page.setViewportSize({ width: 390, height: 844 });
   await page.goto(`/activate#${boxToken}`);
-  for (const [name, value] of [["Full name", "Test Customer"], ["Mobile number", "09121111111"], ["Vehicle make", "Toyota"], ["Vehicle model", "Camry"], ["VIN (17 characters)", "JTDBE32K123456789"], ["Licence plate", "TEST123"], ["Installation date", "2026-01-15"], ["Invoice number", "QR-INV"], ["Installer / shop", "Test shop"], ["Seller name", "Test Seller"], ["Seller mobile", "09122222222"]]) {
+  await page.getByLabel("Mobile number", { exact: true }).fill("09121111111");
+  await page.getByRole("button", { name: "Send sign-in code", exact: true }).click();
+  await page.getByLabel("Verification code", { exact: true }).fill("000000");
+  await page.getByRole("button", { name: "Sign in", exact: true }).click();
+  await expect(page.getByRole("alert").filter({ hasText: "incorrect" })).toBeVisible();
+  await page.getByLabel("Verification code", { exact: true }).fill("123456");
+  await page.getByRole("button", { name: "Sign in", exact: true }).click();
+  for (const [name, value] of [["Full name", "Test Customer"], ["Vehicle make", "Toyota"], ["Vehicle model", "Camry"], ["VIN (17 characters)", "JTDBE32K123456789"], ["Licence plate", "TEST123"], ["Installation date", "2026-01-15"], ["Invoice number", "QR-INV"], ["Installer / shop", "Test shop"], ["Seller name", "Test Seller"], ["Seller mobile", "09122222222"], ["Film used on this vehicle (meters)", "30"]]) {
     await page.getByLabel(name, { exact: true }).fill(value);
   }
   await page.getByRole("checkbox", { name: "rear", exact: true }).check();
   await page.screenshot({ path: testInfo.outputPath("activation-mobile.png"), fullPage: true });
   expect(await page.evaluate(() => document.documentElement.scrollWidth > innerWidth)).toBe(false);
-  await page.getByRole("button", { name: "Send verification code", exact: true }).click();
-  await page.getByLabel("SMS verification code").fill("000000");
-  await page.getByRole("button", { name: "Verify mobile & activate warranty" }).click();
-  await expect(page.getByRole("alert").filter({ hasText: "incorrect" })).toBeVisible();
-  await page.getByLabel("SMS verification code").fill("123456");
-  await page.getByRole("button", { name: "Verify mobile & activate warranty" }).click();
+  await page.getByRole("button", { name: "Check & register warranty" }).click();
   await expect(page.getByRole("heading", { name: "Your warranty is active" })).toBeVisible();
   await expect(page.getByText("2031-01-14", { exact: true })).toBeVisible();
-  expect(new URL(page.url()).hash).toBe("");
+  await expect(page.getByText("120 m", { exact: true })).toBeVisible();
+  await page.getByRole("button", { name: "Register another vehicle" }).click();
+  await expect(page.getByLabel("VIN (17 characters)")).toHaveValue("");
+  await expect(page.getByLabel("Film used on this vehicle (meters)")).toHaveAttribute("max", "120");
 });

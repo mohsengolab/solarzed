@@ -19,7 +19,7 @@ public record WarrantyPublic(
     string Plate, string FilmSerial, string InvoiceNumber, DateOnly Installed,
     string SellerName, string SellerPhoneMasked, string Installer,
     string[] Areas, string Status, string StatusLabel,
-    string? StatusNote, CoveragePublic? Coverage, string[] Flags);
+    string? StatusNote, CoveragePublic? Coverage, string[] Flags, decimal? UsedLengthM = null);
 
 public record WarrantyLimitedPublic(
     string Type, string Make, string Model, string Plate, string FilmSerial,
@@ -188,7 +188,7 @@ public static class WarrantyService
             FilmSerial: w.FilmSerial, InvoiceNumber: w.InvoiceNumber, Installed: w.Installed,
             SellerName: w.SellerName, SellerPhoneMasked: spMasked, Installer: w.Installer,
             Areas: areas, Status: w.Status.ToString().ToLower(), StatusLabel: statusLabel,
-            StatusNote: statusNote, Coverage: coverage, Flags: []);
+            StatusNote: statusNote, Coverage: coverage, Flags: [], UsedLengthM: w.UsedLengthM);
     }
 
     public static WarrantyLimitedPublic ToLimitedPublic(WarrantyRegistration w)

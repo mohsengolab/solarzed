@@ -287,8 +287,10 @@ public class AdminController(AppDbContext db, IConfiguration cfg) : ControllerBa
         if (string.IsNullOrWhiteSpace(req.ModelCode)) return BadRequest(new { error = "modelCode required" });
         if (req.Quantity < 1 || req.Quantity > 200) return BadRequest(new { error = "quantity 1–200" });
         if (!System.Text.RegularExpressions.Regex.IsMatch(req.ModelCode, "^[A-Za-z0-9-]{1,24}$") ||
-            string.IsNullOrWhiteSpace(req.Batch) || req.Batch.Length > 32 || string.IsNullOrWhiteSpace(req.Supplier) || req.Supplier.Length > 16)
-            return BadRequest(new { error = "Valid model code, batch (max 32) and supplier (max 16) are required." });
+            string.IsNullOrWhiteSpace(req.Batch) || req.Batch.Length > 32)
+            return BadRequest(new { error = "Valid model code and batch (max 32) are required." });
+        var supplier = RollService.SupplierCode(req.Supplier);
+        if (supplier == null) return BadRequest(new { error = "Supplier code must be exactly 3 English letters." });
         if (!Enum.TryParse<WarrantyType>(req.Type, true, out var type) || !Enum.IsDefined(type) ||
             !Enum.TryParse<RollQc>(req.Qc, true, out var quality) || !Enum.IsDefined(quality))
             return BadRequest(new { error = "Invalid product type or QC." });
@@ -315,7 +317,7 @@ public class AdminController(AppDbContext db, IConfiguration cfg) : ControllerBa
             if (changed) product.UpdatedAt = DateTime.UtcNow;
         }
 
-        var rolls = await RollService.CreateRolls(req, db, Actor);
+        var rolls = await RollService.CreateRolls(req with { Supplier = supplier }, db, Actor);
         return Ok(rolls.Select(r => new { r.Id, r.ModelCode, r.Type, r.Batch }));
     }
 
@@ -335,7 +337,9 @@ public class AdminController(AppDbContext db, IConfiguration cfg) : ControllerBa
             return BadRequest(new { error = "QC approval is required before release." });
         if ((req.Note?.Length ?? 0) > 1000) return BadRequest(new { error = "Note is too long." });
         if (req.Batch is { Length: > 32 }) return BadRequest(new { error = "Batch is limited to 32 characters." });
-        if (req.Supplier is { Length: > 16 }) return BadRequest(new { error = "Supplier is limited to 16 characters." });
+        var supplier = RollService.SupplierCode(req.Supplier);
+        if (req.Supplier != null && supplier == null && req.Supplier != roll.Supplier)
+            return BadRequest(new { error = "Supplier code must be exactly 3 English letters." });
         if (req.WidthCm is { } w && (w <= 0 || w > 1000)) return BadRequest(new { error = "Width must be between 0 and 1000 cm." });
         if (req.LengthM is { } l && (l <= 0 || l > 10000)) return BadRequest(new { error = "Length must be between 0 and 10000 m." });
 
@@ -343,12 +347,12 @@ public class AdminController(AppDbContext db, IConfiguration cfg) : ControllerBa
         AuditLog.Add(db, Actor, "roll", roll.Id, "updated", AuditLog.Diff(
             ("status", before.Status, st), ("qc", before.Qc, qc),
             ("batch", before.Batch, string.IsNullOrWhiteSpace(req.Batch) ? before.Batch : req.Batch.Trim()),
-            ("supplier", before.Supplier, string.IsNullOrWhiteSpace(req.Supplier) ? before.Supplier : req.Supplier.Trim()),
+            ("supplier", before.Supplier, supplier ?? before.Supplier),
             ("widthCm", before.WidthCm, req.WidthCm), ("lengthM", before.LengthM, req.LengthM)), req.Note);
         roll.Status = st;
         roll.Qc = qc;
         if (!string.IsNullOrWhiteSpace(req.Batch)) roll.Batch = req.Batch.Trim();
-        if (!string.IsNullOrWhiteSpace(req.Supplier)) roll.Supplier = req.Supplier.Trim();
+        if (supplier != null) roll.Supplier = supplier;
         if (req.WidthCm is { } width) roll.WidthCm = width;
         if (req.LengthM is { } length) roll.LengthM = length;
 

@@ -2,7 +2,7 @@
 
 import { useEffect, useState, FormEvent } from "react";
 import Link from "next/link";
-import { inspectBox, completeActivation, portalMe, ActivationInfo, PortalUser, WarrantyPublic } from "@/lib/api";
+import { inspectBox, completeActivation, portalMe, ActivationInfo, PortalUser, ActivationResult } from "@/lib/api";
 import PortalSignIn from "@/components/PortalSignIn";
 import styles from "./activate.module.css";
 
@@ -29,9 +29,10 @@ export default function ActivationPage() {
   const [checked, setChecked] = useState(false);
   const [form, setForm] = useState(initial);
   const [areas, setAreas] = useState<string[]>([]);
+  const [usedLength, setUsedLength] = useState("");
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
-  const [result, setResult] = useState<WarrantyPublic | null>(null);
+  const [result, setResult] = useState<ActivationResult | null>(null);
 
   async function open(code: string) {
     setError(""); setInfo(null);
@@ -51,8 +52,10 @@ export default function ActivationPage() {
     setBusy(true); setError("");
     try {
       const registration = { ...form, phone: user.phone, type: info.type, filmSerial: info.id, windows: info.type === "tint" ? areas : undefined, panels: info.type === "ppf" ? areas : undefined };
-      setResult(await completeActivation(token, registration));
-      window.history.replaceState(null, "", window.location.pathname);
+      const completed = await completeActivation(token, registration, info.remainingLengthM == null ? null : Number(usedLength));
+      setResult(completed);
+      setInfo({ ...info, activated: true, canRegister: (completed.remainingLengthM ?? 0) > 0, remainingLengthM: completed.remainingLengthM });
+      if (!(completed.remainingLengthM && completed.remainingLengthM > 0)) window.history.replaceState(null, "", window.location.pathname);
     } catch (ex) { setError(ex instanceof Error ? ex.message : "Activation failed."); }
     finally { setBusy(false); }
   }
@@ -61,7 +64,7 @@ export default function ActivationPage() {
     <b>{info.product} · {info.type === "tint" ? "Window film" : "Paint protection film"}</b>
     <dl>
       <dt>Roll No</dt><dd><code dir="ltr">{info.id}</code></dd>
-      {info.warrantyCode && <><dt>Warranty code</dt><dd><code dir="ltr">{info.warrantyCode}</code></dd></>}
+      {info.remainingLengthM != null && <><dt>Remaining roll length</dt><dd>{info.remainingLengthM} m</dd></>}
     </dl>
     <span>{info.filmYears}-year film warranty{info.installYears ? ` · ${info.installYears}-year installation warranty` : ""}</span>
   </div>;
@@ -69,7 +72,9 @@ export default function ActivationPage() {
   return <div className={styles.page}>
     <header><Link href="/">SOLAR<span>ZED</span></Link><small>DIGITAL WARRANTY</small></header>
     <main className={styles.card}>
-      {result ? <section aria-live="polite"><span className={styles.eyebrow}>WARRANTY REGISTERED</span><h1>Your warranty is active</h1><p>Keep your warranty number for future reference. You can see it any time in your account.</p><code className={styles.code}>{result.code}</code><dl><dt>Product serial</dt><dd>{info?.id}</dd><dt>Vehicle</dt><dd>{result.make} {result.model}</dd><dt>Film warranty ends</dt><dd>{result.coverage?.filmEnds}</dd>{result.coverage?.installEnds && <><dt>Installation warranty ends</dt><dd>{result.coverage.installEnds}</dd></>}</dl><Link className={styles.button} href="/account">My account</Link></section>
+      {result ? <section aria-live="polite"><span className={styles.eyebrow}>WARRANTY REGISTERED</span><h1>Your warranty is active</h1><p>Keep your warranty number for future reference. You can see it any time in your account.</p><code className={styles.code}>{result.warranty.code}</code><dl><dt>Product serial</dt><dd>{info?.id}</dd><dt>Vehicle</dt><dd>{result.warranty.make} {result.warranty.model}</dd>{result.warranty.usedLengthM != null && <><dt>Film used</dt><dd>{result.warranty.usedLengthM} m</dd><dt>Remaining roll length</dt><dd>{result.remainingLengthM} m</dd></>}<dt>Film warranty ends</dt><dd>{result.warranty.coverage?.filmEnds}</dd>{result.warranty.coverage?.installEnds && <><dt>Installation warranty ends</dt><dd>{result.warranty.coverage.installEnds}</dd></>}</dl>
+        {info?.canRegister && <p><button className={styles.button} type="button" onClick={() => { setResult(null); setForm(initial); setAreas([]); setUsedLength(""); }}>Register another vehicle</button></p>}
+        <Link className={styles.button} href="/account">My account</Link></section>
       : <><span className={styles.eyebrow}>SCAN · SIGN IN · ACTIVATE</span><h1>Activate your Solarzed warranty</h1>
       {error && <p role="alert" className={styles.error}>{error}</p>}
 
@@ -80,15 +85,17 @@ export default function ActivationPage() {
         <button className={styles.button} disabled={!valid(typed.trim())}>Check card</button>
       </form>}
 
-      {info?.activated ? <div>{card}<h2>This warranty is already activated</h2><p>Each warranty card activates one warranty. If it is yours, sign in to your account to see it.</p><Link href="/account" className={styles.button}>My account</Link></div>
-      : info && <>{card}
+      {info && <>{card}
         {!info.released && <p role="status" className={styles.error}>This product has not been released for customer activation yet. Please contact your seller. Your warranty card has not been used.</p>}
-        {checked && !user && <PortalSignIn smsAvailable={info.smsAvailable} onSignedIn={setUser}
-          intro="Sign in with your mobile number. We send you a code by SMS; the warranty is registered to this mobile." />}
+        {checked && !user && <PortalSignIn smsAvailable={info.smsAvailable} onSignedIn={signedIn => { setUser(signedIn); void open(token); }}
+          intro={info.activated ? "Sign in with the mobile used for the first vehicle to see whether this roll has film left." : "Sign in with your mobile number. We send you a code by SMS; the warranty is registered to this mobile."} />}
         {user && !user.phone && <p role="status" className={styles.error}>Your account has no verified mobile number yet. Add one in <Link href="/account">my account</Link> first — warranty cards are registered to a mobile number.</p>}
-        {user && user.phone && <form onSubmit={activate}>
+        {!info.activated && !info.canRegister && <p role="status">The roll length is unavailable. Contact your seller.</p>}
+        {user?.phone && info.activated && !info.canRegister && <p role="status">This card has no available length for this account. <Link href="/account">View my warranties</Link></p>}
+        {user?.phone && info.canRegister && <form onSubmit={activate}>
           <p>Signed in as <b dir="ltr">{user.phone}</b>. Enter the installation details. Coverage starts from the installation date under the approved product terms.</p>
           <div className={styles.grid}>{fields.map(([key, label, max]) => <label key={key}>{label}<input required maxLength={max} value={form[key]} type={key === "installed" ? "date" : key === "sellerPhone" ? "tel" : "text"} autoComplete={key === "owner" ? "name" : "off"} onChange={event => setForm(value => ({ ...value, [key]: event.target.value }))} /></label>)}</div>
+          {info.remainingLengthM != null && <label>Film used on this vehicle (meters)<input required type="number" inputMode="decimal" min="0.01" step="0.01" max={info.remainingLengthM} value={usedLength} onChange={event => setUsedLength(event.target.value)} /></label>}
           <fieldset><legend>{info.type === "tint" ? "Installed windows" : "Protected panels"}</legend><div className={styles.areas}>{(info.type === "tint" ? windows : panels).map(area => <label key={area}><input type="checkbox" checked={areas.includes(area)} onChange={event => setAreas(current => event.target.checked ? [...current, area] : current.filter(item => item !== area))} />{area.replaceAll("-", " ")}</label>)}</div></fieldset>
           <button className={styles.button} type="submit" disabled={busy || !info.released}>{busy ? "Checking…" : "Check & register warranty"}</button>
         </form>}

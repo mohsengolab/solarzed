@@ -246,7 +246,7 @@ export default function AccountPage() {
             <thead><tr><th>Warranty code</th><th>Vehicle</th><th>Status</th><th>Film warranty ends</th></tr></thead>
             <tbody>{warranties.map(w => <tr key={w.code}>
               <td><Link href={`/warranty?code=${encodeURIComponent(w.code)}`}><code dir="ltr">{w.code}</code></Link></td>
-              <td>{w.make} {w.model} · {w.plate}</td><td>{w.statusLabel}</td><td>{w.coverage?.filmEnds ?? "—"}</td>
+              <td>{w.make} {w.model} · {w.plate}{w.usedLengthM != null && <small> · {w.usedLengthM} m</small>}</td><td>{w.statusLabel}</td><td>{w.coverage?.filmEnds ?? "—"}</td>
             </tr>)}</tbody>
           </table></div> : <p>{user.phone ? "No warranties yet. Scan the QR code on the warranty card inside your Solarzed box to activate one." : "No warranties yet. Add your verified mobile above, then scan the QR code on the warranty card inside your Solarzed box."}</p>}
           {user.phone

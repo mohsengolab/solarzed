@@ -200,6 +200,9 @@ namespace Solarzed.Api.Migrations
                         .IsRequired()
                         .HasColumnType("nvarchar(max)");
 
+                    b.Property<decimal?>("RemainingLengthM")
+                        .HasColumnType("decimal(7,2)");
+
                     b.Property<int>("Revision")
                         .IsConcurrencyToken()
                         .HasColumnType("int");
@@ -839,6 +842,9 @@ namespace Solarzed.Api.Migrations
                     b.Property<int>("Type")
                         .HasColumnType("int");
 
+                    b.Property<decimal?>("UsedLengthM")
+                        .HasColumnType("decimal(7,2)");
+
                     b.Property<string>("Vin")
                         .IsRequired()
                         .HasMaxLength(17)
@@ -851,7 +857,12 @@ namespace Solarzed.Api.Migrations
                     b.HasIndex("Vin");
 
                     b.HasIndex("FilmSerial", "InvoiceNumber")
-                        .IsUnique();
+                        .IsUnique()
+                        .HasFilter("[UsedLengthM] IS NULL");
+
+                    b.HasIndex("FilmSerial", "Vin")
+                        .IsUnique()
+                        .HasFilter("[UsedLengthM] IS NOT NULL");
 
                     b.ToTable("WarrantyRegistrations");
                 });

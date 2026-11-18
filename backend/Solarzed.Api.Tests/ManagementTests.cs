@@ -107,7 +107,7 @@ public class ManagementTests
         db.Products.Add(new Product { Code = "TEST", Name = "Archived film", Type = WarrantyType.Tint, Archived = true });
         await db.SaveChangesAsync();
         var admin = new AdminController(db, new ConfigurationBuilder().Build());
-        Assert.IsType<BadRequestObjectResult>(await admin.ReceiveRolls(new("TEST", "tint", "B", "S", "approved", 1)));
+        Assert.IsType<BadRequestObjectResult>(await admin.ReceiveRolls(new("TEST", "tint", "B", "ABC", "approved", 1)));
     }
 
     [Theory]
@@ -138,12 +138,12 @@ public class ManagementTests
         using var db = Database();
         db.Rolls.Add(new Roll { Id = "R", ModelCode = "TEST", Batch = "B1", Supplier = "S1" }); await db.SaveChangesAsync();
         var admin = new AdminController(db, new ConfigurationBuilder().Build());
-        Assert.IsType<BadRequestObjectResult>(await admin.UpdateRoll("R", new(null, null, null, "new batch", "S2", 2000, 20000)));
+        Assert.IsType<BadRequestObjectResult>(await admin.UpdateRoll("R", new(null, null, null, "new batch", "ABC", 2000, 20000)));
         var roll = await db.Rolls.SingleAsync();
         Assert.Equal("B1", roll.Batch);
-        Assert.IsType<OkObjectResult>(await admin.UpdateRoll("R", new(null, null, null, "new batch", "S2", 152, 30)));
+        Assert.IsType<OkObjectResult>(await admin.UpdateRoll("R", new(null, null, null, "new batch", "abc", 152, 30)));
         Assert.Equal("new batch", roll.Batch);
-        Assert.Equal("S2", roll.Supplier);
+        Assert.Equal("ABC", roll.Supplier);
         Assert.Equal(152m, roll.WidthCm);
         Assert.Equal(30m, roll.LengthM);
     }

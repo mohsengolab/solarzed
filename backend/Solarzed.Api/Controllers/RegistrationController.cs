@@ -20,7 +20,7 @@ public class RegistrationController(AppDbContext db) : ControllerBase
 
         // Duplicate serial+invoice guard
         var dup = await db.WarrantyRegistrations
-            .AnyAsync(w => w.FilmSerial == entity!.FilmSerial && w.InvoiceNumber == entity.InvoiceNumber);
+            .AnyAsync(w => w.UsedLengthM == null && w.FilmSerial == entity!.FilmSerial && w.InvoiceNumber == entity.InvoiceNumber);
         if (dup) return Conflict(new { error = "duplicate film serial and invoice" });
 
         // Assess flags

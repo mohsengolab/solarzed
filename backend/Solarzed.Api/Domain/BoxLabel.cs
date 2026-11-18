@@ -1,4 +1,5 @@
 using System.ComponentModel.DataAnnotations;
+using System.ComponentModel.DataAnnotations.Schema;
 
 namespace Solarzed.Api.Domain;
 
@@ -14,6 +15,8 @@ public class BoxLabel
     public int? InstallYears { get; set; }
     public DateTime CreatedAt { get; set; } = DateTime.UtcNow;
     public DateTime? ActivatedAt { get; set; }
+    // Each carton contains one physical roll. Snapshot its length when the label is issued.
+    [Column(TypeName = "decimal(7,2)")] public decimal? RemainingLengthM { get; set; }
     [MaxLength(32)] public string? WarrantyCode { get; set; }
     // Who physically holds the carton now. Null = central warehouse (where every new label starts).
     [MaxLength(200)] public string? Holder { get; set; }
@@ -22,7 +25,7 @@ public class BoxLabel
     public DateTime? HeldSince { get; set; }
     // Warranty number printed on the card inside the carton; becomes the warranty code when activated.
     [MaxLength(32)] public string? CardCode { get; set; }
-    // Letters identifying the factory (e.g. SA, BF). Card code shown to the customer = Factory-Serial-Warranty.
+    // Internal supplier code at issue time; needed to resolve legacy Factory-Serial-Warranty cards.
     [MaxLength(4)] public string? FactoryCode { get; set; }
     [ConcurrencyCheck] public int Revision { get; set; }
 }

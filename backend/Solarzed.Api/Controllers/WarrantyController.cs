@@ -21,7 +21,7 @@ public class WarrantyController(AppDbContext db) : ControllerBase
 
         // Duplicate check: same FilmSerial + InvoiceNumber
         var duplicate = await db.WarrantyRegistrations.AnyAsync(w =>
-            w.FilmSerial == entity!.FilmSerial && w.InvoiceNumber == entity.InvoiceNumber);
+            w.UsedLengthM == null && w.FilmSerial == entity!.FilmSerial && w.InvoiceNumber == entity.InvoiceNumber);
         if (duplicate) return Conflict(new { error = "duplicate registration" });
 
         var flags = await WarrantyService.AssessFlags(entity!, db);

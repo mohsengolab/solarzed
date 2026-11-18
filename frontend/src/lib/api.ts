@@ -276,6 +276,7 @@ export interface WarrantyPublic {
   vinMasked: string;
   plate: string;
   filmSerial: string;
+  usedLengthM?: number | null;
   invoiceNumber: string;
   installed: string;
   sellerName: string;
@@ -415,12 +416,13 @@ export interface BoxLabel {
   // Warranty card inside the carton (manager view only). fullCode = carton roll number + 7-digit warranty number.
   // factoryCode is internal and is never printed on the card.
   factoryCode?: string | null; cardCode?: string | null; fullCode?: string | null;
+  remainingLengthM?: number | null;
 }
 export interface BoxLabelsResult { labels: BoxLabel[]; siteUrl: string; smsConfigured: boolean }
 export function adminBoxLabels() { return apiFetch<BoxLabelsResult>("/api/admin/box-labels"); }
 /** One warranty card per carton, keyed by the roll number printed on each box (e.g. CPT30614374). */
-export function issueBoxLabels(rollId: string, serials: string[], factoryCode: string) {
-  return apiFetch<{ labels: BoxLabel[] }>("/api/admin/box-labels", { method: "POST", body: JSON.stringify({ rollId, quantity: serials.length, serials, factoryCode }) });
+export function issueBoxLabels(rollId: string, serials: string[]) {
+  return apiFetch<{ labels: BoxLabel[] }>("/api/admin/box-labels", { method: "POST", body: JSON.stringify({ rollId, quantity: serials.length, serials }) });
 }
 // ── Box transfers: the roll number printed on the carton (e.g. CPT30614374) moves boxes from mobile to mobile ──
 export interface BoxTransfer { id: number; labelId: string; batchId: string; fromHolder: string | null; fromPhone: string | null; toHolder: string | null; toPhone: string | null; note: string | null; actor: string; at: string }
@@ -441,13 +443,14 @@ export function releaseRoll(id: string) {
 }
 
 // ── Warranty card activation (public) ──
-export interface ActivationInfo { id: string; product: string; type: "tint" | "ppf"; activated: boolean; filmYears: number; installYears: number | null; smsAvailable: boolean; released: boolean; factoryCode: string | null; warrantyCode: string | null }
+export interface ActivationInfo { id: string; product: string; type: "tint" | "ppf"; activated: boolean; filmYears: number; installYears: number | null; smsAvailable: boolean; released: boolean; warrantyCode: string | null; canRegister: boolean; remainingLengthM: number | null }
+export interface ActivationResult { warranty: WarrantyPublic; remainingLengthM: number | null }
 export function inspectBox(token: string) {
   return apiFetch<ActivationInfo>("/api/activation/inspect", { method: "POST", body: JSON.stringify({ token }) });
 }
 /** Requires a signed-in portal session; the warranty is registered to that verified mobile. */
-export function completeActivation(token: string, registration: Record<string, unknown>) {
-  return apiFetch<WarrantyPublic>("/api/activation/complete", { method: "POST", body: JSON.stringify({ token, registration }) });
+export function completeActivation(token: string, registration: Record<string, unknown>, usedLengthM: number | null) {
+  return apiFetch<ActivationResult>("/api/activation/complete", { method: "POST", body: JSON.stringify({ token, registration, usedLengthM }) });
 }
 
 // ── Public-site account: representatives, shops and customers sign in with mobile or email + code ──

@@ -12,9 +12,10 @@ the existing admin password is preserved. Local API port 5010 is used in this
 workspace because port 5000 belongs to another service.
 
 1. Set approved film/installation periods in Admin → Settings.
-2. Receive a roll in Rolls with approved QC. It can still be in stock when labels
-   are prepared; printing does not mark inventory as shipped.
-3. In Labels, generate 1–200 unique labels for that roll, one per carton/product unit.
+2. Receive a roll in Rolls with approved QC, its length in meters, and a three-letter
+   English supplier code. That code is also the internal factory code.
+3. In Labels, issue 1–200 cards for cartons with those same roll specifications.
+   Each carton serial represents one physical roll with its own remaining length.
 4. Select labels and print. The default format is 80 × 50 mm, configurable from
    60–150 mm wide and 40–150 mm high. Select matching paper in the printer driver,
    100% scale, and disable browser headers/footers. There is one label per page.
@@ -22,28 +23,28 @@ workspace because port 5000 belongs to another service.
    activation**. The existing printed codes become eligible without reprinting.
    Until then, the customer page explains that activation is awaiting release.
 
-The QR contains only `https://solarzed.com/activate#<random-token>`. QR generation
-is local; no customer data goes to an external QR service. Codes have a four-module
+The current QR contains `https://solarzed.com/activate#<carton-serial>-<7-digit-code>`.
+QR generation is local; no customer data goes to an external QR service. Codes have a four-module
 quiet zone and black modules on white. Readability is verified by decoding the
 actual rendered QR in the browser test. The local activation-preview link is for
 development; printed labels always contain the configured public domain.
 
-Every label has its own `SZB-…` product serial, linked internally to its parent
-roll. The new warranty uses that unit serial in `FilmSerial` and the inventory
-roll in `RollId`. This permits multiple boxes from one roll/invoice while keeping
-the existing unique serial/invoice constraint. Reprinting retains the same token.
+Every label uses the printed carton serial (or a generated `SZB-…` serial), linked
+internally to its inventory record. Warranties use the carton serial in `FilmSerial`
+and the inventory record in `RollId`. The supplier code is not included on new cards.
+Reprinting retains the same activation code.
 Changing the public domain is blocked once labels exist, to avoid silently
 invalidating printed stock. Keep the domain and `/activate` route reachable.
 
 ## Customer workflow
 
-Scanning opens the existing-information form: name, mobile, vehicle make/model,
-VIN, plate, installation date, invoice, installer/seller and covered areas.
-Product type and serial are always bound on the server to the issued carton.
-The user requests a six-digit code, receives it on their mobile, then submits it
-to activate the warranty. The successful page shows the warranty number and end
-dates. Coverage uses the periods captured when the label was issued and starts
-at the entered installation date, matching the existing coverage rules.
+Scan the card, sign in with a verified mobile, and enter the vehicle details (make,
+model, VIN, plate), installation date, invoice, installer/seller, covered areas and
+meters used. The successful page shows the vehicle's warranty number, end dates and
+the remaining length. For example, using 30 m from a 150 m roll leaves 120 m.
+The mobile that registered the first vehicle can reuse the same card for other
+vehicles, including vehicles on the same invoice, until the roll is exhausted.
+Each vehicle receives a separate warranty. The first warranty uses the printed code.
 
 Codes expire after five minutes. Wrong codes are limited to five attempts;
 resends require 60 seconds and daily phone/box limits also apply. An OTP is bound
@@ -52,10 +53,11 @@ SMS submission never permits activation. There is no development OTP bypass.
 The provider accepting a message does not itself prove delivery; only entering
 the correct code completes mobile verification.
 
-The label, consumed OTP and active warranty are committed in one EF database
-transaction with optimistic concurrency. A second activation loses the race and
-cannot create another warranty. Public rescan metadata contains no owner/mobile
-or private seller information. Existing non-QR registrations still need review.
+The warranty and updated roll balance are committed in one EF database transaction
+with optimistic concurrency. Over-allocation and repeat registration of the same
+VIN on the same roll are rejected. Old unused cards can track usage once a roll
+length is entered; old activated cards have no recorded balance and stay closed.
+Public rescan metadata contains no owner/mobile or private seller information.
 
 ## Faraz configuration
 
@@ -96,7 +98,7 @@ hashes for lookup and encrypted tokens for reprint; it never stores raw OTPs.
 
 ## Deployment and verification
 
-Apply the included `BoxLabelsAndActivation` EF migration (startup applies pending
+Apply the included `RollWarrantyUsage` EF migration (startup applies pending
 migrations in the current app). Configure production API routing and deploy the
 Next.js `/activate` page to **solarzed.com** before attaching labels to products.
 Use same-origin API routing (leave `NEXT_PUBLIC_API_URL` unset), or a public API

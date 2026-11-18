@@ -12,6 +12,12 @@ public record CreateRollsRequest(
 
 public static class RollService
 {
+    public static string? SupplierCode(string? raw)
+    {
+        var value = raw?.Trim() ?? "";
+        return System.Text.RegularExpressions.Regex.IsMatch(value, @"\A[A-Za-z]{3}\z") ? value.ToUpperInvariant() : null;
+    }
+
     public static async Task<Roll[]> CreateRolls(CreateRollsRequest req, AppDbContext db, string actor = "system")
     {
         var type = req.Type.ToLower() == "ppf" ? WarrantyType.Ppf : WarrantyType.Tint;
@@ -50,7 +56,7 @@ public static class RollService
                 ModelCode = model,
                 Type = type,
                 Batch = req.Batch,
-                Supplier = req.Supplier,
+                Supplier = SupplierCode(req.Supplier) ?? req.Supplier,
                 Qc = qc,
                 WidthCm = req.WidthCm,
                 LengthM = req.LengthM,

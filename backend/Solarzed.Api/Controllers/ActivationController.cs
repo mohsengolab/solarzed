@@ -1,3 +1,4 @@
+using Microsoft.AspNetCore.Authentication;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.RateLimiting;
@@ -14,7 +15,8 @@ public class ActivationController(BoxLabelService labels) : ControllerBase
     public async Task<IActionResult> Inspect(TokenRequest request)
     {
         Response.Headers.CacheControl = "no-store";
-        try { return Ok(await labels.Info(request.Token)); }
+        var session = await HttpContext.AuthenticateAsync(PortalAuth.Scheme);
+        try { return Ok(await labels.Info(request.Token, PortalAuth.Phone(session.Principal))); }
         catch (ActivationError ex) { return StatusCode(ex.Status, new { error = ex.Message }); }
     }
 

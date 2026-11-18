@@ -51,7 +51,11 @@ public class AppDbContext(DbContextOptions<AppDbContext> options) : DbContext(op
         mb.Entity<ActivationChallenge>().HasOne<BoxLabel>().WithMany().HasForeignKey(x => x.LabelId).OnDelete(DeleteBehavior.Cascade);
         mb.Entity<WarrantyRegistration>()
             .HasIndex(w => new { w.FilmSerial, w.InvoiceNumber })
-            .IsUnique();
+            .IsUnique().HasFilter("[UsedLengthM] IS NULL");
+
+        mb.Entity<WarrantyRegistration>()
+            .HasIndex(w => new { w.FilmSerial, w.Vin })
+            .IsUnique().HasFilter("[UsedLengthM] IS NOT NULL");
 
         mb.Entity<WarrantyRegistration>()
             .HasIndex(w => w.Vin);

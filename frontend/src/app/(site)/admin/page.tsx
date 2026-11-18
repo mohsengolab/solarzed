@@ -389,7 +389,7 @@ function ReportWarranties() {
       downloadCsv("warranties-report", all.items, [
         ["code", "کد گارانتی"], ["status", "وضعیت"], ["type", "نوع محصول"],
         ["owner", "مالک"], ["phone", "موبایل"], ["make", "برند خودرو"], ["model", "مدل خودرو"],
-        ["vin", "VIN"], ["plate", "پلاک"], ["filmSerial", "سریال فیلم"], ["invoiceNumber", "شماره فاکتور"],
+        ["vin", "VIN"], ["plate", "پلاک"], ["filmSerial", "سریال فیلم"], ["usedLengthM", "مصرف (متر)"], ["invoiceNumber", "شماره فاکتور"],
         ["installer", "نصّاب / فروشنده"], ["installed", "تاریخ نصب"],
         ["filmEnds", "پایان گارانتی فیلم"], ["createdAt", "تاریخ ثبت"],
       ]);
@@ -627,7 +627,7 @@ function WarrantiesPanel() {
     try {
       const all = await adminWarranties<WRow>(list.exportQuery);
       downloadCsv("warranties", all.items, [["code", "کد"], ["status", "وضعیت"], ["type", "نوع"], ["owner", "مالک"], ["phone", "موبایل"],
-        ["make", "برند"], ["model", "مدل"], ["vin", "VIN"], ["plate", "پلاک"], ["filmSerial", "سریال فیلم"], ["invoiceNumber", "فاکتور"],
+        ["make", "برند"], ["model", "مدل"], ["vin", "VIN"], ["plate", "پلاک"], ["filmSerial", "سریال فیلم"], ["usedLengthM", "مصرف (متر)"], ["invoiceNumber", "فاکتور"],
         ["installer", "نصّاب"], ["installed", "تاریخ نصب"], ["filmEnds", "پایان گارانتی فیلم"], ["createdAt", "ثبت"]]);
     } catch (e) { setQrError(fa(errorText(e, "خروجی ناموفق بود."))); }
   }
@@ -863,11 +863,11 @@ function RollsPanel() {
             {[
               { label: "کد مدل", name: "modelCode", placeholder: "مثلاً PIR یا CP-01", max: 24 },
               { label: "بچ", name: "batch", placeholder: "مثلاً LOT-2608-B17", max: 32 },
-              { label: "کد تأمین‌کننده", name: "supplier", placeholder: "مثلاً SUP-02", max: 16 },
+              { label: "کد تأمین‌کننده / کارخانه (۳ حرف انگلیسی)", name: "supplier", placeholder: "مثلاً ABC", max: 3 },
             ].map(x => (
               <label key={x.name}>{x.label}
-                <input required maxLength={x.max} value={(form as Record<string, string>)[x.name]} placeholder={x.placeholder} dir="ltr"
-                  onChange={e => setForm(p => ({ ...p, [x.name]: e.target.value }))} />
+                <input required maxLength={x.max} pattern={x.name === "supplier" ? "[A-Za-z]{3}" : undefined} value={(form as Record<string, string>)[x.name]} placeholder={x.placeholder} dir="ltr"
+                  onChange={e => setForm(p => ({ ...p, [x.name]: x.name === "supplier" ? e.target.value.toUpperCase() : e.target.value }))} />
               </label>
             ))}
             <label>نوع
@@ -973,7 +973,7 @@ function RollsPanel() {
         <label>وضعیت انبار<select value={edit.status} onChange={e => setEdit({ ...edit, status: e.target.value })}>{["instock", "shipped", "consumed", "void"].map(v => <option key={v} value={v}>{fa(v)}</option>)}</select></label>
         <div className={styles.row2}>
           <label>بچ<input maxLength={32} value={edit.batch} dir="ltr" onChange={e => setEdit({ ...edit, batch: e.target.value })} /></label>
-          <label>تأمین‌کننده<input maxLength={16} value={edit.supplier} dir="ltr" onChange={e => setEdit({ ...edit, supplier: e.target.value })} /></label>
+          <label>کد تأمین‌کننده / کارخانه (۳ حرف انگلیسی)<input maxLength={Math.max(3, edit.supplier.length)} value={edit.supplier} dir="ltr" onChange={e => setEdit({ ...edit, supplier: e.target.value.toUpperCase() })} /></label>
           <label>عرض (سانتی‌متر)<input type="number" min={1} max={1000} step="0.1" value={edit.widthCm ?? ""} dir="ltr"
             onChange={e => setEdit({ ...edit, widthCm: e.target.value === "" ? null : Number(e.target.value) })} /></label>
           <label>طول (متر)<input type="number" min={1} max={10000} step="0.1" value={edit.lengthM ?? ""} dir="ltr"

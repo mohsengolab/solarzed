@@ -10,7 +10,7 @@ namespace Solarzed.Api.Controllers;
 [ApiController, Route("api/admin/box-labels"), Authorize(Policy = "StaffPolicy")]
 public class BoxLabelsController(AppDbContext db, BoxLabelService labels, BoxTransferService transfers, IActivationSmsSender sms) : ControllerBase
 {
-    bool IsAdmin => User.IsInRole("admin");
+    bool IsAdmin => User.IsInRole("admin") || User.IsInRole("superadmin");
 
     // Both managers and carton operators move boxes; the box serial is the only identifier used.
     [HttpPost("transfers")]
@@ -48,8 +48,8 @@ public class BoxLabelsController(AppDbContext db, BoxLabelService labels, BoxTra
         {
             // Cartons normally arrive with the roll number printed on the box; generated serials are the fallback.
             var created = request.Serials is { Length: > 0 }
-                ? await labels.Issue(request.RollId, request.Serials, request.FactoryCode)
-                : await labels.Issue(request.RollId, request.Quantity, request.FactoryCode);
+                ? await labels.Issue(request.RollId, request.Serials)
+                : await labels.Issue(request.RollId, request.Quantity);
             return Ok(new { labels = created });
         }
         catch (ActivationError ex) { return StatusCode(ex.Status, new { error = ex.Message }); }
@@ -74,5 +74,5 @@ public class BoxLabelsController(AppDbContext db, BoxLabelService labels, BoxTra
     }
 }
 
-public record IssueLabelsRequest(string RollId, int Quantity, string? FactoryCode, string[]? Serials = null);
+public record IssueLabelsRequest(string RollId, int Quantity, string[]? Serials = null);
 public record SiteUrlRequest(string SiteUrl);

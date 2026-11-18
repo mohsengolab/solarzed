@@ -10,10 +10,9 @@ import { printQrLabels } from "./qrPrint";
 import { printBarcodeLabels } from "./barcode";
 
 type Role = "superadmin" | "admin" | "carton";
-type Roll = { id: string; modelCode: string; type: "tint" | "ppf"; qc: string; status: string };
+type Roll = { id: string; modelCode: string; type: "tint" | "ppf"; qc: string; status: string; supplier: string; lengthM: number | null };
 type CoverageSettings = { durations: Record<"tint" | "ppf", { film: number | null; install: number | null }> };
 const message = (error: unknown) => error instanceof Error ? fa(error.message) : fa("The request failed.");
-const FACTORY_KEY = "solarzed:factory-code";
 
 export default function BoxLabelsPanel({ onSettings, role }: { onSettings: () => void; role: Role }) {
   const canManage = role !== "carton";
@@ -21,7 +20,6 @@ export default function BoxLabelsPanel({ onSettings, role }: { onSettings: () =>
   const [rolls, setRolls] = useState<Roll[]>([]);
   const [rollId, setRollId] = useState("");
   const [serialText, setSerialText] = useState("");
-  const [factory, setFactory] = useState("");
   const [site, setSite] = useState("https://solarzed.com");
   const [smsReady, setSmsReady] = useState(false);
   const [selected, setSelected] = useState<string[]>([]);
@@ -44,7 +42,6 @@ export default function BoxLabelsPanel({ onSettings, role }: { onSettings: () =>
     setLoaded(true);
   }
   useEffect(() => {
-    try { const saved = localStorage.getItem(FACTORY_KEY); if (saved) Promise.resolve().then(() => setFactory(saved)); } catch { /* storage unavailable */ }
     Promise.resolve().then(load).catch(ex => { setError(message(ex)); setLoaded(true); });
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
@@ -60,8 +57,7 @@ export default function BoxLabelsPanel({ onSettings, role }: { onSettings: () =>
   async function create(event: FormEvent) {
     event.preventDefault(); setError(""); setBusy(true);
     try {
-      const result = await issueBoxLabels(rollId, serials, factory);
-      try { localStorage.setItem(FACTORY_KEY, factory.trim().toUpperCase()); } catch { /* storage unavailable */ }
+      const result = await issueBoxLabels(rollId, serials);
       setSerialText("");
       await load(); setSelected(result.labels.map(label => label.id));
     } catch (ex) { setError(message(ex)); } finally { setBusy(false); }
@@ -100,6 +96,7 @@ export default function BoxLabelsPanel({ onSettings, role }: { onSettings: () =>
   // One roll number per line (a barcode scanner types the number and presses Enter).
   const serials = [...new Set(serialText.split(/[\s,]+/).map(item => item.trim().toUpperCase()).filter(Boolean))];
   const roll = rolls.find(item => item.id === rollId);
+  const validSupplier = !!roll && /^[A-Za-z]{3}$/.test(roll.supplier.trim());
   const period = roll && coverage?.durations[roll.type];
   const selectBox = (label: BoxLabel) => <input aria-label={`${fa("Select")} ${label.id}`} type="checkbox" disabled={!!label.activatedAt} checked={selected.includes(label.id)} onChange={event => setSelected(items => event.target.checked ? [...items, label.id] : items.filter(id => id !== label.id))} />;
   const sizeFields = <div className={labelsStyle.sizes}><label>{fa("Width (mm)")}<input type="number" min={60} max={150} value={width} onChange={event => setWidth(Number(event.target.value))} /></label><label>{fa("Height (mm)")}<input type="number" min={40} max={150} value={height} onChange={event => setHeight(Number(event.target.value))} /></label></div>;
@@ -148,9 +145,9 @@ export default function BoxLabelsPanel({ onSettings, role }: { onSettings: () =>
           <label>{fa("Product roll")}<select required value={rollId} onChange={event => setRollId(event.target.value)}><option value="">{fa("Select a roll")}</option>{rolls.map(item => <option key={item.id} value={item.id}>{item.id} · {item.qc} · {item.status}</option>)}</select></label>
           {roll && !period?.film && <div className={labelsStyle.notice}>{fa("Set the approved warranty period for")} {roll.type === "tint" ? fa("Window film") : "PPF"} {fa("before generating labels.")} <button type="button" className={styles.ghost} onClick={onSettings}>{fa("Open coverage settings")}</button></div>}
           {roll?.qc === "approved" && roll.status === "instock" && <><p className={labelsStyle.help}>{fa("You can generate and print QR labels now. Mark the roll as shipped when it is ready for customers to activate.")}</p><button type="button" className={styles.ghost} disabled={busy} onClick={async () => { setBusy(true); setError(""); try { await releaseRoll(roll.id); await load(); } catch (ex) { setError(message(ex)); } finally { setBusy(false); } }}>{fa("Mark roll as shipped — enable customer activation")}</button></>}
-          <label>کد کارخانه — محرمانه، روی کارت چاپ نمی‌شود (۱ تا ۴ حرف انگلیسی، مثلاً SA یا BF)<input dir="ltr" required maxLength={4} pattern="[A-Za-z]{1,4}" value={factory} onChange={event => setFactory(event.target.value.replace(/[^A-Za-z]/g, "").toUpperCase())} /></label>
+          {roll && <p className={labelsStyle.help}>{validSupplier ? <>کد کارخانه (از تأمین‌کنندهٔ رول): <code dir="ltr">{roll.supplier.trim().toUpperCase()}</code> — روی کارت چاپ نمی‌شود.</> : "کد سه‌حرفی تأمین‌کننده را در موجودی رول اصلاح کنید."} {(roll.lengthM ?? 0) > 0 ? ` طول هر رول: ${roll.lengthM} متر.` : " طول رول را در موجودی ثبت کنید."}</p>}
           <label>Roll No کارتن‌ها (هر خط یکی، با بارکدخوان) — {serials.length.toLocaleString("fa-IR")} کارتن<textarea dir="ltr" rows={5} required value={serialText} onChange={event => setSerialText(event.target.value)} placeholder={"CPT30614374\nCPT30614375"} /></label>
-          <button className={styles.btnPrimary} disabled={busy || !loaded || !roll || !period?.film || roll.qc !== "approved" || roll.status === "void" || !factory || !serials.length || serials.length > 200}>{busy ? fa("Working…") : "ساخت برچسب و کارت گارانتی"}</button>
+          <button className={styles.btnPrimary} disabled={busy || !loaded || !roll || !period?.film || roll.qc !== "approved" || roll.status === "void" || !validSupplier || !(roll.lengthM && roll.lengthM > 0) || !serials.length || serials.length > 200}>{busy ? fa("Working…") : "ساخت برچسب و کارت گارانتی"}</button>
         </form>
         <div className={`${styles.card} ${styles.adminForm}`}>
           <h2>{fa("Print setup")}</h2>
@@ -164,8 +161,8 @@ export default function BoxLabelsPanel({ onSettings, role }: { onSettings: () =>
       </div>
       <div className={`${styles.card} ${labelsStyle.list}`}>
         <h2>{fa("Issued labels")}</h2>
-        <div className={labelsStyle.scroll}><table className={styles.table}><thead><tr><th>{fa("Select")}</th><th>{fa("Box serial")}</th><th>کد کارت گارانتی</th><th>{fa("Product / roll")}</th><th>{fa("Status")}</th><th>{fa("Holder")}</th><th>{fa("Warranty")}</th></tr></thead><tbody>{labels.map(label => <tr key={label.id}>
-          <td>{selectBox(label)}</td><td><code dir="ltr">{label.id}</code></td><td><code dir="ltr">{label.fullCode ?? "—"}</code></td><td>{label.product}<br /><small>{label.rollId}</small></td><td>{label.activatedAt ? fa("Activated") : rolls.find(item => item.id === label.rollId)?.status === "instock" ? fa("Awaiting shipment") : fa("Unused")}</td><td>{holderName(label.holder, label.holderPhone)}</td><td><code dir="ltr">{label.warrantyCode ?? "—"}</code></td>
+        <div className={labelsStyle.scroll}><table className={styles.table}><thead><tr><th>{fa("Select")}</th><th>{fa("Box serial")}</th><th>کد کارت گارانتی</th><th>{fa("Product / roll")}</th><th>مانده (متر)</th><th>{fa("Status")}</th><th>{fa("Holder")}</th><th>{fa("Warranty")}</th></tr></thead><tbody>{labels.map(label => <tr key={label.id}>
+          <td>{selectBox(label)}</td><td><code dir="ltr">{label.id}</code></td><td><code dir="ltr">{label.fullCode ?? "—"}</code></td><td>{label.product}<br /><small>{label.rollId}</small></td><td>{label.remainingLengthM ?? "—"}</td><td>{label.activatedAt ? fa("Activated") : rolls.find(item => item.id === label.rollId)?.status === "instock" ? fa("Awaiting shipment") : fa("Unused")}</td><td>{holderName(label.holder, label.holderPhone)}</td><td><code dir="ltr">{label.warrantyCode ?? "—"}</code></td>
         </tr>)}</tbody></table></div>
         {loaded && !labels.length && <p className={styles.empty}>{fa("No box labels issued yet.")}</p>}
       </div>
