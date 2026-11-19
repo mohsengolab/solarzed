@@ -161,6 +161,24 @@ public class BoxLabelTests
     }
 
     [Fact]
+    public async Task DeletingARollAlwaysWorksAndKeepsItsWarranties()
+    {
+        using var f = new Fixture();
+        var (label, code) = await f.Issue();
+        await new BoxTransferService(f.Db).Transfer(new([label.Id], "Rep", "09125555555", null, null), "admin");
+        await f.Service.Activate(new ActivateBoxRequest(code, Registration(), 30m), Customer);
+        var admin = new Solarzed.Api.Controllers.AdminController(f.Db, new ConfigurationBuilder().Build());
+        Assert.IsType<Microsoft.AspNetCore.Mvc.OkObjectResult>(await admin.DeleteRoll("SZ-TEST-26-000001"));
+        using var check = new SqliteDb(f.Options);
+        Assert.Empty(await check.Rolls.ToListAsync());
+        Assert.Empty(await check.BoxLabels.ToListAsync());
+        Assert.Empty(await check.BoxTransfers.ToListAsync());
+        var warranty = await check.WarrantyRegistrations.SingleAsync();
+        Assert.Null(warranty.RollId);
+        Assert.Equal(30m, warranty.UsedLengthM);
+    }
+
+    [Fact]
     public async Task SignedInInstallerRegistersSeparateVehiclesFromTheSameRollAndInvoice()
     {
         using var f = new Fixture();
