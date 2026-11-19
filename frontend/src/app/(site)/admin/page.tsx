@@ -814,7 +814,7 @@ function RollsPanel() {
   }
 
   async function deleteRoll(id: string) {
-    if (!window.confirm(`رول ${id} حذف شود؟ اگر ثبت گارانتی یا برچسب کارتن داشته باشد حذف نمی‌شود.`)) return;
+    if (!window.confirm(`رول ${id} حذف شود؟ برچسب‌های کارتن این رول هم حذف می‌شوند؛ گارانتی‌های ثبت‌شده باقی می‌مانند ولی از رول جدا می‌شوند. این کار برگشت‌پذیر نیست.`)) return;
     setMsg("");
     try { await adminDeleteRoll(id); setMsg("رول حذف شد."); list.reload(); }
     catch (e) { setMsg(fa(errorText(e, "حذف ناموفق بود."))); }
@@ -958,7 +958,7 @@ function RollsPanel() {
                 <td>{new Date(r.receivedAt).toLocaleDateString("fa-IR")}</td>
                 <td>
                   <button type="button" className={styles.ghost} onClick={() => { setEdit(r); setNote(""); setMsg(""); }}>مدیریت</button>
-                  <button type="button" className={styles.danger} disabled={r.installs > 0} title={r.installs > 0 ? "این رول ثبت گارانتی دارد" : undefined} onClick={() => deleteRoll(r.id)}>حذف</button>
+                  <button type="button" className={styles.danger} onClick={() => deleteRoll(r.id)}>حذف</button>
                 </td>
               </tr>
             ))}

@@ -82,22 +82,19 @@ public class ManagementTests
     }
 
     [Fact]
-    public async Task RollDeleteIsBlockedByRegistrationsAndLabelsThenWorks()
+    public async Task RollDeleteRemovesLabelsAndUnlinksRegistrations()
     {
         using var db = Database(); var admin = new AdminController(db, new ConfigurationBuilder().Build());
         db.Rolls.Add(new Roll { Id = "R", ModelCode = "TEST", Type = WarrantyType.Tint, Batch = "B", Supplier = "S" });
         db.WarrantyRegistrations.Add(Registration("R"));
-        await db.SaveChangesAsync();
-        Assert.IsType<ConflictObjectResult>(await admin.DeleteRoll("R"));
-
-        db.WarrantyRegistrations.Remove(db.WarrantyRegistrations.Single());
         db.BoxLabels.Add(new BoxLabel { Id = "L1", TokenHash = "h", ProtectedToken = "p", RollId = "R", Product = "TEST", Type = WarrantyType.Tint, FilmYears = 5 });
         await db.SaveChangesAsync();
-        Assert.IsType<ConflictObjectResult>(await admin.DeleteRoll("R"));
 
-        db.BoxLabels.Remove(db.BoxLabels.Single()); await db.SaveChangesAsync();
         Assert.IsType<OkObjectResult>(await admin.DeleteRoll("R"));
         Assert.Empty(db.Rolls);
+        Assert.Empty(db.BoxLabels);
+        Assert.Null(db.WarrantyRegistrations.Single().RollId);
+        Assert.IsType<NotFoundResult>(await admin.DeleteRoll("R"));
     }
 
     [Fact]

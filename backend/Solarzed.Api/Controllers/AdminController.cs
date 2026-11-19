@@ -369,7 +369,10 @@ public class AdminController(AppDbContext db, IConfiguration cfg) : ControllerBa
         return Ok(new { ok = true });
     }
 
-    /// <summary>Deletes a roll. Blocked while warranty registrations or carton labels still reference it.</summary>
+    /// <summary>
+    /// Deletes a roll in every case. Its carton labels (with their transfers and activation challenges) go with it;
+    /// warranty registrations are customer records, so they are kept and only unlinked from the roll.
+    /// </summary>
     [HttpDelete("rolls/{id}")]
     [Authorize(Policy = "AdminPolicy")]
     public async Task<IActionResult> DeleteRoll(string id)
@@ -377,17 +380,32 @@ public class AdminController(AppDbContext db, IConfiguration cfg) : ControllerBa
         var roll = await db.Rolls.FirstOrDefaultAsync(r => r.Id == id);
         if (roll == null) return NotFound();
 
-        if (await db.WarrantyRegistrations.AnyAsync(w => w.RollId == id))
-            return Conflict(new { error = "This roll has warranty registrations; it cannot be deleted. Mark it void instead." });
-        if (await db.BoxLabels.AnyAsync(b => b.RollId == id))
-            return Conflict(new { error = "This roll has carton labels; it cannot be deleted. Mark it void instead." });
+        var labels = await db.BoxLabels.Where(b => b.RollId == id).ToListAsync();
+        var labelIds = labels.Select(b => b.Id).ToList();
+        var transfers = await db.BoxTransfers.Where(t => labelIds.Contains(t.LabelId)).ToListAsync();
+        var challenges = await db.ActivationChallenges.Where(c => labelIds.Contains(c.LabelId)).ToListAsync();
+        var warranties = await db.WarrantyRegistrations.Where(w => w.RollId == id).ToListAsync();
+
+        foreach (var w in warranties)
+        {
+            AuditLog.Add(db, Actor, "warranty", w.Code, "roll_unlinked", AuditLog.Diff(("rollId", id, null)));
+            w.RollId = null;
+        }
+        foreach (var b in labels)
+            AuditLog.Add(db, Actor, "box_label", b.Id, "deleted", AuditLog.Diff(
+                ("rollId", b.RollId, null), ("cardCode", b.CardCode, null), ("holder", b.Holder, null), ("warrantyCode", b.WarrantyCode, null)));
+        db.BoxTransfers.RemoveRange(transfers);
+        db.ActivationChallenges.RemoveRange(challenges);
+        db.BoxLabels.RemoveRange(labels);
 
         AuditLog.Add(db, Actor, "roll", roll.Id, "deleted", AuditLog.Diff(
             ("modelCode", roll.ModelCode, null), ("batch", roll.Batch, null), ("supplier", roll.Supplier, null),
-            ("qc", roll.Qc, null), ("status", roll.Status, null)));
+            ("qc", roll.Qc, null), ("status", roll.Status, null),
+            ("labels", labels.Count, null), ("warrantiesUnlinked", warranties.Count, null)));
         db.Rolls.Remove(roll);
+        // One SaveChanges = one transaction: either everything goes or nothing does.
         await db.SaveChangesAsync();
-        return Ok(new { ok = true });
+        return Ok(new { ok = true, labelsDeleted = labels.Count, warrantiesUnlinked = warranties.Count });
     }
 
     // ── Settings ─────────────────────────────────────────────────────────────
