@@ -41,6 +41,9 @@ const securityHeaders = [
 const nextConfig: NextConfig = {
   distDir: process.env.NEXT_DIST_DIR ?? ".next",
   poweredByHeader: false,
+  // Never let `next build` stop for an interactive upgrade prompt: the deploy runs it while the
+  // live site is being replaced. Upgrades are done on purpose, not in the middle of a deploy.
+  experimental: { agentUpgrade: false },
   compress: true,
   async headers() {
     return [
