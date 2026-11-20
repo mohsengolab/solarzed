@@ -51,7 +51,7 @@ export default function CoveragePage() {
           <Link href="/warranty">Warranty</Link>
           <Link href="/coverage">Coverage</Link>
           <Link href="/contact">Contact</Link>
-          <Link href="/register" className={styles.navCta}>Register</Link>
+          <Link href="/activate" className={styles.navCta}>Activate</Link>
         </nav>
       </header>
 

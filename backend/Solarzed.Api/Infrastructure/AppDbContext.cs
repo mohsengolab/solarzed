@@ -20,6 +20,15 @@ public class AppDbContext(DbContextOptions<AppDbContext> options) : DbContext(op
     public DbSet<Ticket> Tickets => Set<Ticket>();
     public DbSet<TicketReply> TicketReplies => Set<TicketReply>();
 
+    // Every timestamp is written as DateTime.UtcNow, but SQL Server's datetime2 has no time zone, so values come back
+    // as Kind=Unspecified and serialize without "Z". Browsers then read them as local time (3.5 h off in Tehran).
+    // Mark them UTC on the way out of the database so the JSON always carries "Z".
+    protected override void ConfigureConventions(ModelConfigurationBuilder configurationBuilder)
+    {
+        configurationBuilder.Properties<DateTime>().HaveConversion<UtcDateTimeConverter>();
+        configurationBuilder.Properties<DateTime?>().HaveConversion<NullableUtcDateTimeConverter>();
+    }
+
     protected override void OnModelCreating(ModelBuilder mb)
     {
         mb.Entity<WarrantyClaim>().HasOne<WarrantyRegistration>().WithMany().HasForeignKey(x => x.WarrantyCode).OnDelete(DeleteBehavior.Restrict);

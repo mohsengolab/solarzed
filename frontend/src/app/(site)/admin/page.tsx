@@ -814,7 +814,7 @@ function RollsPanel() {
   }
 
   async function deleteRoll(id: string) {
-    if (!window.confirm(`رول ${id} حذف شود؟ برچسب‌های کارتن این رول هم حذف می‌شوند؛ گارانتی‌های ثبت‌شده باقی می‌مانند ولی از رول جدا می‌شوند. این کار برگشت‌پذیر نیست.`)) return;
+    if (!window.confirm(`رول ${id} حذف شود؟ کارتن‌هایی که هنوز فعال نشده‌اند حذف می‌شوند. کارتن‌های فعال‌شده و گارانتی‌هایشان باقی می‌مانند و کارت مشتری همچنان کار می‌کند، ولی از رول جدا می‌شوند. این کار برگشت‌پذیر نیست.`)) return;
     setMsg("");
     try { await adminDeleteRoll(id); setMsg("رول حذف شد."); list.reload(); }
     catch (e) { setMsg(fa(errorText(e, "حذف ناموفق بود."))); }

@@ -290,19 +290,26 @@ export interface WarrantyPublic {
   flags: string[];
 }
 
+/** Public certificate check: no plate, VIN, invoice, installer or seller. Owners see full records in /account. */
+export interface WarrantyCheck {
+  code: string;
+  type: "tint" | "ppf";
+  make: string;
+  model: string;
+  installed: string;
+  areas: string[];
+  status: "pending" | "active" | "rejected";
+  statusLabel: string;
+  statusNote?: string | null;
+  coverage?: { filmEnds?: string; installEnds?: string } | null;
+}
+
 export interface LookupResult {
-  records: WarrantyPublic[];
+  records: WarrantyCheck[];
 }
 
 export function lookupWarranty(q: string): Promise<LookupResult> {
   return apiFetch(`/api/warranty?q=${encodeURIComponent(q)}`);
-}
-
-export function registerWarranty(data: Record<string, unknown>) {
-  return apiFetch<{ code: string; flags: string[] }>("/api/warranty/register", {
-    method: "POST",
-    body: JSON.stringify(data),
-  });
 }
 
 // ── Admin ────────────────────────────────────────────────────────────────────

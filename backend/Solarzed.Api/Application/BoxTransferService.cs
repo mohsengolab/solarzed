@@ -16,9 +16,9 @@ public record TransferRequest(string[] Serials, string? ToHolder, string? ToPhon
 public record PortalTransferRequest(string[] Serials, string? ToPhone, string? ToName, string? Note);
 public record TransferView(long Id, string LabelId, string BatchId, string? FromHolder, string? FromPhone, string? ToHolder, string? ToPhone, string? Note, string Actor, DateTime At);
 public record TransferResult(string BatchId, string? ToHolder, string? ToPhone, TransferView[] Transfers);
-public record BoxHistory(string Id, string Product, string RollId, bool Activated, string? Holder, string? HolderPhone, DateTime? HeldSince, TransferView[] Transfers);
+public record BoxHistory(string Id, string Product, string? RollId, bool Activated, string? Holder, string? HolderPhone, DateTime? HeldSince, TransferView[] Transfers);
 public record HolderSummary(string? Holder, string? Phone, int Boxes);
-public record HeldBox(string Id, string Product, string Type, string RollId, DateTime? HeldSince);
+public record HeldBox(string Id, string Product, string Type, string? RollId, DateTime? HeldSince);
 public record MyBoxes(HeldBox[] Boxes, TransferView[] Outgoing);
 
 /// <summary>

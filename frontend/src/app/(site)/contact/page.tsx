@@ -28,7 +28,7 @@ export default function ContactPage() {
           <Link href="/warranty">Warranty</Link>
           <Link href="/coverage">Coverage</Link>
           <Link href="/contact">Contact</Link>
-          <Link href="/register" className={styles.navCta}>Register</Link>
+          <Link href="/activate" className={styles.navCta}>Activate</Link>
         </nav>
       </header>
 
@@ -83,11 +83,10 @@ export default function ContactPage() {
 
         <section className={styles.noteSection}>
           <div className={styles.noteBox}>
-            <strong>Installer registration</strong>
+            <strong>Dealers &amp; installers</strong>
             <p>
-              If you&rsquo;re an authorised installer, register customer warranties through the{" "}
-              <Link href="/register">installer registration portal</Link>.
-              For admin access to the portal, contact your SOLARZED regional representative.
+              Dealers and installers <Link href="/account">sign in to their account</Link> with the mobile number
+              SOLARZED sent their cartons to. Customers activate their warranty with the card inside the box.
             </p>
           </div>
         </section>

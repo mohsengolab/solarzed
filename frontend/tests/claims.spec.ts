@@ -6,9 +6,11 @@ test("warranty claim workflow and change log through the admin interface", async
   expect((await request.get(`${api}/api/admin/claims`)).status()).toBe(401);
   expect((await request.get(`${api}/api/admin/audit`)).status()).toBe(401);
 
-  // A registered warranty to claim against (public registration form).
+  // A registered warranty to claim against (staff manual registration).
   const stamp = Date.now().toString();
-  const reg = await request.post(`${api}/api/registrations`, { data: {
+  const adminToken = (await (await request.post(`${api}/api/admin/login`, { data: { username: "admin", password: "local-browser-tests-only" } })).json()).token;
+  const staff = { Authorization: `Bearer ${adminToken}` };
+  const reg = await request.post(`${api}/api/registrations`, { headers: staff, data: {
     type: "tint", make: "Toyota", model: "Camry", owner: "Claim Browser Test", phone: "0912" + stamp.slice(-7), plate: "12B" + stamp.slice(-3),
     vin: "1HGCM82633A" + stamp.slice(-6), filmSerial: `QA-SERIAL-${stamp}`, invoiceNumber: `INV-${stamp}`, installed: "2026-01-10",
     sellerName: "QA Seller", sellerPhone: "09120000001", installer: "QA Installer", windows: ["rear"],

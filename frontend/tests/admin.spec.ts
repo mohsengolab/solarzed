@@ -45,7 +45,11 @@ test("admin login, settings persistence, rolls and warranty decisions against re
   await expect(page.getByRole("cell", { name: batch, exact: true })).toBeVisible();
 
   // Test data is confined to SolarzedBrowserTests, never the application database.
-  const response = await request.post(`${api}/api/registrations`, { data: {
+  // Manual registrations are staff-only; anonymous callers are refused.
+  const adminToken = (await (await request.post(`${api}/api/admin/login`, { data: { username: "admin", password: "local-browser-tests-only" } })).json()).token;
+  const staff = { Authorization: `Bearer ${adminToken}` };
+  expect((await request.post(`${api}/api/registrations`, { data: {} })).status()).toBe(401);
+  const response = await request.post(`${api}/api/registrations`, { headers: staff, data: {
     type: "tint", make: "BrowserTest", model: "Camry", owner: "Test Owner",
     phone: "09120000000", plate: "E2E", vin: "JTDBE32K123456789",
     filmSerial: `E2E-${Date.now()}`, invoiceNumber: batch, installed: "2026-01-15",
@@ -57,7 +61,7 @@ test("admin login, settings persistence, rolls and warranty decisions against re
   await page.getByRole("row").filter({ hasText: code }).click();
   await page.getByRole("button", { name: "Save decision" }).click();
   await expect(page.getByRole("heading", { name: `Decision — ${code}` })).toBeHidden();
-  const lookup = await request.get(`${api}/api/registrations/${code}`);
+  const lookup = await request.get(`${api}/api/registrations/${code}`, { headers: staff });
   expect((await lookup.json()).coverage).toEqual({ filmEnds: "2031-01-14", installEnds: "2028-01-14" });
   await page.getByRole("button", { name: "active", exact: true }).click();
   await page.getByRole("row").filter({ hasText: code }).click();
@@ -67,7 +71,7 @@ test("admin login, settings persistence, rolls and warranty decisions against re
   await page.getByRole("dialog", { name: "Warranty decision" }).getByRole("textbox").fill("Browser test rejection");
   await page.getByRole("button", { name: "Save decision" }).click();
   await expect(page.getByRole("heading", { name: `Decision — ${code}` })).toBeHidden();
-  const rejected = await (await request.get(`${api}/api/registrations/${code}`)).json();
+  const rejected = await (await request.get(`${api}/api/registrations/${code}`, { headers: staff })).json();
   expect(rejected.status).toBe("rejected");
   expect(rejected.coverage).toBeNull();
   await page.getByRole("button", { name: "Sign out" }).click();
