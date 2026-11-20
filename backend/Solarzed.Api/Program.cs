@@ -53,6 +53,9 @@ builder.Services.AddRateLimiter(options =>
         ClientKey(context), _ => new SlidingWindowRateLimiterOptions { PermitLimit = 600, Window = TimeSpan.FromMinutes(1), SegmentsPerWindow = 6, QueueLimit = 0 }));
     options.AddPolicy("activation", context => RateLimitPartition.GetFixedWindowLimiter(
         ClientKey(context), _ => new FixedWindowRateLimiterOptions { PermitLimit = 30, Window = TimeSpan.FromMinutes(1), QueueLimit = 0 }));
+    // Public warranty check: enough for people checking their own certificate, too slow to enumerate 7-digit numbers.
+    options.AddPolicy("warranty-lookup", context => RateLimitPartition.GetFixedWindowLimiter(
+        ClientKey(context), _ => new FixedWindowRateLimiterOptions { PermitLimit = 20, Window = TimeSpan.FromMinutes(1), QueueLimit = 0 }));
     options.AddPolicy("admin-login", context => RateLimitPartition.GetFixedWindowLimiter(
         ClientKey(context), _ => new FixedWindowRateLimiterOptions { PermitLimit = 10, Window = TimeSpan.FromMinutes(10), QueueLimit = 0 }));
     options.AddPolicy("portal-otp", context => RateLimitPartition.GetFixedWindowLimiter(

@@ -25,6 +25,11 @@ public record WarrantyLimitedPublic(
     string Type, string Make, string Model, string Plate, string FilmSerial,
     DateOnly Installed, string SellerName, string Status, string StatusLabel);
 
+/// <summary>Public certificate check: enough to confirm coverage, nothing that identifies the owner or the vehicle.</summary>
+public record WarrantyCheckPublic(
+    string Code, string Type, string Make, string Model, DateOnly Installed, string[] Areas,
+    string Status, string StatusLabel, string? StatusNote, CoveragePublic? Coverage);
+
 public record CoveragePublic(DateOnly? FilmEnds, DateOnly? InstallEnds);
 
 public static class WarrantyService
@@ -189,6 +194,13 @@ public static class WarrantyService
             SellerName: w.SellerName, SellerPhoneMasked: spMasked, Installer: w.Installer,
             Areas: areas, Status: w.Status.ToString().ToLower(), StatusLabel: statusLabel,
             StatusNote: statusNote, Coverage: coverage, Flags: [], UsedLengthM: w.UsedLengthM);
+    }
+
+    public static WarrantyCheckPublic ToCheck(WarrantyRegistration w)
+    {
+        var full = ToPublic(w);
+        return new WarrantyCheckPublic(full.Code, full.Type, full.Make, full.Model, full.Installed, full.Areas,
+            full.Status, full.StatusLabel, full.StatusNote, full.Coverage);
     }
 
     public static WarrantyLimitedPublic ToLimitedPublic(WarrantyRegistration w)

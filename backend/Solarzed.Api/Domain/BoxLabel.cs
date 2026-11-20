@@ -8,7 +8,8 @@ public class BoxLabel
     [Key, MaxLength(32)] public string Id { get; set; } = default!;
     [MaxLength(64)] public string TokenHash { get; set; } = default!;
     public string ProtectedToken { get; set; } = default!;
-    [MaxLength(60)] public string RollId { get; set; } = default!;
+    // Null once the roll was deleted: an activated carton stays, so its card keeps working for the customer.
+    [MaxLength(60)] public string? RollId { get; set; }
     [MaxLength(24)] public string Product { get; set; } = default!;
     public WarrantyType Type { get; set; }
     public int FilmYears { get; set; }

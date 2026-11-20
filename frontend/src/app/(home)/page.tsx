@@ -71,7 +71,7 @@ export default function HomePage() {
               <h1 className="sz-hero-title">Solarzed<br /><span>Window Films</span></h1>
               <p>Premium automotive film, installed with precision — and a verified digital record for every window you tint.</p>
               <div className="sz-hero-actions">
-                <Link className="sv-button" href="/register">Register installation <i>↗</i></Link>
+                <Link className="sv-button" href="/activate">Activate warranty <i>↗</i></Link>
                 <Link className="sz-ghost" href="/warranty">Check warranty</Link>
               </div>
             </div>
@@ -198,7 +198,7 @@ export default function HomePage() {
                 <li><span>02</span> Twelve-panel map for paint protection film</li>
                 <li><span>03</span> Vehicle, VIN, product and installer details</li>
               </ul>
-              <Link className="text-link" href="/register">Explore dealer registration <span>→</span></Link>
+              <Link className="text-link" href="/account">Dealer sign-in <span>→</span></Link>
             </div>
           </div>
         </section>
@@ -210,7 +210,7 @@ export default function HomePage() {
               <p>Choose your next step.</p>
             </div>
             <div className="sv-registration-actions">
-              <Link href="/register"><b>Register warranty</b><span>For sellers &amp; installers</span><i>↗</i></Link>
+              <Link href="/activate"><b>Activate warranty</b><span>Scan the card inside your Solarzed box</span><i>↗</i></Link>
               <Link href="/warranty"><b>Check warranty</b><span>Find your installation by code</span><i>↗</i></Link>
               <Link href="/account"><b>My account</b><span>Cartons, transfers &amp; your warranties</span><i>↗</i></Link>
             </div>

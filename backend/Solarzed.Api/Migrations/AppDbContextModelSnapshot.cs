@@ -208,7 +208,6 @@ namespace Solarzed.Api.Migrations
                         .HasColumnType("int");
 
                     b.Property<string>("RollId")
-                        .IsRequired()
                         .HasMaxLength(60)
                         .HasColumnType("nvarchar(60)");
 
@@ -881,8 +880,7 @@ namespace Solarzed.Api.Migrations
                     b.HasOne("Solarzed.Api.Domain.Roll", null)
                         .WithMany()
                         .HasForeignKey("RollId")
-                        .OnDelete(DeleteBehavior.Restrict)
-                        .IsRequired();
+                        .OnDelete(DeleteBehavior.Restrict);
 
                     b.HasOne("Solarzed.Api.Domain.WarrantyRegistration", null)
                         .WithMany()

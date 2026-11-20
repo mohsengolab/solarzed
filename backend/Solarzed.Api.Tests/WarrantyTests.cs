@@ -1,4 +1,4 @@
-﻿using System.Text.Json;
+using System.Text.Json;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Configuration;
@@ -65,6 +65,15 @@ public class WarrantyTests
     [InlineData("2024-02-29", 1, "2025-02-27")]
     public void CoverageEndsOneDayBeforeAnniversary(string installed, int years, string expected) =>
         Assert.Equal(DateOnly.Parse(expected), WarrantyService.AddYears(DateOnly.Parse(installed), years));
+
+    [Fact]
+    public void ManualRegistrationIsStaffOnlyAndThereIsNoAnonymousRegisterEndpoint()
+    {
+        var policy = typeof(RegistrationController).GetCustomAttributes(typeof(Microsoft.AspNetCore.Authorization.AuthorizeAttribute), true)
+            .Cast<Microsoft.AspNetCore.Authorization.AuthorizeAttribute>().Single().Policy;
+        Assert.Equal("AdminPolicy", policy);
+        Assert.Null(typeof(WarrantyController).GetMethod("Register"));
+    }
 
     [Fact]
     public async Task RegistrationPersistsAndRejectsDuplicateSerialInvoice()
@@ -166,21 +175,41 @@ public class WarrantyTests
     }
 
     [Fact]
-    public async Task LookupByCodeVinAndPhoneReturnsMaskedRecords()
+    public async Task PublicLookupByCodeOrVinReturnsOnlyCertificateFields()
+    {
+        using var db = Database();
+        var row = WarrantyService.Validate(Request()).Entity!;
+        db.WarrantyRegistrations.Add(row);
+        var card = WarrantyService.Validate(Request() with { Vin = "JTDBE32K123456780", FilmSerial = "CPT30614374", InvoiceNumber = "INV-CARD" }).Entity!;
+        card.Code = "4827153";
+        db.WarrantyRegistrations.Add(card);
+        await db.SaveChangesAsync();
+        var controller = new WarrantyController(db);
+        foreach (var (by, query, code) in new[] {
+            ("code", row.Code, row.Code), ("vin", row.Vin.ToLowerInvariant(), row.Code), ((string?)null, row.Code, row.Code),
+            (null, "4827153", "4827153"), (null, "CPT30614374-4827153", "4827153") })
+        {
+            var response = Assert.IsType<OkObjectResult>(await controller.Lookup(by, query));
+            var json = JsonSerializer.Serialize(response.Value);
+            using var doc = JsonDocument.Parse(json);
+            var record = Assert.Single(doc.RootElement.GetProperty("records").EnumerateArray());
+            Assert.Equal(code, record.GetProperty("Code").GetString());
+            foreach (var hidden in new[] { "Owner", "Plate", "VinMasked", "InvoiceNumber", "Installer", "SellerName", "FilmSerial" })
+                Assert.False(record.TryGetProperty(hidden, out _), hidden);
+            Assert.DoesNotContain(row.Plate, json);
+        }
+    }
+
+    [Fact]
+    public async Task PublicLookupByMobileIsRefused()
     {
         using var db = Database();
         var row = WarrantyService.Validate(Request()).Entity!;
         db.WarrantyRegistrations.Add(row);
         await db.SaveChangesAsync();
         var controller = new WarrantyController(db);
-        foreach (var (by, query) in new[] { ("code", row.Code), ("vin", row.Vin.ToLowerInvariant()), ("phone", row.Phone) })
-        {
-            var response = Assert.IsType<OkObjectResult>(await controller.Lookup(by, query));
-            using var json = JsonDocument.Parse(JsonSerializer.Serialize(response.Value));
-            var record = Assert.Single(json.RootElement.GetProperty("records").EnumerateArray());
-            Assert.Equal(row.Code, record.GetProperty("Code").GetString());
-            Assert.False(record.TryGetProperty("Owner", out _));
-        }
+        Assert.IsType<BadRequestObjectResult>(await controller.Lookup("phone", row.Phone));
+        Assert.IsType<BadRequestObjectResult>(await controller.Lookup(null, row.Phone));
     }
 
     [Fact]

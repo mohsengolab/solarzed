@@ -10,10 +10,10 @@ using Solarzed.Api.Infrastructure;
 namespace Solarzed.Api.Application;
 
 public class ActivationError(int status, string message) : Exception(message) { public int Status => status; }
-public record LabelView(string Id, string RollId, string Product, string Type, int FilmYears, int? InstallYears,
+public record LabelView(string Id, string? RollId, string Product, string Type, int FilmYears, int? InstallYears,
     DateTime CreatedAt, DateTime? ActivatedAt, string? WarrantyCode, string ActivationUrl, string? Holder, string? HolderPhone, DateTime? HeldSince,
     string? FactoryCode, string? CardCode, string? FullCode, decimal? RemainingLengthM);
-public record LabelSerialView(string Id, string RollId, string Product, string Type, DateTime CreatedAt, DateTime? ActivatedAt, string? Holder, string? HolderPhone, DateTime? HeldSince);
+public record LabelSerialView(string Id, string? RollId, string Product, string Type, DateTime CreatedAt, DateTime? ActivatedAt, string? Holder, string? HolderPhone, DateTime? HeldSince);
 public record ActivationInfo(string Id, string Product, string Type, bool Activated, int FilmYears, int? InstallYears, bool SmsAvailable, bool Released,
     string? FactoryCode, string? WarrantyCode, bool CanRegister, decimal? RemainingLengthM);
 public record ActivateBoxRequest(string Token, RegisterRequest Registration, decimal? UsedLengthM = null);
@@ -182,8 +182,10 @@ public class BoxLabelService(AppDbContext db, IDataProtectionProvider protection
     public async Task<ActivationInfo> Info(string token, string? phone = null)
     {
         var label = await Find(token);
-        var roll = await db.Rolls.FindAsync(label.RollId);
-        var released = roll?.Qc == RollQc.Approved && roll.Status is RollStatus.Shipped or RollStatus.Consumed;
+        var roll = label.RollId is { } rollId ? await db.Rolls.FindAsync(rollId) : null;
+        // A carton whose roll was deleted after activation was released when it was first used.
+        var released = roll == null ? label.ActivatedAt.HasValue
+            : roll.Qc == RollQc.Approved && roll.Status is RollStatus.Shipped or RollStatus.Consumed;
         var started = label.ActivatedAt.HasValue;
         var remaining = Remaining(label, roll);
         var canRegister = remaining is > 0 && (!started || (phone != null && label.HolderPhone == phone));
@@ -204,8 +206,10 @@ public class BoxLabelService(AppDbContext db, IDataProtectionProvider protection
         var first = !label.ActivatedAt.HasValue;
         if (!first && (label.RemainingLengthM == null || label.HolderPhone != phone))
             throw new ActivationError(409, "This card has already been activated. Sign in with the mobile used for the first activation.");
-        var roll = await db.Rolls.FindAsync(label.RollId) ?? throw new ActivationError(409, "Product unavailable.");
-        Eligible(roll);
+        var roll = label.RollId is { } rollId ? await db.Rolls.FindAsync(rollId) : null;
+        // Only activated cartons outlive their roll; they were released when first used.
+        if (roll == null && first) throw new ActivationError(409, "Product unavailable.");
+        if (roll != null) Eligible(roll);
         var remaining = Remaining(label, roll) ?? throw new ActivationError(409, "The roll length is unavailable. Contact your seller.");
         if (req.UsedLengthM is not > 0 || decimal.Round(req.UsedLengthM.Value, 2) != req.UsedLengthM.Value)
             throw new ActivationError(400, "Enter a positive used length in meters with up to two decimal places.");
@@ -227,7 +231,7 @@ public class BoxLabelService(AppDbContext db, IDataProtectionProvider protection
         // The printed number remains the first vehicle's warranty code. Later vehicles get their own code.
         if (first && label.CardCode != null && !await db.WarrantyRegistrations.AnyAsync(x => x.Code == label.CardCode))
             registration.Code = label.CardCode;
-        registration.RollId = roll.Id;
+        registration.RollId = roll?.Id;
         registration.UsedLengthM = req.UsedLengthM;
         registration.Status = WarrantyStatus.Active;
         registration.ReviewedAt = DateTime.UtcNow;
@@ -252,7 +256,7 @@ public class BoxLabelService(AppDbContext db, IDataProtectionProvider protection
         label.Revision++;
         db.WarrantyRegistrations.Add(registration);
         AuditLog.Add(db, "customer:" + phone, "warranty", registration.Code, "activated", AuditLog.Diff(
-            ("status", null, registration.Status), ("label", null, label.Id), ("roll", null, roll.Id),
+            ("status", null, registration.Status), ("label", null, label.Id), ("roll", null, roll?.Id),
             ("usedLengthM", null, registration.UsedLengthM), ("remainingLengthM", remaining, label.RemainingLengthM),
             ("filmEnds", null, registration.FilmEnds), ("installEnds", null, registration.InstallEnds), ("flags", null, registration.FlagsJson)));
         try { await db.SaveChangesAsync(); }

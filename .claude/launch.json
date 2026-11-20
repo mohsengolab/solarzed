@@ -62,6 +62,27 @@
         "SOLARZED_REVALIDATE_SECRET": "local-dev-revalidate-secret-only",
         "Sms__DevConsole": "true"
       }
+    },
+    {
+      "name": "api-qa",
+      "runtimeExecutable": "dotnet",
+      "runtimeArgs": [
+        "run",
+        "--project",
+        "backend/Solarzed.Api",
+        "--launch-profile",
+        "http",
+        "--urls",
+        "http://localhost:5296"
+      ],
+      "port": 5296,
+      "env": {
+        "ConnectionStrings__Default": "Server=(localdb)\\mssqllocaldb;Database=SolarzedManualQA;Trusted_Connection=True;",
+        "FrontendOrigin": "http://localhost:3000",
+        "SOLARZED_REVALIDATE_SECRET": "local-dev-revalidate-secret-only",
+        "Sms__DevConsole": "true",
+        "Email__DevConsole": "true"
+      }
     }
   ]
 }

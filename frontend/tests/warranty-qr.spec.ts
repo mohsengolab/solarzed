@@ -9,7 +9,7 @@ test("warranty QR: admin prints a decodable code that opens the public warranty 
   await request.post(`${api}/api/admin/settings`, { headers, data: { durations: { tint: { film: 5, install: 2 }, ppf: { film: 7, install: 3 } } } });
 
   const unique = Date.now().toString(36).toUpperCase();
-  const registered = await request.post(`${api}/api/warranty/register`, { data: {
+  const registered = await request.post(`${api}/api/registrations`, { headers, data: {
     type: "tint", make: "Toyota", model: "Corolla", owner: "QR Test Owner", phone: "09121111111", plate: "QR-TEST",
     vin: "JTDBE32K123456789", filmSerial: `QR-SERIAL-${unique}`, invoiceNumber: `QR-INV-${unique}`, installed: "2026-01-15",
     sellerName: "QR Seller", sellerPhone: "09122222222", installer: "QR Shop", windows: ["left-front", "rear"],

@@ -1,4 +1,5 @@
 using System.Text.Json;
+using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
 using Solarzed.Api.Application;
@@ -7,8 +8,13 @@ using Solarzed.Api.Infrastructure;
 
 namespace Solarzed.Api.Controllers;
 
+/// <summary>
+/// Manual (staff-entered) warranty registrations. Customers register only through the card inside the carton
+/// (/api/activation), so these endpoints are closed to anonymous callers.
+/// </summary>
 [ApiController]
 [Route("api/registrations")]
+[Authorize(Policy = "AdminPolicy")]
 public class RegistrationController(AppDbContext db) : ControllerBase
 {
     [HttpPost]
@@ -28,7 +34,7 @@ public class RegistrationController(AppDbContext db) : ControllerBase
         entity!.FlagsJson = JsonSerializer.Serialize(flags);
 
         db.WarrantyRegistrations.Add(entity);
-        AuditLog.Add(db, "public-form", "warranty", entity.Code, "registered",
+        AuditLog.Add(db, AuditLog.Actor(User), "warranty", entity.Code, "registered",
             AuditLog.Diff(("status", null, entity.Status), ("filmSerial", null, entity.FilmSerial), ("installer", null, entity.Installer), ("flags", null, entity.FlagsJson)));
         await db.SaveChangesAsync();
 

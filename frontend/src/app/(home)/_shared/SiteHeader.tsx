@@ -53,7 +53,7 @@ export default function SiteHeader() {
         <details className="sv-dropdown">
           <summary>WARRANTY <span>▾</span></summary>
           <div>
-            <Link href="/register">Register an installation</Link>
+            <Link href="/activate">Activate a warranty</Link>
             <Link href="/warranty">Check warranty</Link>
             <Link href="/coverage">Warranty policy</Link>
           </div>
@@ -62,7 +62,7 @@ export default function SiteHeader() {
       </nav>
       <Brand />
       <div className="sv-header-actions">
-        <Link className="sv-dealer" href="/register">DEALER REGISTRATION ↗</Link>
+        <Link className="sv-dealer" href="/account">DEALER SIGN-IN ↗</Link>
         <Link className="sv-button" href="/contact">CONTACTS</Link>
       </div>
       <button className="menu" aria-label="Open menu" aria-expanded="false" aria-controls="navigation">☰</button>
@@ -78,7 +78,7 @@ export function SiteFooter() {
         <Link href="/contact">CONTACTS</Link>
         <Link href="/coverage">WARRANTY POLICY</Link>
         <Link href="/warranty">CHECK WARRANTY</Link>
-        <Link href="/register">DEALER REGISTRATION</Link>
+        <Link href="/account">DEALER SIGN-IN</Link>
       </div>
       <span>SOLARZED · DESIGN PRESENTATION</span>
     </footer>

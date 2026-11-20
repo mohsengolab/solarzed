@@ -2,10 +2,10 @@
 
 import { useState, useEffect, FormEvent } from "react";
 import Link from "next/link";
-import { lookupWarranty, WarrantyPublic } from "@/lib/api";
+import { lookupWarranty, WarrantyCheck } from "@/lib/api";
 import styles from "./warranty.module.css";
 
-function CertificateCard({ w }: { w: WarrantyPublic }) {
+function CertificateCard({ w }: { w: WarrantyCheck }) {
   const statusColor = {
     active: "#1fc3cf",
     pending: "#f59e0b",
@@ -22,13 +22,8 @@ function CertificateCard({ w }: { w: WarrantyPublic }) {
       </div>
       <div className={styles.certGrid}>
         <div><span>Vehicle</span><b>{w.make} {w.model}</b></div>
-        <div><span>VIN</span><b className={styles.mono}>{w.vinMasked}</b></div>
-        <div><span>Plate</span><b>{w.plate}</b></div>
         <div><span>Type</span><b>{w.type === "ppf" ? "Paint protection film" : "Window film"}</b></div>
-        <div><span>Film serial</span><b className={styles.mono}>{w.filmSerial}</b></div>
         <div><span>Installed</span><b>{w.installed}</b></div>
-        <div><span>Installer</span><b>{w.installer}</b></div>
-        <div><span>Seller</span><b>{w.sellerName}</b></div>
       </div>
       {w.coverage && (
         <div className={styles.certCoverage}>
@@ -51,15 +46,15 @@ function CertificateCard({ w }: { w: WarrantyPublic }) {
 
 export default function WarrantyPage() {
   const [q, setQ] = useState("");
-  const [records, setRecords] = useState<WarrantyPublic[] | null>(null);
+  const [records, setRecords] = useState<WarrantyCheck[] | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  // Deep-link support: ?q=... or ?code=... or ?vin=... or ?phone=...
+  // Deep-link support: ?q=... or ?code=... or ?vin=...
   useEffect(() => {
     if (typeof window === "undefined") return;
     const params = new URLSearchParams(window.location.search);
-    const val = params.get("q") ?? params.get("code") ?? params.get("vin") ?? params.get("phone");
+    const val = params.get("q") ?? params.get("code") ?? params.get("vin");
     if (val) {
       setQ(val);
       doLookup(val);
@@ -95,19 +90,11 @@ export default function WarrantyPage() {
       type: "tint",
       make: "Toyota",
       model: "Camry",
-      vinMasked: "1HG••••F2JH123456",
-      plate: "A123-BC",
-      filmSerial: "SZ-PIR-26-000001",
-      invoiceNumber: "INV-2026-001",
       installed: "2026-03-15",
-      sellerName: "Sample Auto Tint",
-      sellerPhoneMasked: "09**1234",
-      installer: "Sample Installer",
       areas: ["left-front", "right-front", "left-rear", "right-rear", "rear"],
       status: "active",
       statusLabel: "Active warranty",
       coverage: { filmEnds: "2031-03-14", installEnds: "2028-03-14" },
-      flags: [],
     }]);
     setLoading(false);
   }
@@ -129,7 +116,7 @@ export default function WarrantyPage() {
 
           <form onSubmit={onSubmit} className={styles.form}>
             <label htmlFor="inquiry-q" className="visually-hidden">
-              Warranty number, VIN or mobile number
+              Warranty number or VIN
             </label>
             <input
               id="inquiry-q"
@@ -140,13 +127,14 @@ export default function WarrantyPage() {
               autoComplete="off"
               spellCheck={false}
               autoCapitalize="characters"
-              placeholder="Warranty number / VIN / mobile number"
+              placeholder="Warranty number / VIN"
             />
             <button type="submit" disabled={loading}>
               {loading ? "Searching…" : "Query"}
             </button>
             <p className={styles.helpText}>
-              Enter one of: your warranty number (SZ-…), the 17-character VIN, or your mobile number.
+              Enter your warranty number (the 7 digits on your warranty card, or SZ-…) or the 17-character VIN.
+              To see every warranty registered to your mobile, <Link href="/account">sign in to your account</Link>.
             </p>
             <button type="button" className={styles.sampleBtn} onClick={showSample}>
               See a sample certificate

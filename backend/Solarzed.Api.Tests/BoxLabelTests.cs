@@ -161,21 +161,46 @@ public class BoxLabelTests
     }
 
     [Fact]
-    public async Task DeletingARollAlwaysWorksAndKeepsItsWarranties()
+    public async Task DeletingARollAlwaysWorksAndKeepsActivatedCartonsUsable()
     {
         using var f = new Fixture();
         var (label, code) = await f.Issue();
-        await new BoxTransferService(f.Db).Transfer(new([label.Id], "Rep", "09125555555", null, null), "admin");
+        var (unused, _) = await f.Issue();
+        await new BoxTransferService(f.Db).Transfer(new([label.Id, unused.Id], "Rep", "09125555555", null, null), "admin");
         await f.Service.Activate(new ActivateBoxRequest(code, Registration(), 30m), Customer);
         var admin = new Solarzed.Api.Controllers.AdminController(f.Db, new ConfigurationBuilder().Build());
         Assert.IsType<Microsoft.AspNetCore.Mvc.OkObjectResult>(await admin.DeleteRoll("SZ-TEST-26-000001"));
-        using var check = new SqliteDb(f.Options);
-        Assert.Empty(await check.Rolls.ToListAsync());
-        Assert.Empty(await check.BoxLabels.ToListAsync());
-        Assert.Empty(await check.BoxTransfers.ToListAsync());
-        var warranty = await check.WarrantyRegistrations.SingleAsync();
-        Assert.Null(warranty.RollId);
-        Assert.Equal(30m, warranty.UsedLengthM);
+
+        using (var check = new SqliteDb(f.Options))
+        {
+            Assert.Empty(await check.Rolls.ToListAsync());
+            // The unused carton goes; the activated one stays, unlinked, with its hand-over history.
+            var kept = await check.BoxLabels.SingleAsync();
+            Assert.Equal(label.Id, kept.Id);
+            Assert.Null(kept.RollId);
+            Assert.Equal(120m, kept.RemainingLengthM);
+            Assert.All(await check.BoxTransfers.ToListAsync(), t => Assert.Equal(label.Id, t.LabelId));
+            Assert.Equal(2, await check.BoxTransfers.CountAsync());
+            var warranty = await check.WarrantyRegistrations.SingleAsync();
+            Assert.Null(warranty.RollId);
+            Assert.Equal(30m, warranty.UsedLengthM);
+        }
+
+        // The customer's card still works for the next vehicle, but only for the first customer.
+        using var after = new SqliteDb(f.Options);
+        var service = new BoxLabelService(after, f.Protection, f.Sms);
+        Assert.True((await service.Info(code, Customer)).CanRegister);
+        var next = new ActivateBoxRequest(code, Registration() with { Vin = "JTDBE32K123456780", InvoiceNumber = "INV-2" }, 20m);
+        await Error(409, () => service.Activate(next, "09124444444"));
+        var second = await service.Activate(next, Customer);
+        Assert.Equal(100m, second.RemainingLengthM);
+        Assert.Equal(label.Id, second.Warranty.FilmSerial);
+        // The serial of the activated carton cannot be given to a new carton.
+        after.Rolls.Add(new Roll { Id = "SZ-TEST-26-000002", ModelCode = "TEST", Type = WarrantyType.Tint,
+            Batch = "TEST", Supplier = "ABC", LengthM = 150, Qc = RollQc.Approved, Status = RollStatus.Shipped });
+        await after.SaveChangesAsync();
+        var reuse = await Assert.ThrowsAsync<ActivationError>(() => service.Issue("SZ-TEST-26-000002", [label.Id]));
+        Assert.Contains("already have a warranty card", reuse.Message);
     }
 
     [Fact]

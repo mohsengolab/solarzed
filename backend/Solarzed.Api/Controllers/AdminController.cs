@@ -370,8 +370,10 @@ public class AdminController(AppDbContext db, IConfiguration cfg) : ControllerBa
     }
 
     /// <summary>
-    /// Deletes a roll in every case. Its carton labels (with their transfers and activation challenges) go with it;
-    /// warranty registrations are customer records, so they are kept and only unlinked from the roll.
+    /// Deletes a roll in every case. Cartons never used on a vehicle go with it (with their transfers and activation
+    /// challenges), so their serials can be issued again. Cartons already activated stay, unlinked from the roll: the
+    /// card in the customer's hands keeps working for further vehicles, the hand-over history is kept and the serial
+    /// cannot be given to another carton. Warranty registrations are customer records and are only unlinked.
     /// </summary>
     [HttpDelete("rolls/{id}")]
     [Authorize(Policy = "AdminPolicy")]
@@ -381,9 +383,11 @@ public class AdminController(AppDbContext db, IConfiguration cfg) : ControllerBa
         if (roll == null) return NotFound();
 
         var labels = await db.BoxLabels.Where(b => b.RollId == id).ToListAsync();
-        var labelIds = labels.Select(b => b.Id).ToList();
-        var transfers = await db.BoxTransfers.Where(t => labelIds.Contains(t.LabelId)).ToListAsync();
-        var challenges = await db.ActivationChallenges.Where(c => labelIds.Contains(c.LabelId)).ToListAsync();
+        var kept = labels.Where(b => b.ActivatedAt != null).ToList();
+        var removed = labels.Where(b => b.ActivatedAt == null).ToList();
+        var removedIds = removed.Select(b => b.Id).ToList();
+        var transfers = await db.BoxTransfers.Where(t => removedIds.Contains(t.LabelId)).ToListAsync();
+        var challenges = await db.ActivationChallenges.Where(c => removedIds.Contains(c.LabelId)).ToListAsync();
         var warranties = await db.WarrantyRegistrations.Where(w => w.RollId == id).ToListAsync();
 
         foreach (var w in warranties)
@@ -391,21 +395,27 @@ public class AdminController(AppDbContext db, IConfiguration cfg) : ControllerBa
             AuditLog.Add(db, Actor, "warranty", w.Code, "roll_unlinked", AuditLog.Diff(("rollId", id, null)));
             w.RollId = null;
         }
-        foreach (var b in labels)
+        foreach (var b in kept)
+        {
+            AuditLog.Add(db, Actor, "box_label", b.Id, "roll_unlinked", AuditLog.Diff(("rollId", b.RollId, null)));
+            b.RollId = null;
+            b.Revision++;
+        }
+        foreach (var b in removed)
             AuditLog.Add(db, Actor, "box_label", b.Id, "deleted", AuditLog.Diff(
-                ("rollId", b.RollId, null), ("cardCode", b.CardCode, null), ("holder", b.Holder, null), ("warrantyCode", b.WarrantyCode, null)));
+                ("rollId", b.RollId, null), ("cardCode", b.CardCode, null), ("holder", b.Holder, null)));
         db.BoxTransfers.RemoveRange(transfers);
         db.ActivationChallenges.RemoveRange(challenges);
-        db.BoxLabels.RemoveRange(labels);
+        db.BoxLabels.RemoveRange(removed);
 
         AuditLog.Add(db, Actor, "roll", roll.Id, "deleted", AuditLog.Diff(
             ("modelCode", roll.ModelCode, null), ("batch", roll.Batch, null), ("supplier", roll.Supplier, null),
             ("qc", roll.Qc, null), ("status", roll.Status, null),
-            ("labels", labels.Count, null), ("warrantiesUnlinked", warranties.Count, null)));
+            ("labels", removed.Count, null), ("activatedLabelsKept", kept.Count, null), ("warrantiesUnlinked", warranties.Count, null)));
         db.Rolls.Remove(roll);
         // One SaveChanges = one transaction: either everything goes or nothing does.
         await db.SaveChangesAsync();
-        return Ok(new { ok = true, labelsDeleted = labels.Count, warrantiesUnlinked = warranties.Count });
+        return Ok(new { ok = true, labelsDeleted = removed.Count, activatedLabelsKept = kept.Count, warrantiesUnlinked = warranties.Count });
     }
 
     // ── Settings ─────────────────────────────────────────────────────────────
