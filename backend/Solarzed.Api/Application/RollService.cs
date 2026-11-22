@@ -1,3 +1,4 @@
+using System.Security.Cryptography;
 using System.Text.Json;
 using Microsoft.EntityFrameworkCore;
 using Solarzed.Api.Domain;
@@ -32,37 +33,37 @@ public static class RollService
         // Gregorian year and month side by side, e.g. 2611 for November 2026.
         var yymm = DateTime.UtcNow.ToString("yyMM", System.Globalization.CultureInfo.InvariantCulture);
         var model = req.ModelCode.ToUpperInvariant().Replace(" ", "");
-
-        // Find highest existing sequence for this model+month
-        var prefix = $"SZ-{model}-{yymm}-";
-        var existing = await db.Rolls
-            .Where(r => r.Id.StartsWith(prefix))
-            .Select(r => r.Id)
-            .ToListAsync();
-
-        int next = 1;
-        if (existing.Count > 0)
-        {
-            next = existing
-                .Select(id => int.TryParse(id[prefix.Length..], out var n) ? n : 0)
-                .Max() + 1;
-        }
+        var supplier = SupplierCode(req.Supplier) ?? req.Supplier;
+        var factory = supplier.ToUpperInvariant().Replace(" ", "");
 
         // One roll per scanned carton Roll No when given (already validated by the caller).
         var rollNos = req.RollNos is { Length: > 0 } ? req.RollNos : null;
         var count = rollNos?.Length ?? req.Quantity;
+
+        // SZ-{model}-{yyMM}-{random 7 digits}-{factory}: a random number instead of a running count,
+        // so roll IDs don't reveal how many rolls were received.
+        var prefix = $"SZ-{model}-{yymm}-";
+        var ids = new List<string>();
+        while (ids.Count < count)
+        {
+            var batch = Enumerable.Range(0, (count - ids.Count) * 2)
+                .Select(_ => $"{prefix}{RandomNumberGenerator.GetInt32(1_000_000, 10_000_000)}-{factory}")
+                .Distinct().Where(x => !ids.Contains(x)).ToList();
+            var taken = await db.Rolls.Where(r => batch.Contains(r.Id)).Select(r => r.Id).ToListAsync();
+            ids.AddRange(batch.Except(taken).Take(count - ids.Count));
+        }
+
         var rolls = new List<Roll>();
         for (int i = 0; i < count; i++)
         {
-            var seq = (next + i).ToString("D6");
             rolls.Add(new Roll
             {
-                Id = $"{prefix}{seq}",
+                Id = ids[i],
                 ModelCode = model,
                 RollNo = rollNos?[i],
                 Type = type,
                 Batch = req.Batch,
-                Supplier = SupplierCode(req.Supplier) ?? req.Supplier,
+                Supplier = supplier,
                 Qc = qc,
                 WidthCm = req.WidthCm,
                 LengthM = req.LengthM,

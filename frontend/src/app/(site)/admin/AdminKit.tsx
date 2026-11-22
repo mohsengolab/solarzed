@@ -38,9 +38,10 @@ export function usePaged<T>(load: (query: string) => Promise<Paged<T>>, filters:
   const setPage = useCallback((p: number) => setPaging({ key: filterKey, page: p }), [filterKey]);
   const toggleSort = useCallback((column: string) => setSortState(prev =>
     prev.sort === column ? { sort: column, dir: prev.dir === "asc" ? "desc" : "asc" } : { sort: column, dir: "asc" }), []);
+  const setSort = useCallback((column: string, dir: "asc" | "desc") => setSortState({ sort: column, dir }), []);
   const reload = useCallback(() => setNonce(n => n + 1), []);
 
-  return { data, items: data?.items ?? [], total: data?.total ?? 0, page, pageSize, loading, error, setPage, sort, toggleSort, reload,
+  return { data, items: data?.items ?? [], total: data?.total ?? 0, page, pageSize, loading, error, setPage, sort, toggleSort, setSort, reload,
     exportQuery: qs({ ...filters, sort: sort.sort, dir: sort.dir, page: 1, pageSize: 200 }) };
 }
 
