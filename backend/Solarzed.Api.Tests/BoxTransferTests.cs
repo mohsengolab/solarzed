@@ -35,7 +35,7 @@ public class BoxTransferTests
             connection.Open();
             Db = new SqliteDb(new DbContextOptionsBuilder<AppDbContext>().UseSqlite(connection).Options);
             Db.Database.EnsureCreated();
-            Db.Rolls.Add(new Roll { Id = "SZ-TEST-26-000001", ModelCode = "TEST", Type = WarrantyType.Tint,
+            Db.Rolls.Add(new Roll { Id = "SZ-TEST-26-000001", Number = 1, ModelCode = "TEST", Type = WarrantyType.Tint,
                 Batch = "TEST", Supplier = "ABC", LengthM = 150, Qc = RollQc.Approved, Status = RollStatus.Shipped });
             Db.CoverageSettings.Add(new CoverageSetting { TintFilmYears = 5, TintInstallYears = 2 });
             Db.SaveChanges();

@@ -10,7 +10,11 @@ public class Roll
 {
     [Key]
     [MaxLength(60)]
-    public string Id { get; set; } = default!;   // SZ-{MODEL}-{YYMM}-{7 random digits}-{FACTORY}, e.g. SZ-1015-2611-4827153-ABC (older rolls: SZ-{MODEL}-{YYMM|YY}-{NNNNNN})
+    public string Id { get; set; } = default!;   // SZ-{ROLL NO}-{YYMM}-{7 random digits}-{FACTORY}, e.g. SZ-CPT30614374-2611-4827153-ABC;
+                                                  // the model code stands in when no Roll No is given at receipt. Older rolls keep earlier formats.
+
+    // Running number of the roll in receipt order, starting at 1 (the internal register number).
+    public int Number { get; set; }
 
     [MaxLength(24)]
     public string ModelCode { get; set; } = default!;

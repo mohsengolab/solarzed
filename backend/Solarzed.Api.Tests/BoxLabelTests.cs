@@ -43,7 +43,7 @@ public class BoxLabelTests
             Connection.Open();
             Options = new DbContextOptionsBuilder<AppDbContext>().UseSqlite(Connection).Options;
             Db = new SqliteDb(Options); Db.Database.EnsureCreated();
-            Db.Rolls.Add(new Roll { Id = "SZ-TEST-26-000001", ModelCode = "TEST", Type = WarrantyType.Tint,
+            Db.Rolls.Add(new Roll { Id = "SZ-TEST-26-000001", Number = 1, ModelCode = "TEST", Type = WarrantyType.Tint,
                 Batch = "TEST", Supplier = " abc ", LengthM = 150, Qc = RollQc.Approved, Status = RollStatus.Shipped });
             Db.CoverageSettings.Add(new CoverageSetting { TintFilmYears = 5, TintInstallYears = 2 });
             Db.SaveChanges(); Service = new(Db, Protection, Sms);
@@ -199,7 +199,7 @@ public class BoxLabelTests
         Assert.Equal(100m, second.RemainingLengthM);
         Assert.Equal(label.Id, second.Warranty.FilmSerial);
         // The serial of the activated carton cannot be given to a new carton.
-        after.Rolls.Add(new Roll { Id = "SZ-TEST-26-000002", ModelCode = "TEST", Type = WarrantyType.Tint,
+        after.Rolls.Add(new Roll { Id = "SZ-TEST-26-000002", Number = 2, ModelCode = "TEST", Type = WarrantyType.Tint,
             Batch = "TEST", Supplier = "ABC", LengthM = 150, Qc = RollQc.Approved, Status = RollStatus.Shipped });
         await after.SaveChangesAsync();
         var reuse = await Assert.ThrowsAsync<ActivationError>(() => service.Issue("SZ-TEST-26-000002", [label.Id]));
@@ -353,7 +353,7 @@ public class BoxLabelTests
     public async Task CardIsIssuedFromTheRollNoRecordedOnTheRoll()
     {
         using var f = new Fixture();
-        f.Db.Rolls.Add(new Roll { Id = "SZ-TEST-26-000002", RollNo = "CPT30614374", ModelCode = "TEST", Type = WarrantyType.Tint,
+        f.Db.Rolls.Add(new Roll { Id = "SZ-TEST-26-000002", Number = 2, RollNo = "CPT30614374", ModelCode = "TEST", Type = WarrantyType.Tint,
             Batch = "TEST", Supplier = "ABC", LengthM = 30, Qc = RollQc.Approved, Status = RollStatus.InStock });
         await f.Db.SaveChangesAsync();
 
@@ -371,7 +371,7 @@ public class BoxLabelTests
     public async Task RollWithRollNoOnlyAcceptsItsOwnCarton()
     {
         using var f = new Fixture();
-        f.Db.Rolls.Add(new Roll { Id = "SZ-TEST-26-000002", RollNo = "CPT30614374", ModelCode = "TEST", Type = WarrantyType.Tint,
+        f.Db.Rolls.Add(new Roll { Id = "SZ-TEST-26-000002", Number = 2, RollNo = "CPT30614374", ModelCode = "TEST", Type = WarrantyType.Tint,
             Batch = "TEST", Supplier = "ABC", LengthM = 30, Qc = RollQc.Approved, Status = RollStatus.Shipped });
         await f.Db.SaveChangesAsync();
 

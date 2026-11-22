@@ -201,7 +201,8 @@ public class ManagementTests
         Assert.IsType<OkObjectResult>(await admin.ReceiveRolls(new("TEST", "tint", "B", "ABC", "approved", 1, RollNos: ["cpt1001", " CPT1002 "])));
         var rolls = await db.Rolls.OrderBy(r => r.RollNo).ToListAsync();
         Assert.Equal(["CPT1001", "CPT1002"], rolls.Select(r => r.RollNo));
-        Assert.All(rolls, r => Assert.StartsWith("SZ-TEST-", r.Id));
+        Assert.All(rolls, r => Assert.StartsWith($"SZ-{r.RollNo}-", r.Id));   // the carton Roll No leads the roll ID
+        Assert.Equal([1, 2], rolls.Select(r => r.Number));                    // register numbers start at 1
 
         Assert.IsType<ConflictObjectResult>(await admin.ReceiveRolls(new("TEST", "tint", "B", "ABC", "approved", 1, RollNos: ["CPT1002"])));
         Assert.IsType<BadRequestObjectResult>(await admin.ReceiveRolls(new("TEST", "tint", "B", "ABC", "approved", 1, RollNos: ["CPT1003", "CPT1003"])));

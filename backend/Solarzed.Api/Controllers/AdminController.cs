@@ -231,7 +231,7 @@ public class AdminController(AppDbContext db, IConfiguration cfg) : ControllerBa
 
     static readonly Dictionary<string, System.Linq.Expressions.Expression<Func<Roll, object>>> RollSort = new()
     {
-        ["receivedAt"] = r => r.ReceivedAt, ["id"] = r => r.Id, ["modelCode"] = r => r.ModelCode, ["rollNo"] = r => r.RollNo!,
+        ["receivedAt"] = r => r.ReceivedAt, ["number"] = r => r.Number, ["id"] = r => r.Id, ["modelCode"] = r => r.ModelCode, ["rollNo"] = r => r.RollNo!,
         ["batch"] = r => r.Batch, ["supplier"] = r => r.Supplier, ["qc"] = r => r.Qc, ["status"] = r => r.Status, ["type"] = r => r.Type,
     };
 
@@ -240,7 +240,10 @@ public class AdminController(AppDbContext db, IConfiguration cfg) : ControllerBa
     {
         var query = db.Rolls.AsNoTracking();
         if (Paging.Term(f.Q) is { } q)
-            query = query.Where(r => r.Id.Contains(q) || (r.RollNo != null && r.RollNo.Contains(q)) || r.ModelCode.Contains(q) || r.Batch.Contains(q) || r.Supplier.Contains(q));
+        {
+            var number = int.TryParse(q, out var n) ? n : -1;   // the register number, e.g. 12
+            query = query.Where(r => r.Number == number || r.Id.Contains(q) || (r.RollNo != null && r.RollNo.Contains(q)) || r.ModelCode.Contains(q) || r.Batch.Contains(q) || r.Supplier.Contains(q));
+        }
         if (Paging.Term(f.Model) is { } model) { var m = model.ToUpperInvariant(); query = query.Where(r => r.ModelCode == m); }
         if (Paging.Term(f.Batch) is { } batch) query = query.Where(r => r.Batch.Contains(batch));
         if (Paging.Term(f.Supplier) is { } supplier) query = query.Where(r => r.Supplier.Contains(supplier));
@@ -277,7 +280,7 @@ public class AdminController(AppDbContext db, IConfiguration cfg) : ControllerBa
         {
             items = result.Items.Select(r => new
             {
-                r.Id, r.RollNo, r.ModelCode, r.Type, r.Batch, r.Supplier, r.HistoryJson, r.WidthCm, r.LengthM,
+                r.Id, r.Number, r.RollNo, r.ModelCode, r.Type, r.Batch, r.Supplier, r.HistoryJson, r.WidthCm, r.LengthM,
                 Qc = r.Qc.ToString().ToLower(), Status = r.Status.ToString().ToLower(),
                 r.ReceivedAt,
                 Installs = counts.GetValueOrDefault(r.Id, 0),
@@ -323,8 +326,9 @@ public class AdminController(AppDbContext db, IConfiguration cfg) : ControllerBa
         Roll[] rolls;
         try { rolls = await RollService.CreateRolls(req with { Supplier = supplier, RollNos = rollNos }, db, Actor); }
         // Two receipts of the same carton at once trip the unique Roll No index.
-        catch (DbUpdateException) when (rollNos != null) { return Conflict(new { error = "Some of these Roll Nos were just registered by another request. Refresh and try again." }); }
-        return Ok(rolls.Select(r => new { r.Id, r.RollNo, r.ModelCode, r.Type, r.Batch }));
+        // Two receipts at once trip the unique Roll No or register-number index.
+        catch (DbUpdateException) { return Conflict(new { error = "Another receipt was saved at the same time. Refresh and try again." }); }
+        return Ok(rolls.Select(r => new { r.Id, r.Number, r.RollNo, r.ModelCode, r.Type, r.Batch }));
     }
 
     [HttpPost("rolls/{id}")]

@@ -37,6 +37,7 @@ public class AppDbContext(DbContextOptions<AppDbContext> options) : DbContext(op
         mb.Entity<AuditEntry>().HasIndex(x => x.At);
 
         mb.Entity<Roll>().HasIndex(x => x.RollNo).IsUnique().HasFilter("[RollNo] IS NOT NULL");
+        mb.Entity<Roll>().HasIndex(x => x.Number).IsUnique();
         mb.Entity<BoxLabel>().HasIndex(x => x.TokenHash).IsUnique();
         mb.Entity<BoxLabel>().HasIndex(x => x.WarrantyCode).IsUnique().HasFilter("[WarrantyCode] IS NOT NULL");
         mb.Entity<BoxLabel>().HasOne<Roll>().WithMany().HasForeignKey(x => x.RollId).OnDelete(DeleteBehavior.Restrict);
