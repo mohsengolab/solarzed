@@ -59,12 +59,10 @@ public class ManagementController(AppDbContext db) : ControllerBase
     [HttpPost("products")]
     public async Task<IActionResult> Create(ProductRequest req)
     {
-        // The admin form leaves the code empty: the server assigns the next one for the product type.
-        var autoCode = string.IsNullOrWhiteSpace(req.Code);
-        if (autoCode) req = req with { Code = "AUTO" };
+        // The code is the film model printed on the carton (e.g. PC15); it also goes into every roll ID.
         var error = Validate(req, requireType: true);
         if (error != null) return BadRequest(new { error });
-        var code = autoCode ? await NextCode(req.Type) : req.Code!.Trim().ToUpperInvariant();
+        var code = req.Code!.Trim().ToUpperInvariant();
         if (await db.Products.AnyAsync(p => p.Code == code)) return Conflict(new { error = "Product code already exists." });
         if (await NameTaken(req.Name, null)) return Conflict(new { error = "Product name already exists." });
         var product = new Product { Code = code };
@@ -122,15 +120,6 @@ public class ManagementController(AppDbContext db) : ControllerBase
     {
         var normalized = name.Trim().ToLower();
         return db.Products.AnyAsync(p => p.Code != exceptCode && p.Name.ToLower() == normalized);
-    }
-
-    // Next code for a type: TINT-0001, TINT-0002 … / PPF-0001 … (one above the highest existing number).
-    async Task<string> NextCode(string? type)
-    {
-        var prefix = (Enum.TryParse<WarrantyType>(type, true, out var t) && t == WarrantyType.Ppf ? "PPF" : "TINT") + "-";
-        var existing = await db.Products.AsNoTracking().Where(p => p.Code.StartsWith(prefix)).Select(p => p.Code).ToListAsync();
-        var max = existing.Select(c => int.TryParse(c[prefix.Length..], out var n) ? n : 0).DefaultIfEmpty(0).Max();
-        return $"{prefix}{max + 1:D4}";
     }
 
     static string? Validate(ProductRequest r, bool requireType = true)

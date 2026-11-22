@@ -30,16 +30,13 @@ public class ManagementTests
     }
 
     [Fact]
-    public async Task EmptyProductCodeIsAssignedPerType()
+    public async Task ProductCodeIsTheModelEnteredByTheAdmin()
     {
         using var db = Database(); var api = new ManagementController(db);
-        async Task<string> Create(string type, string name) =>
-            ((Product)((OkObjectResult)await api.Create(Product("") with { Type = type, Name = name })).Value!).Code;
-        Assert.Equal("TINT-0001", await Create("tint", "Film 1"));
-        Assert.Equal("TINT-0002", await Create("tint", "Film 2"));
-        Assert.Equal("PPF-0001", await Create("ppf", "PPF 1"));
-        Assert.IsType<OkObjectResult>(await api.Create(Product("TINT-0010") with { Name = "Manual" }));
-        Assert.Equal("TINT-0011", await Create("tint", "Film 3"));
+        Assert.IsType<BadRequestObjectResult>(await api.Create(Product("") with { Name = "No code" }));
+        var saved = (Product)((OkObjectResult)await api.Create(Product(" pc15 ") with { Name = "Solarzed PC15" })).Value!;
+        Assert.Equal("PC15", saved.Code);
+        Assert.IsType<ConflictObjectResult>(await api.Create(Product("PC15") with { Name = "Another" }));
     }
 
     [Fact]

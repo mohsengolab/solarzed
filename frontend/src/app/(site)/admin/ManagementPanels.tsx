@@ -31,10 +31,10 @@ export function ProductsPanel() {
     try {
       // Only the name is editable on an existing product: type, series, description and the
       // technical specs are fixed at creation. To change them, delete and create again.
-      // On create the code is left empty and the server assigns it (TINT-0001, PPF-0001, …).
-      const saved = await managementFetch<Product>(editing ? `products/${encodeURIComponent(form.code)}` : "products",
-        editing ? { code: form.code, name: form.name } : { ...form, code: "" }, editing ? "PUT" : "POST");
-      list.reload(); setForm(empty); setEditing(false); setMsg(editing ? "محصول ذخیره شد." : `محصول ذخیره شد. کد: ${saved.code}`);
+      // The code is the film model printed on the carton, e.g. PC15.
+      await managementFetch<Product>(editing ? `products/${encodeURIComponent(form.code)}` : "products",
+        editing ? { code: form.code, name: form.name } : form, editing ? "PUT" : "POST");
+      list.reload(); setForm(empty); setEditing(false); setMsg("محصول ذخیره شد.");
     } catch (e) { setMsg(message(e)); } finally { setBusy(false); }
   }
 
@@ -51,7 +51,7 @@ export function ProductsPanel() {
     <form className={`${s.card} ${s.adminForm}`} onSubmit={save}>
       <h2>{editing ? "ویرایش محصول" : "تعریف محصول"}</h2>
       <div className={s.row2}>
-        <label>کد محصول<input readOnly disabled={editing} value={form.code} placeholder="خودکار پس از ذخیره" /></label>
+        <label>کد محصول (مدل روی کارتن)<input required maxLength={24} pattern="[A-Za-z0-9-]+" disabled={editing} value={form.code} placeholder="مثلاً PC15" onChange={e => setForm({ ...form, code: e.target.value.replace(/\s+/g, "").toUpperCase() })} dir="ltr" /></label>
         <label>نام محصول<input required maxLength={120} value={form.name} onChange={e => setForm({ ...form, name: e.target.value })} /></label>
         <label>نوع محصول<select value={form.type} disabled={editing} onChange={e => setForm({ ...form, type: e.target.value })}><option value="tint">فیلم شیشه</option><option value="ppf">فیلم محافظ رنگ (شامل Color PPF)</option></select></label>
         <label>سری<input maxLength={80} disabled={editing} list="series-options" value={form.series} onChange={e => setForm({ ...form, series: e.target.value })} /></label>
