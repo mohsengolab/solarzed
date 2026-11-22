@@ -97,7 +97,10 @@ public class WarrantyTests
         var pattern = $@"\ASZ-PIR-{DateTime.UtcNow:yyMM}-[1-9]\d{{6}}-SUP-TEST\z";
         Assert.All(rolls, r => Assert.Matches(pattern, r.Id));
         Assert.Equal(3, rolls.Select(r => r.Id).Distinct().Count());
-        Assert.Matches(pattern, Assert.Single(await RollService.CreateRolls(request with { Quantity = 1 }, db)).Id);
+        var next = Assert.Single(await RollService.CreateRolls(request with { Quantity = 1 }, db));
+        Assert.Matches(pattern, next.Id);   // no Roll No: the model code stands in
+        Assert.Equal(new[] { 1, 2, 3 }, rolls.Select(r => r.Number));
+        Assert.Equal(4, next.Number);
         var row = WarrantyService.Validate(Request() with { FilmSerial = rolls[0].Id }).Entity!;
         Assert.Equal(new[] { "roll_not_approved", "roll_not_distributed" }, await WarrantyService.AssessFlags(row, db));
         rolls[0].Qc = RollQc.Approved;

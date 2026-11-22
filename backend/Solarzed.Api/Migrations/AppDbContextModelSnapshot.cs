@@ -523,6 +523,9 @@ namespace Solarzed.Api.Migrations
                         .HasMaxLength(24)
                         .HasColumnType("nvarchar(24)");
 
+                    b.Property<int>("Number")
+                        .HasColumnType("int");
+
                     b.Property<int>("Qc")
                         .HasColumnType("int");
 
@@ -548,6 +551,9 @@ namespace Solarzed.Api.Migrations
                         .HasColumnType("decimal(7,2)");
 
                     b.HasKey("Id");
+
+                    b.HasIndex("Number")
+                        .IsUnique();
 
                     b.HasIndex("RollNo")
                         .IsUnique()

@@ -40,18 +40,20 @@ public static class RollService
         var rollNos = req.RollNos is { Length: > 0 } ? req.RollNos : null;
         var count = rollNos?.Length ?? req.Quantity;
 
-        // SZ-{model}-{yyMM}-{random 7 digits}-{factory}: a random number instead of a running count,
-        // so roll IDs don't reveal how many rolls were received.
-        var prefix = $"SZ-{model}-{yymm}-";
+        // SZ-{carton Roll No}-{yyMM}-{random 7 digits}-{factory}: a random number instead of a running count,
+        // so roll IDs don't reveal how many rolls were received. Without a Roll No the model code stands in.
         var ids = new List<string>();
-        while (ids.Count < count)
+        for (int i = 0; i < count; i++)
         {
-            var batch = Enumerable.Range(0, (count - ids.Count) * 2)
-                .Select(_ => $"{prefix}{RandomNumberGenerator.GetInt32(1_000_000, 10_000_000)}-{factory}")
-                .Distinct().Where(x => !ids.Contains(x)).ToList();
-            var taken = await db.Rolls.Where(r => batch.Contains(r.Id)).Select(r => r.Id).ToListAsync();
-            ids.AddRange(batch.Except(taken).Take(count - ids.Count));
+            var head = rollNos?[i] ?? model;
+            string id;
+            do id = $"SZ-{head}-{yymm}-{RandomNumberGenerator.GetInt32(1_000_000, 10_000_000)}-{factory}";
+            while (ids.Contains(id) || await db.Rolls.AnyAsync(r => r.Id == id));
+            ids.Add(id);
         }
+
+        // Internal register number: continues from the highest so far, starting at 1.
+        var lastNumber = await db.Rolls.MaxAsync(r => (int?)r.Number) ?? 0;
 
         var rolls = new List<Roll>();
         for (int i = 0; i < count; i++)
@@ -59,6 +61,7 @@ public static class RollService
             rolls.Add(new Roll
             {
                 Id = ids[i],
+                Number = lastNumber + i + 1,
                 ModelCode = model,
                 RollNo = rollNos?[i],
                 Type = type,

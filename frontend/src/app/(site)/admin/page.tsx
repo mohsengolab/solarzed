@@ -752,7 +752,7 @@ function WarrantiesPanel() {
 
 // ── Rolls ─────────────────────────────────────────────────────────────────────
 
-type RollRow = { id: string; rollNo?: string | null; cards: number; modelCode: string; type: string; batch: string; supplier: string; qc: string; status: string; installs: number; historyJson: string; receivedAt: string; widthCm?: number | null; lengthM?: number | null };
+type RollRow = { id: string; number: number; rollNo?: string | null; cards: number; modelCode: string; type: string; batch: string; supplier: string; qc: string; status: string; installs: number; historyJson: string; receivedAt: string; widthCm?: number | null; lengthM?: number | null };
 type SpecKey = "thicknessMil" | "vlt" | "irr" | "uv" | "tser" | "warrantyYears";
 const SPEC_FIELDS: { key: SpecKey; label: string; min: number; max: number; step: number; placeholder: string }[] = [
   { key: "thicknessMil", label: "ضخامت (Mil)", min: 0.1, max: 20, step: 0.1, placeholder: "مثلاً 2" },
@@ -864,7 +864,7 @@ function RollsPanel() {
   async function exportCsv() {
     try {
       const all = await adminRollsSearch<RollRow>(list.exportQuery);
-      downloadCsv("rolls", all.items, [["id", "شناسه رول"], ["rollNo", "Roll No کارتن"], ["modelCode", "مدل"], ["type", "نوع"], ["batch", "بچ"], ["supplier", "تأمین‌کننده"],
+      downloadCsv("rolls", all.items, [["number", "#"], ["id", "شناسه رول"], ["rollNo", "Roll No کارتن"], ["modelCode", "مدل"], ["type", "نوع"], ["batch", "بچ"], ["supplier", "تأمین‌کننده"],
         ["widthCm", "عرض (cm)"], ["lengthM", "طول (m)"], ["qc", "QC"], ["status", "وضعیت"], ["installs", "نصب‌ها"], ["receivedAt", "دریافت"]]);
     } catch (e) { setMsg(fa(errorText(e, "خروجی ناموفق بود."))); }
   }
@@ -937,7 +937,7 @@ function RollsPanel() {
         </div>
       </div>
       <FilterBar active={countActive(f)} onClear={() => setF(R_EMPTY)}>
-        <label className={styles.wide}>جستجوی موجودی<input type="search" placeholder="شناسه رول، Roll No، مدل، بچ یا تأمین‌کننده" value={f.q} onChange={set("q")} /></label>
+        <label className={styles.wide}>جستجوی موجودی<input type="search" placeholder="شماره، شناسه رول، Roll No، مدل، بچ یا تأمین‌کننده" value={f.q} onChange={set("q")} /></label>
         <label>محصول<select value={f.model} onChange={set("model")}><option value="">همه محصولات</option>{products.map(p => <option key={p.code} value={p.code}>{p.code}</option>)}</select></label>
         <label>نوع<select value={f.type} onChange={set("type")}><option value="">همه انواع</option><option value="tint">فیلم شیشه</option><option value="ppf">PPF</option></select></label>
         <label>فیلتر QC<select value={f.qc} onChange={set("qc")}><option value="">هر QC</option><option value="pending">در انتظار</option><option value="approved">تأیید شده</option><option value="rejected">رد شده</option></select></label>
@@ -951,12 +951,13 @@ function RollsPanel() {
       {list.error && <p role="alert" className={styles.errorText}>{list.error}</p>}
       <div className={styles.card}>
         <table className={`${styles.table} ${styles.tableCompact} ${list.loading ? styles.tableBusy : ""}`}>
-          <thead><tr><th>QR</th><SortTh column="id" label="شناسه رول" {...sortProps} /><SortTh column="rollNo" label="Roll No کارتن" {...sortProps} /><SortTh column="modelCode" label="مدل" {...sortProps} /><SortTh column="type" label="نوع" {...sortProps} />
+          <thead><tr><SortTh column="number" label="#" {...sortProps} /><th>QR</th><SortTh column="id" label="شناسه رول" {...sortProps} /><SortTh column="rollNo" label="Roll No کارتن" {...sortProps} /><SortTh column="modelCode" label="مدل" {...sortProps} /><SortTh column="type" label="نوع" {...sortProps} />
             <SortTh column="batch" label="بچ" {...sortProps} /><th>ابعاد (cm × m)</th><SortTh column="qc" label="QC" {...sortProps} />
             <SortTh column="status" label="وضعیت" {...sortProps} /><th>نصب‌ها</th><SortTh column="receivedAt" label="دریافت" {...sortProps} /><th>عملیات</th></tr></thead>
           <tbody>
             {list.items.map(r => (
               <tr key={r.id} style={created.includes(r.id) ? { background: "rgb(var(--sz-tint) / 0.08)" } : undefined}>
+                <td><b>{r.number.toLocaleString("fa-IR")}</b></td>
                 <td>{qrs[r.id] && <button type="button" onClick={() => openQr(r)} title="نمایش بزرگ و چاپ QR" aria-label={`نمایش بزرگ QR رول ${r.id}`}
                   style={{ display: "block", padding: 0, border: 0, background: "none", cursor: "zoom-in" }}>
                   <img src={qrs[r.id]} alt={`QR رول ${r.id}`} width={44} height={44} style={{ display: "block", background: "#fff", borderRadius: 4, padding: 2 }} />
@@ -984,7 +985,7 @@ function RollsPanel() {
         <Pager page={list.page} pageSize={list.pageSize} total={list.total} loading={list.loading} onPage={list.setPage} />
       </div>
       {edit && <div className={styles.dialog} role="dialog" aria-modal="true" aria-label="مدیریت موجودی"><form className={`${styles.dialogInner} ${styles.adminForm}`} onSubmit={updateRoll}>
-        <h2 dir="ltr">{edit.id}</h2><button type="button" className={styles.dialogClose} aria-label="بستن موجودی" onClick={() => setEdit(null)}>×</button>
+        <h2 dir="ltr">#{edit.number} · {edit.id}</h2><button type="button" className={styles.dialogClose} aria-label="بستن موجودی" onClick={() => setEdit(null)}>×</button>
         <label>کنترل کیفیت<select value={edit.qc} onChange={e => setEdit({ ...edit, qc: e.target.value })}>{["pending", "approved", "rejected"].map(v => <option key={v} value={v}>{fa(v)}</option>)}</select></label>
         <label>وضعیت انبار<select value={edit.status} onChange={e => setEdit({ ...edit, status: e.target.value })}>{["instock", "shipped", "consumed", "void"].map(v => <option key={v} value={v}>{fa(v)}</option>)}</select></label>
         <div className={styles.row2}>
