@@ -5,7 +5,7 @@ import Link from "next/link";
 import QRCode from "qrcode";
 import {
   adminLogin, adminLogout, adminSession, adminOverview, adminWarranties, adminDecision,
-  adminRollsSearch, adminCreateRolls, adminUpdateRoll, adminDeleteRoll, issueCardsForRolls, adminGetSettings, adminSaveSettings,
+  adminRollsSearch, adminCreateRolls, adminUpdateRoll, adminDeleteRoll, adminGetSettings, adminSaveSettings,
   adminBoxLabels, managementFetch, ADMIN_UNAUTHORIZED, fa, qs, FA_DATE,
 } from "@/lib/api";
 import styles from "./admin.module.css";
@@ -482,7 +482,7 @@ function ReportRolls() {
       const all = await adminRollsSearch<RollRow>(q);
       downloadCsv("rolls-report", all.items, [
         ["id", "شناسه رول"], ["modelCode", "کد مدل"], ["type", "نوع"],
-        ["batch", "بچ"], ["supplier", "تأمین‌کننده"], ["qc", "کنترل کیفیت"],
+        ["batch", "Batch"], ["supplier", "تأمین‌کننده"], ["qc", "کنترل کیفیت"],
         ["status", "وضعیت انبار"], ["installs", "تعداد نصب"], ["receivedAt", "تاریخ دریافت"],
       ]);
       setMsg(`${all.total.toLocaleString("fa-IR")} ردیف دریافت شد.`);
@@ -849,22 +849,10 @@ function RollsPanel() {
     }
   }
 
-  // A roll whose carton Roll No is recorded and that can get its warranty card now.
-  const cardReady = (r: RollRow) => !!r.rollNo && !r.cards && r.qc === "approved" && r.status !== "void";
-  async function issueCards(ids: string[]) {
-    if (!ids.length) return;
-    setSaving(true); setMsg("");
-    try {
-      const result = await issueCardsForRolls(ids);
-      setMsg(`${result.labels.length.toLocaleString("fa-IR")} کارت گارانتی ساخته شد. چاپ کارت‌ها از بخش «برچسب‌ها».`);
-      list.reload();
-    } catch (e) { setMsg(fa(errorText(e, "ساخت کارت ناموفق بود."))); } finally { setSaving(false); }
-  }
-
   async function exportCsv() {
     try {
       const all = await adminRollsSearch<RollRow>(list.exportQuery);
-      downloadCsv("rolls", all.items, [["number", "#"], ["id", "شناسه رول"], ["rollNo", "Roll No کارتن"], ["modelCode", "مدل"], ["type", "نوع"], ["batch", "بچ"], ["supplier", "تأمین‌کننده"],
+      downloadCsv("rolls", all.items, [["number", "#"], ["id", "شناسه رول"], ["rollNo", "Roll No کارتن"], ["modelCode", "مدل"], ["type", "نوع"], ["batch", "Batch"], ["supplier", "تأمین‌کننده"],
         ["widthCm", "عرض (cm)"], ["lengthM", "طول (m)"], ["qc", "QC"], ["status", "وضعیت"], ["installs", "نصب‌ها"], ["receivedAt", "دریافت"]]);
     } catch (e) { setMsg(fa(errorText(e, "خروجی ناموفق بود."))); }
   }
@@ -872,7 +860,7 @@ function RollsPanel() {
   const sortProps = { sort: list.sort, onSort: list.toggleSort };
   return (
     <section>
-      <header className={styles.panelHead}><div><span className={styles.eyebrow}>ثبت رول‌ها</span><h1>رول‌ها و بچ‌ها</h1></div></header>
+      <header className={styles.panelHead}><div><span className={styles.eyebrow}>ثبت رول‌ها</span><h1>رول‌ها و Batchها</h1></div></header>
       <div className={styles.card}>
         <h2>دریافت رول</h2>
         <form onSubmit={onSubmit} className={styles.adminForm}>
@@ -895,8 +883,8 @@ function RollsPanel() {
             : !models.length && products.length > 0 && <p style={{ margin: 0, fontSize: 13 }}>ابتدا در «محصولات» مدل این گروه را با کد روی کارتن (مثلاً PC15) تعریف کنید.</p>}
           <div className={styles.row2}>
             {[
-              { label: "بچ", name: "batch", placeholder: "مثلاً LOT-2608-B17", max: 32 },
-              { label: "کد تأمین‌کننده / کارخانه (۳ حرف انگلیسی)", name: "supplier", placeholder: "مثلاً ABC", max: 3 },
+              { label: "Batch", name: "batch", placeholder: "مثلاً LOT-2608-B17", max: 32 },
+              { label: "کد تأمین‌کننده", name: "supplier", placeholder: "مثلاً ABC", max: 3 },
             ].map(x => (
               <label key={x.name}>{x.label}
                 <input required maxLength={x.max} pattern={x.name === "supplier" ? "[A-Za-z]{3}" : undefined} value={(form as Record<string, string>)[x.name]} placeholder={x.placeholder} dir="ltr"
@@ -937,12 +925,12 @@ function RollsPanel() {
         </div>
       </div>
       <FilterBar active={countActive(f)} onClear={() => setF(R_EMPTY)}>
-        <label className={styles.wide}>جستجوی موجودی<input type="search" placeholder="شماره، شناسه رول، Roll No، مدل، بچ یا تأمین‌کننده" value={f.q} onChange={set("q")} /></label>
+        <label className={styles.wide}>جستجوی موجودی<input type="search" placeholder="شماره، شناسه رول، Roll No، مدل، Batch یا تأمین‌کننده" value={f.q} onChange={set("q")} /></label>
         <label>محصول<select value={f.model} onChange={set("model")}><option value="">همه محصولات</option>{products.map(p => <option key={p.code} value={p.code}>{p.code}</option>)}</select></label>
         <label>نوع<select value={f.type} onChange={set("type")}><option value="">همه انواع</option><option value="tint">فیلم شیشه</option><option value="ppf">PPF</option></select></label>
         <label>فیلتر QC<select value={f.qc} onChange={set("qc")}><option value="">هر QC</option><option value="pending">در انتظار</option><option value="approved">تأیید شده</option><option value="rejected">رد شده</option></select></label>
         <label>فیلتر وضعیت انبار<select value={f.status} onChange={set("status")}><option value="">هر وضعیت</option><option value="instock">موجود در انبار</option><option value="shipped">ارسال شده</option><option value="consumed">مصرف شده</option><option value="void">باطل</option></select></label>
-        <label>بچ شامل<input value={f.batch} onChange={set("batch")} /></label>
+        <label>Batch شامل<input value={f.batch} onChange={set("batch")} /></label>
         <label>تأمین‌کننده شامل<input value={f.supplier} onChange={set("supplier")} /></label>
         <label>دریافت از<input type="date" value={f.receivedFrom} onChange={set("receivedFrom")} /></label>
         <label>دریافت تا<input type="date" value={f.receivedTo} onChange={set("receivedTo")} /></label>
@@ -952,7 +940,7 @@ function RollsPanel() {
       <div className={styles.card}>
         <table className={`${styles.table} ${styles.tableCompact} ${list.loading ? styles.tableBusy : ""}`}>
           <thead><tr><SortTh column="number" label="#" {...sortProps} /><th>QR</th><SortTh column="id" label="شناسه رول" {...sortProps} /><SortTh column="rollNo" label="Roll No کارتن" {...sortProps} /><SortTh column="modelCode" label="مدل" {...sortProps} /><SortTh column="type" label="نوع" {...sortProps} />
-            <SortTh column="batch" label="بچ" {...sortProps} /><th>ابعاد (cm × m)</th><SortTh column="qc" label="QC" {...sortProps} />
+            <SortTh column="batch" label="Batch" {...sortProps} /><th>ابعاد (cm × m)</th><SortTh column="qc" label="QC" {...sortProps} />
             <SortTh column="status" label="وضعیت" {...sortProps} /><th>نصب‌ها</th><SortTh column="receivedAt" label="دریافت" {...sortProps} /><th>عملیات</th></tr></thead>
           <tbody>
             {list.items.map(r => (
@@ -973,9 +961,12 @@ function RollsPanel() {
                 <td>{r.installs.toLocaleString("fa-IR")}</td>
                 <td>{new Date(r.receivedAt).toLocaleDateString(FA_DATE)}</td>
                 <td><div className={styles.rowActions}>
-                  <button type="button" className={styles.ghost} onClick={() => { setEdit(r); setNote(""); setMsg(""); }}>مدیریت</button>
-                  {cardReady(r) && <button type="button" className={styles.ghost} disabled={saving} onClick={() => issueCards([r.id])}>ساخت کارت</button>}
-                  <button type="button" className={styles.danger} onClick={() => deleteRoll(r.id)}>حذف</button>
+                  <button type="button" className={`${styles.ghost} ${styles.iconBtn}`} title="مدیریت" aria-label={`مدیریت رول ${r.id}`} onClick={() => { setEdit(r); setNote(""); setMsg(""); }}>
+                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><path d="M12 20h9"/><path d="M16.5 3.5a2.1 2.1 0 0 1 3 3L7 19l-4 1 1-4z"/></svg>
+                  </button>
+                  <button type="button" className={`${styles.danger} ${styles.iconBtn}`} title="حذف" aria-label={`حذف رول ${r.id}`} onClick={() => deleteRoll(r.id)}>
+                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"/><path d="M10 11v6"/><path d="M14 11v6"/><path d="M9 6V4a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v2"/></svg>
+                  </button>
                 </div></td>
               </tr>
             ))}
@@ -991,8 +982,8 @@ function RollsPanel() {
         <div className={styles.row2}>
           <label>Roll No کارتن (بارکد کارخانه){edit.cards > 0 && " — کارت صادر شده، قابل تغییر نیست"}<input maxLength={32} value={edit.rollNo ?? ""} dir="ltr" disabled={edit.cards > 0} placeholder="مثلاً CPT30614374"
             onChange={e => setEdit({ ...edit, rollNo: e.target.value.replace(/\s+/g, "").toUpperCase() })} /></label>
-          <label>بچ<input maxLength={32} value={edit.batch} dir="ltr" onChange={e => setEdit({ ...edit, batch: e.target.value })} /></label>
-          <label>کد تأمین‌کننده / کارخانه (۳ حرف انگلیسی)<input maxLength={Math.max(3, edit.supplier.length)} value={edit.supplier} dir="ltr" onChange={e => setEdit({ ...edit, supplier: e.target.value.toUpperCase() })} /></label>
+          <label>Batch<input maxLength={32} value={edit.batch} dir="ltr" onChange={e => setEdit({ ...edit, batch: e.target.value })} /></label>
+          <label>کد تأمین‌کننده<input maxLength={Math.max(3, edit.supplier.length)} value={edit.supplier} dir="ltr" onChange={e => setEdit({ ...edit, supplier: e.target.value.toUpperCase() })} /></label>
           <label>عرض (سانتی‌متر)<input type="number" min={1} max={1000} step="0.1" value={edit.widthCm ?? ""} dir="ltr"
             onChange={e => setEdit({ ...edit, widthCm: e.target.value === "" ? null : Number(e.target.value) })} /></label>
           <label>طول (متر)<input type="number" min={1} max={10000} step="0.1" value={edit.lengthM ?? ""} dir="ltr"

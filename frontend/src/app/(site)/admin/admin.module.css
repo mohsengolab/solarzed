@@ -342,6 +342,7 @@
 /* Row action buttons: side by side and compact. */
 .rowActions { display: flex; gap: 6px; flex-wrap: nowrap; }
 .rowActions > button { padding: 5px 10px; white-space: nowrap; }
+.rowActions > .iconBtn { padding: 0; width: 32px; height: 32px; display: inline-grid; place-items: center; }
 /* Many-column tables: tighter cells so they fit the card on a normal screen. */
 .tableCompact th { padding: 0 8px 12px; }
 .tableCompact td { padding: 10px 8px; }
