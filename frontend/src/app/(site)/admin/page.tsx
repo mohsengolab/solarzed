@@ -765,7 +765,7 @@ const SPEC_FIELDS: { key: SpecKey; label: string; min: number; max: number; step
 const R_EMPTY = { q: "", model: "", type: "", qc: "", status: "", supplier: "", batch: "", receivedFrom: "", receivedTo: "", hasInstalls: "" };
 
 function RollsPanel() {
-  const [form, setForm] = useState({ modelCode: "", type: "tint", batch: "", supplier: "", qc: "pending", quantity: "1", widthCm: "", lengthM: "" });
+  const [form, setForm] = useState({ modelCode: "", type: "tint", batch: "", supplier: "", qc: "pending", widthCm: "", lengthM: "" });
   // Carton Roll Nos scanned at receipt, one per line: each becomes one roll.
   const [rollNos, setRollNos] = useState<string[]>([]);
   const [msg, setMsg] = useState("");
@@ -828,9 +828,9 @@ function RollsPanel() {
     try {
       const num = (v: string) => (v.trim() === "" ? null : Number(v));
       if (!selectedProduct) { setMsg("مدل فیلم را انتخاب کنید."); return; }
-      await adminCreateRolls({ ...form, modelCode: selectedProduct.code, quantity: rollNos.length || Number(form.quantity), rollNos, widthCm: num(form.widthCm), lengthM: num(form.lengthM) });
+      await adminCreateRolls({ ...form, modelCode: selectedProduct.code, quantity: rollNos.length || 1, rollNos, widthCm: num(form.widthCm), lengthM: num(form.lengthM) });
       setRollNos([]);
-      setMsg(rollNos.length ? `${rollNos.length.toLocaleString("fa-IR")} رول با Roll No کارتن ساخته شد.` : "رول‌ها ساخته شدند.");
+      setMsg(rollNos.length ? `${rollNos.length.toLocaleString("fa-IR")} رول با Roll No کارتن ساخته شد.` : "رول ساخته شد.");
       list.reload();
     } catch (ex: unknown) {
       setMsg(fa(errorText(ex, fa("Error"))));
@@ -901,10 +901,6 @@ function RollsPanel() {
                 <option value="rejected">رد شده</option>
               </select>
             </label>
-            <label>تعداد {rollNos.length > 0 && "(از روی Roll Noها)"}
-              <input type="number" required min="1" max="200" value={rollNos.length || form.quantity} disabled={rollNos.length > 0}
-                onChange={e => setForm(p => ({ ...p, quantity: e.target.value }))} />
-            </label>
             <label>عرض رول (سانتی‌متر)
               <input type="number" required min="1" max="1000" step="0.1" placeholder="مثلاً 152" value={form.widthCm} dir="ltr"
                 onChange={e => setForm(p => ({ ...p, widthCm: e.target.value }))} />
@@ -916,7 +912,7 @@ function RollsPanel() {
           </div>
           <div>
             <SerialInput label="Roll No کارتن‌ها (بارکد کارخانه روی کارتن؛ با بارکدخوان، تایپ یا فایل اکسل)" value={rollNos} onChange={setRollNos} />
-            <small style={{ opacity: .75 }}>هر کارتن یک رول است: برای هر Roll No یک رول ساخته می‌شود و «تعداد» از روی آن‌ها پر می‌شود. اگر خالی بماند، Roll No را بعداً در «مدیریت» همان رول وارد کنید.</small>
+            <small style={{ opacity: .75 }}>هر کارتن یک رول است: برای هر Roll No یک رول ساخته می‌شود. اگر خالی بماند، یک رول ساخته می‌شود و Roll No را بعداً در «مدیریت» همان رول وارد کنید.</small>
           </div>
           <button type="submit" className={styles.btnPrimary} disabled={saving}>
             {saving ? "در حال ساخت…" : "ساخت شناسه رول ↗"}
