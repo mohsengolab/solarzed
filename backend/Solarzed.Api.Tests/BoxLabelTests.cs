@@ -69,9 +69,9 @@ public class BoxLabelTests
         Assert.Equal(3, labels.Select(x => x.CardCode).Distinct().Count());
         Assert.All(labels, x =>
         {
-            Assert.Equal("ABC", x.FactoryCode);   // copied from the roll and never printed on the card
+            Assert.Equal("ABC", x.FactoryCode);   // copied from the roll and printed last on the card
             Assert.Equal(150m, x.RemainingLengthM);
-            Assert.Equal($"{x.Id}-{x.CardCode}", x.FullCode);
+            Assert.Equal($"{x.Id}-{x.CardCode}-ABC", x.FullCode);
             Assert.Equal($"https://solarzed.com/activate#{x.FullCode}", x.ActivationUrl);
             Assert.Matches("^[1-9][0-9]{6}$", x.CardCode!);
         });
@@ -90,7 +90,10 @@ public class BoxLabelTests
         Assert.Equal(label.Id, (await f.Service.Info(code.ToLowerInvariant())).Id);
         Assert.Equal(label.CardCode, (await f.Service.Info($" {code} ")).WarrantyCode);
         Assert.Null((await f.Service.Info(code)).FactoryCode);
-        await Error(404, () => f.Service.Info($"{label.Id}-{(label.CardCode == "1234567" ? "7654321" : "1234567")}"));
+        // Cards printed before the factory was added (RollNo-1234567) still open.
+        Assert.Equal(label.Id, (await f.Service.Info($"{label.Id}-{label.CardCode}")).Id);
+        await Error(404, () => f.Service.Info($"{label.Id}-{label.CardCode}-XYZ"));   // wrong factory
+        await Error(404, () => f.Service.Info($"{label.Id}-{(label.CardCode == "1234567" ? "7654321" : "1234567")}-ABC"));
         await Error(404, () => f.Service.Info($"SA-{label.Id}-SZ-AAAAAAAAAAAAAAAA"));
         await Error(404, () => f.Service.Info(label.Id));
 
@@ -110,8 +113,8 @@ public class BoxLabelTests
         var labels = await f.Service.Issue("SZ-TEST-26-000001", [" cpt30614374 ", "CPT30614375"]);
         Assert.Equal(["CPT30614374", "CPT30614375"], labels.Select(x => x.Id).ToArray());
         var first = labels[0];
-        Assert.Equal($"CPT30614374-{first.CardCode}", first.FullCode);
-        Assert.Equal("CPT30614374", (await f.Service.Info($"cpt30614374-{first.CardCode}")).Id);
+        Assert.Equal($"CPT30614374-{first.CardCode}-ABC", first.FullCode);
+        Assert.Equal("CPT30614374", (await f.Service.Info($"cpt30614374-{first.CardCode}-abc")).Id);
         // Another carton's warranty number does not open this carton.
         await Error(404, () => f.Service.Info($"CPT30614374-{labels[1].CardCode}"));
         // A carton gets one card only; duplicates and malformed numbers are refused.
@@ -358,7 +361,7 @@ public class BoxLabelTests
         Assert.Equal("CPT30614374", card.Id);
         Assert.Equal("SZ-TEST-26-000002", card.RollId);
         Assert.Equal(30m, card.RemainingLengthM);
-        Assert.Matches("^CPT30614374-[1-9][0-9]{6}$", card.FullCode);
+        Assert.Matches("^CPT30614374-[1-9][0-9]{6}-[A-Z]{3}$", card.FullCode);
         await Error(409, () => f.Service.IssueForRolls(["SZ-TEST-26-000002"]));   // one card per carton
         await Error(400, () => f.Service.IssueForRolls(["SZ-TEST-26-000001"]));   // no Roll No recorded
         await Error(404, () => f.Service.IssueForRolls(["SZ-MISSING"]));

@@ -8,6 +8,7 @@ import {
   BoxTransfer, HeldBox, PortalUser, PortalChannel, PortalTicket, WarrantyPublic, type AdminTicketReply,
 } from "@/lib/api";
 import PortalSignIn from "@/components/PortalSignIn";
+import SerialInput from "@/components/SerialInput";
 import styles from "../activate/activate.module.css";
 import own from "./account.module.css";
 
@@ -25,7 +26,7 @@ export default function AccountPage() {
   const [outgoing, setOutgoing] = useState<BoxTransfer[]>([]);
   const [warranties, setWarranties] = useState<WarrantyPublic[]>([]);
   const [selected, setSelected] = useState<string[]>([]);
-  const [serials, setSerials] = useState("");
+  const [list, setSerials] = useState<string[]>([]);
   const [toPhone, setToPhone] = useState("");
   const [toName, setToName] = useState("");
   const [note, setNote] = useState("");
@@ -73,14 +74,13 @@ export default function AccountPage() {
     if (user) Promise.resolve().then(load).catch(ex => setError(ex instanceof Error ? ex.message : "Could not load your account."));
   }, [user]);
 
-  const list = serials.split(/[\s,;]+/).map(x => x.trim()).filter(Boolean);
 
   async function transfer(event: FormEvent) {
     event.preventDefault(); setBusy(true); setError(""); setDone("");
     try {
       const result = await portalTransfer({ serials: list, toPhone, toName: toName || null, note: note || null });
       setDone(`${result.transfers.length} box(es) transferred to ${who(result.toHolder, result.toPhone)} · Transfer ${result.batchId}`);
-      setSerials(""); setNote(""); setSelected([]);
+      setSerials([]); setNote(""); setSelected([]);
       await load();
     } catch (ex) { setError(ex instanceof Error ? ex.message : "Transfer failed."); }
     finally { setBusy(false); }
@@ -221,8 +221,8 @@ export default function AccountPage() {
           <h2>Pass cartons on</h2>
           <p>Scan the barcode on each carton (or type the serial), enter the next person&apos;s mobile and record the transfer. The cartons then appear in their account.</p>
           <form onSubmit={transfer} className={own.form}>
-            <label>Box serials (one per line)<textarea dir="ltr" rows={4} required value={serials} onChange={event => setSerials(event.target.value)} placeholder="CPT30614374" /></label>
-            {selected.length > 0 && <button type="button" className={own.ghost} onClick={() => setSerials(selected.join("\n"))}>Use selected cartons ({selected.length})</button>}
+            <SerialInput lang="en" label="Box serials (scan, type or upload Excel)" value={list} onChange={setSerials} />
+            {selected.length > 0 && <button type="button" className={own.ghost} onClick={() => setSerials([...new Set([...list, ...selected])])}>Use selected cartons ({selected.length})</button>}
             <div className={styles.grid}>
               <label>Receiver mobile<input type="tel" dir="ltr" required maxLength={20} value={toPhone} onChange={event => setToPhone(event.target.value)} placeholder="09…" /></label>
               <label>Receiver name (optional)<input maxLength={200} value={toName} onChange={event => setToName(event.target.value)} /></label>

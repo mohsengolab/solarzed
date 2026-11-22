@@ -9,6 +9,9 @@ test("real QR generation and print dimensions, then customer activation form wit
   const headers = { Authorization: `Bearer ${adminToken}` };
   expect((await request.get(`${api}/api/admin/box-labels`)).status()).toBe(401);
   await request.post(`${api}/api/admin/settings`, { headers, data: { durations: { tint: { film: 5, install: 2 }, ppf: { film: 7, install: 3 } } } });
+  // Rolls can only be received for a film model defined in Products (409 = left over from an earlier run).
+  const product = await request.post(`${api}/api/admin/products`, { headers, data: { code: "QRE2E", name: "QR E2E film", type: "tint", archived: false } });
+  expect([200, 409], await product.text()).toContain(product.status());
   const suffix = Date.now().toString(36).toUpperCase();
   const received = await request.post(`${api}/api/admin/rolls`, { headers, data: { modelCode: "QRE2E", type: "tint", batch: `QR-${suffix}`, supplier: "ABC", qc: "approved", quantity: 1, lengthM: 150 } });
   expect(received.ok()).toBeTruthy();
@@ -21,7 +24,17 @@ test("real QR generation and print dimensions, then customer activation form wit
   await page.getByRole("button", { name: "برچسب‌ها", exact: true }).click();
   await page.getByLabel("رول محصول").selectOption(roll.id);
   await expect(page.getByText(/کد کارخانه \(از تأمین‌کنندهٔ رول\)/)).toContainText("ABC");
-  await page.getByLabel(/Roll No کارتن‌ها/).fill(`CPT-${suffix}-1\nCPT-${suffix}-2`);
+  // Excel upload reads the "Roll No" column (shared, rich-text, inline and numeric cells) and flags invalid cells.
+  const issueForm = page.locator("form").filter({ hasText: "ساخت برچسب برای کارتن‌ها" });
+  await issueForm.locator('input[type="file"]').setInputFiles("tests/fixtures/roll-nos.xlsx");
+  await expect(issueForm.getByText("۴ کارتن", { exact: true })).toBeVisible();
+  for (const serial of ["XLSX-A-0001", "XLSX-B-0002", "XLSX-C-0003", "30614377"]) await expect(issueForm.getByText(serial, { exact: true })).toBeVisible();
+  await expect(issueForm.getByRole("alert")).toContainText("BAD/ROLL");
+  await issueForm.getByRole("button", { name: "پاک کردن همه" }).click();
+  const rollNo = page.getByRole("textbox", { name: /Roll No کارتن‌ها/ });
+  await rollNo.fill(`CPT-${suffix}-1`); await rollNo.press("Enter");   // a barcode scanner types and presses Enter
+  await rollNo.fill(`CPT-${suffix}-2`); await rollNo.press("Enter");
+  await expect(page.getByText("۲ کارتن", { exact: true })).toBeVisible();
   await page.getByRole("button", { name: "ساخت برچسب و کارت گارانتی" }).click();
   const qrs = page.getByRole("img", { name: /^QR CPT-/ });
   await expect(qrs).toHaveCount(2);
@@ -35,7 +48,7 @@ test("real QR generation and print dimensions, then customer activation form wit
   });
   const decoded = jsQR(new Uint8ClampedArray(pixels.data), pixels.width, pixels.height);
   expect(decoded).not.toBeNull();
-  expect(decoded!.data).toMatch(/^https:\/\/solarzed\.com\/activate#CPT-[A-Z0-9]+-[12]-[1-9][0-9]{6}$/);
+  expect(decoded!.data).toMatch(/^https:\/\/solarzed\.com\/activate#CPT-[A-Z0-9]+-[12]-[1-9][0-9]{6}-ABC$/);
   const boxToken = new URL(decoded!.data).hash.slice(1);
   let metadata = await (await request.post(`${api}/api/activation/inspect`, { data: { token: boxToken } })).json();
   expect(metadata.activated).toBe(false);

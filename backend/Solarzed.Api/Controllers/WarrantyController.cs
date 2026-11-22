@@ -13,11 +13,11 @@ namespace Solarzed.Api.Controllers;
 [Route("api/warranty")]
 public class WarrantyController(AppDbContext db) : ControllerBase
 {
-    static readonly Regex CardToken = new(@"\A[A-Za-z0-9]{1,40}-(\d{7})\z", RegexOptions.Compiled);
+    static readonly Regex CardToken = new(@"\A[A-Za-z0-9]{1,40}-(\d{7})(?:-[A-Za-z]{3})?\z", RegexOptions.Compiled);
     static readonly Regex SevenDigits = new(@"\A\d{7}\z", RegexOptions.Compiled);
 
     /// <summary>
-    /// Public warranty check by warranty number (also the number on the card, alone or as RollNo-1234567) or VIN.
+    /// Public warranty check by warranty number (also the number on the card, alone or as RollNo-1234567[-ABC]) or VIN.
     /// It returns only what a certificate check needs: no plate, VIN, invoice, installer or seller. Owners see the
     /// full record in their account after SMS sign-in, so lookup by mobile number is not offered here.
     /// </summary>

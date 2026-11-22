@@ -187,7 +187,7 @@ public class WarrantyTests
         var controller = new WarrantyController(db);
         foreach (var (by, query, code) in new[] {
             ("code", row.Code, row.Code), ("vin", row.Vin.ToLowerInvariant(), row.Code), ((string?)null, row.Code, row.Code),
-            (null, "4827153", "4827153"), (null, "CPT30614374-4827153", "4827153") })
+            (null, "4827153", "4827153"), (null, "CPT30614374-4827153", "4827153"), (null, "CPT30614374-4827153-ABC", "4827153") })
         {
             var response = Assert.IsType<OkObjectResult>(await controller.Lookup(by, query));
             var json = JsonSerializer.Serialize(response.Value);

@@ -4,6 +4,7 @@ import { useEffect, useState, FormEvent } from "react";
 import { boxHistory, boxHolders, transferBoxes, BoxHistory, HolderSummary, fa } from "@/lib/api";
 import styles from "./admin.module.css";
 import labelsStyle from "./labels.module.css";
+import SerialInput from "@/components/SerialInput";
 
 // Server messages for a rejected batch embed serials and names, so translate the fixed fragments only.
 const FRAGMENTS: [string, string][] = [
@@ -24,7 +25,7 @@ const date = (value: string) => new Date(value).toLocaleString("fa-IR");
 const ANY = "__any__", WAREHOUSE = "__warehouse__";
 
 export default function BoxTransfers({ selected = [], onChanged }: { selected?: string[]; onChanged: () => void }) {
-  const [serials, setSerials] = useState("");
+  const [list, setSerials] = useState<string[]>([]);
   const [from, setFrom] = useState(ANY);
   const [to, setTo] = useState("");
   const [phone, setPhone] = useState("");
@@ -40,7 +41,6 @@ export default function BoxTransfers({ selected = [], onChanged }: { selected?: 
   const loadHolders = () => boxHolders().then(result => setHolders(result.holders)).catch(ex => setError(message(ex)));
   useEffect(() => { loadHolders(); }, []);
 
-  const list = serials.split(/[\s,;]+/).map(x => x.trim()).filter(Boolean);
 
   async function submit(event: FormEvent) {
     event.preventDefault(); setError(""); setDone(""); setBusy(true);
@@ -50,7 +50,7 @@ export default function BoxTransfers({ selected = [], onChanged }: { selected?: 
         expectedFrom: from === ANY ? null : from === WAREHOUSE ? "" : from,
       });
       setDone(`${result.transfers.length.toLocaleString("fa-IR")} ${fa("boxes transferred")} → ${holderName(result.toHolder, result.toPhone)} · ${fa("Transfer number")}: ${result.batchId}`);
-      setSerials(""); setNote(""); setTo(""); setPhone("");
+      setSerials([]); setNote(""); setTo(""); setPhone("");
       await loadHolders(); onChanged();
       if (history && result.transfers.some(t => t.labelId === history.id)) setHistory(await boxHistory(history.id));
     } catch (ex) { setError(message(ex)); } finally { setBusy(false); }
@@ -70,10 +70,8 @@ export default function BoxTransfers({ selected = [], onChanged }: { selected?: 
       {done && <p role="status" className={labelsStyle.notice}>{done}</p>}
       <div className={labelsStyle.columns}>
         <form className={`${styles.card} ${styles.adminForm}`} onSubmit={submit}>
-          <label>{fa("Box serials (scan or type, one per line)")}
-            <textarea dir="ltr" rows={5} required value={serials} onChange={e => setSerials(e.target.value)} placeholder="CPT30614374" />
-          </label>
-          {selected.length > 0 && <button type="button" className={styles.ghost} onClick={() => setSerials(selected.join("\n"))}>{fa("Use selected boxes")} ({selected.length.toLocaleString("fa-IR")})</button>}
+          <SerialInput label="سریال کارتن‌ها (Roll No؛ با بارکدخوان، تایپ یا فایل اکسل)" value={list} onChange={setSerials} />
+          {selected.length > 0 && <button type="button" className={styles.ghost} onClick={() => setSerials([...new Set([...list, ...selected])])}>{fa("Use selected boxes")} ({selected.length.toLocaleString("fa-IR")})</button>}
           <label>{fa("Current holder (safety check)")}
             <select value={from} onChange={e => setFrom(e.target.value)}>
               <option value={ANY}>{fa("Any holder — no check")}</option>

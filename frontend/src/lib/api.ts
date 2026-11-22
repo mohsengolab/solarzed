@@ -420,7 +420,7 @@ export interface BoxLabel {
   filmYears: number; installYears: number | null; createdAt: string;
   activatedAt: string | null; warrantyCode?: string | null; activationUrl?: string;
   holder: string | null; holderPhone: string | null; heldSince: string | null;
-  // Warranty card inside the carton (manager view only). fullCode = carton roll number + 7-digit warranty number.
+  // Warranty card inside the carton (manager view only). fullCode = carton roll number + 7-digit warranty number + factory code.
   // factoryCode is internal and is never printed on the card.
   factoryCode?: string | null; cardCode?: string | null; fullCode?: string | null;
   remainingLengthM?: number | null;

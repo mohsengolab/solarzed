@@ -14,6 +14,7 @@ import BoxLabelsPanel from "./BoxLabelsPanel";
 import { printQrLabels, printQrImage } from "./qrPrint";
 import { ProductsPanel, CustomersPanel, AccountPanel, UsersPanel } from "./ManagementPanels";
 import TicketsPanel from "./TicketsPanel";
+import SerialInput from "@/components/SerialInput";
 import SmsSettingsPanel from "./SmsSettingsPanel";
 import { ClaimsPanel, HistoryPanel, WarrantyActivity } from "./ClaimsPanels";
 import { usePaged, SortTh, Pager, FilterBar, countActive, downloadCsv, errorText } from "./AdminKit";
@@ -766,8 +767,7 @@ const R_EMPTY = { q: "", model: "", type: "", qc: "", status: "", supplier: "", 
 function RollsPanel() {
   const [form, setForm] = useState({ modelCode: "", type: "tint", batch: "", supplier: "", qc: "pending", quantity: "1", widthCm: "", lengthM: "" });
   // Carton Roll Nos scanned at receipt, one per line: each becomes one roll.
-  const [rollNoText, setRollNoText] = useState("");
-  const rollNos = [...new Set(rollNoText.split(/[\s,]+/).map(x => x.trim().toUpperCase()).filter(Boolean))];
+  const [rollNos, setRollNos] = useState<string[]>([]);
   const [msg, setMsg] = useState("");
   const [saving, setSaving] = useState(false);
   const [products, setProducts] = useState<({ code: string; name: string; type: string; archived: boolean } & Partial<Record<SpecKey, number | null>>)[]>([]);
@@ -829,7 +829,7 @@ function RollsPanel() {
       const num = (v: string) => (v.trim() === "" ? null : Number(v));
       if (!selectedProduct) { setMsg("مدل فیلم را انتخاب کنید."); return; }
       await adminCreateRolls({ ...form, modelCode: selectedProduct.code, quantity: rollNos.length || Number(form.quantity), rollNos, widthCm: num(form.widthCm), lengthM: num(form.lengthM) });
-      setRollNoText("");
+      setRollNos([]);
       setMsg(rollNos.length ? `${rollNos.length.toLocaleString("fa-IR")} رول با Roll No کارتن ساخته شد.` : "رول‌ها ساخته شدند.");
       list.reload();
     } catch (ex: unknown) {
@@ -914,10 +914,10 @@ function RollsPanel() {
                 onChange={e => setForm(p => ({ ...p, lengthM: e.target.value }))} />
             </label>
           </div>
-          <label>Roll No کارتن‌ها (بارکد کارخانه روی کارتن؛ هر خط یکی، با بارکدخوان) — {rollNos.length.toLocaleString("fa-IR")} کارتن
-            <textarea dir="ltr" rows={4} value={rollNoText} onChange={e => setRollNoText(e.target.value)} placeholder={"CPT30614374\nCPT30614375"} />
+          <div>
+            <SerialInput label="Roll No کارتن‌ها (بارکد کارخانه روی کارتن؛ با بارکدخوان، تایپ یا فایل اکسل)" value={rollNos} onChange={setRollNos} />
             <small style={{ opacity: .75 }}>هر کارتن یک رول است: برای هر Roll No یک رول ساخته می‌شود و «تعداد» از روی آن‌ها پر می‌شود. اگر خالی بماند، Roll No را بعداً در «مدیریت» همان رول وارد کنید.</small>
-          </label>
+          </div>
           <button type="submit" className={styles.btnPrimary} disabled={saving}>
             {saving ? "در حال ساخت…" : "ساخت شناسه رول ↗"}
           </button>
