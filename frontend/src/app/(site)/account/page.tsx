@@ -12,8 +12,8 @@ import SerialInput from "@/components/SerialInput";
 import styles from "../activate/activate.module.css";
 import own from "./account.module.css";
 
-const date = (value: string | null) => value ? new Date(value).toLocaleDateString() : "—";
-const stamp = (value: string) => new Date(value).toLocaleString();
+const date = (value: string | null) => value ? new Date(value).toLocaleDateString(undefined, { calendar: "gregory" }) : "—";
+const stamp = (value: string) => new Date(value).toLocaleString(undefined, { calendar: "gregory" });
 const who = (name: string | null, phone: string | null) => name && phone && name !== phone ? `${name} (${phone})` : name ?? phone ?? "Central warehouse";
 const display = (user: PortalUser) => user.phone ?? user.email ?? "your account";
 

@@ -93,7 +93,7 @@ public class WarrantyTests
         using var db = Database();
         var request = new CreateRollsRequest("pir", "tint", "LOT-TEST", "SUP-TEST", "pending", 3);
         var rolls = await RollService.CreateRolls(request, db);
-        var prefix = $"SZ-PIR-{DateTime.UtcNow:yy}-";
+        var prefix = $"SZ-PIR-{DateTime.UtcNow:yyMM}-";   // Gregorian year+month, e.g. 2611
         Assert.Equal(new[] { 1, 2, 3 }.Select(n => prefix + n.ToString("D6")), rolls.Select(r => r.Id));
         Assert.Equal(prefix + "000004", Assert.Single(await RollService.CreateRolls(request with { Quantity = 1 }, db)).Id);
         var row = WarrantyService.Validate(Request() with { FilmSerial = rolls[0].Id }).Entity!;

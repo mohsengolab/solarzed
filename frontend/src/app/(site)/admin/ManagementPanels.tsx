@@ -1,7 +1,7 @@
 "use client";
 
 import { FormEvent, useCallback, useEffect, useState } from "react";
-import { adminSession, adminUsers, adminCreateUser, adminUpdateUser, adminResetPassword, managementFetch, fa, type AdminUserRow, type AdminRole, type Paged } from "@/lib/api";
+import { adminSession, adminUsers, adminCreateUser, adminUpdateUser, adminResetPassword, managementFetch, fa, FA_DATE, type AdminUserRow, type AdminRole, type Paged } from "@/lib/api";
 import s from "./admin.module.css";
 import { usePaged, SortTh, Pager, FilterBar, countActive, errorText as message } from "./AdminKit";
 
@@ -31,7 +31,7 @@ export function ProductsPanel() {
     try {
       // Only the name is editable on an existing product: type, series, description and the
       // technical specs are fixed at creation. To change them, delete and create again.
-      // The code is the film model printed on the carton, e.g. PC15.
+      // The code is the numeric item code, e.g. 1015.
       await managementFetch<Product>(editing ? `products/${encodeURIComponent(form.code)}` : "products",
         editing ? { code: form.code, name: form.name } : form, editing ? "PUT" : "POST");
       list.reload(); setForm(empty); setEditing(false); setMsg("محصول ذخیره شد.");
@@ -51,7 +51,7 @@ export function ProductsPanel() {
     <form className={`${s.card} ${s.adminForm}`} onSubmit={save}>
       <h2>{editing ? "ویرایش محصول" : "تعریف محصول"}</h2>
       <div className={s.row2}>
-        <label>کد محصول (مدل روی کارتن)<input required maxLength={24} pattern="[A-Za-z0-9-]+" disabled={editing} value={form.code} placeholder="مثلاً PC15" onChange={e => setForm({ ...form, code: e.target.value.replace(/\s+/g, "").toUpperCase() })} dir="ltr" /></label>
+        <label>کد محصول (فقط عدد)<input required maxLength={editing ? 24 : 12} pattern={editing ? undefined : "[0-9]+"} inputMode="numeric" disabled={editing} value={form.code} placeholder="مثلاً 1015" onChange={e => setForm({ ...form, code: e.target.value.replace(/[۰-۹]/g, d => String("۰۱۲۳۴۵۶۷۸۹".indexOf(d))).replace(/\D+/g, "") })} dir="ltr" /></label>
         <label>نام محصول<input required maxLength={120} value={form.name} onChange={e => setForm({ ...form, name: e.target.value })} /></label>
         <label>نوع محصول<select value={form.type} disabled={editing} onChange={e => setForm({ ...form, type: e.target.value })}><option value="tint">فیلم شیشه</option><option value="ppf">فیلم محافظ رنگ (شامل Color PPF)</option></select></label>
         <label>سری<input maxLength={80} disabled={editing} list="series-options" value={form.series} onChange={e => setForm({ ...form, series: e.target.value })} /></label>
@@ -87,7 +87,7 @@ export function ProductsPanel() {
         <td dir="ltr">{p.vlt != null ? p.vlt : "—"}</td><td dir="ltr">{p.irr != null ? p.irr : "—"}</td>
         <td dir="ltr">{p.tser != null ? p.tser : "—"}</td><td dir="ltr">{p.warrantyYears != null ? `${p.warrantyYears}Y` : "—"}</td>
         <td><span className={s.badge} data-tone={p.archived ? "muted" : "active"}>{p.archived ? "بایگانی" : "فعال"}</span></td>
-        <td>{p.updatedAt ? new Date(p.updatedAt).toLocaleDateString("fa-IR") : "—"}</td>
+        <td>{p.updatedAt ? new Date(p.updatedAt).toLocaleDateString(FA_DATE) : "—"}</td>
         <td>
           <button type="button" className={s.ghost} onClick={() => { setForm({ ...empty, ...p }); setEditing(true); setMsg(""); window.scrollTo({ top: 0, behavior: "smooth" }); }}>ویرایش {p.code}</button>
           <button type="button" className={s.danger} disabled={busy} onClick={() => remove(p.code)}>حذف</button>

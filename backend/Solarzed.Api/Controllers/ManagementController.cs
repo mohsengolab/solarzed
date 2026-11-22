@@ -59,8 +59,10 @@ public class ManagementController(AppDbContext db) : ControllerBase
     [HttpPost("products")]
     public async Task<IActionResult> Create(ProductRequest req)
     {
-        // The code is the film model printed on the carton (e.g. PC15); it also goes into every roll ID.
-        var error = Validate(req, requireType: true);
+        // The code is the numeric item code entered by the admin (e.g. 1015); it also goes into every roll ID.
+        // Products created before codes were numeric keep their original code.
+        var error = req.Code is { } c && !System.Text.RegularExpressions.Regex.IsMatch(c.Trim(), "^[0-9]{1,12}$")
+            ? "Product code must be 1–12 digits." : Validate(req, requireType: true);
         if (error != null) return BadRequest(new { error });
         var code = req.Code!.Trim().ToUpperInvariant();
         if (await db.Products.AnyAsync(p => p.Code == code)) return Conflict(new { error = "Product code already exists." });

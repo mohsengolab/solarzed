@@ -6,7 +6,7 @@ import QRCode from "qrcode";
 import {
   adminLogin, adminLogout, adminSession, adminOverview, adminWarranties, adminDecision,
   adminRollsSearch, adminCreateRolls, adminUpdateRoll, adminDeleteRoll, issueCardsForRolls, adminGetSettings, adminSaveSettings,
-  adminBoxLabels, managementFetch, ADMIN_UNAUTHORIZED, fa, qs,
+  adminBoxLabels, managementFetch, ADMIN_UNAUTHORIZED, fa, qs, FA_DATE,
 } from "@/lib/api";
 import styles from "./admin.module.css";
 import labelsStyle from "./labels.module.css";
@@ -968,7 +968,7 @@ function RollsPanel() {
                 <td><Badge value={r.qc} /></td>
                 <td>{fa(r.status)}</td>
                 <td>{r.installs.toLocaleString("fa-IR")}</td>
-                <td>{new Date(r.receivedAt).toLocaleDateString("fa-IR")}</td>
+                <td>{new Date(r.receivedAt).toLocaleDateString(FA_DATE)}</td>
                 <td>
                   <button type="button" className={styles.ghost} onClick={() => { setEdit(r); setNote(""); setMsg(""); }}>مدیریت</button>
                   {cardReady(r) && <button type="button" className={styles.ghost} disabled={saving} onClick={() => issueCards([r.id])}>ساخت کارت</button>}

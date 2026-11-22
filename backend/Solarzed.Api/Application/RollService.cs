@@ -29,11 +29,12 @@ public static class RollService
             _ => RollQc.Pending
         };
 
-        var yy = DateTime.UtcNow.ToString("yy");
+        // Gregorian year and month side by side, e.g. 2611 for November 2026.
+        var yymm = DateTime.UtcNow.ToString("yyMM", System.Globalization.CultureInfo.InvariantCulture);
         var model = req.ModelCode.ToUpperInvariant().Replace(" ", "");
 
-        // Find highest existing sequence for this model+year
-        var prefix = $"SZ-{model}-{yy}-";
+        // Find highest existing sequence for this model+month
+        var prefix = $"SZ-{model}-{yymm}-";
         var existing = await db.Rolls
             .Where(r => r.Id.StartsWith(prefix))
             .Select(r => r.Id)
