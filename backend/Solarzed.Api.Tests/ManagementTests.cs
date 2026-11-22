@@ -1,3 +1,4 @@
+using System.Reflection;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Configuration;
@@ -26,6 +27,32 @@ public class ManagementTests
         Assert.IsType<OkObjectResult>(await api.Create(Product("test")));
         Assert.IsType<ConflictObjectResult>(await api.Create(Product()));
         Assert.Single(db.Products);
+    }
+
+    [Fact]
+    public async Task EmptyProductCodeIsAssignedPerType()
+    {
+        using var db = Database(); var api = new ManagementController(db);
+        async Task<string> Create(string type, string name) =>
+            ((Product)((OkObjectResult)await api.Create(Product("") with { Type = type, Name = name })).Value!).Code;
+        Assert.Equal("TINT-0001", await Create("tint", "Film 1"));
+        Assert.Equal("TINT-0002", await Create("tint", "Film 2"));
+        Assert.Equal("PPF-0001", await Create("ppf", "PPF 1"));
+        Assert.IsType<OkObjectResult>(await api.Create(Product("TINT-0010") with { Name = "Manual" }));
+        Assert.Equal("TINT-0011", await Create("tint", "Film 3"));
+    }
+
+    [Fact]
+    public void RenameBodyWithOnlyCodeAndNamePassesModelValidation()
+    {
+        // The admin rename sends {code, name}; [ApiController] must not reject the missing type with a 400.
+        var req = System.Text.Json.JsonSerializer.Deserialize<ProductRequest>("""{"code":"A","name":"New"}""",
+            new System.Text.Json.JsonSerializerOptions(System.Text.Json.JsonSerializerDefaults.Web))!;
+        var ctx = new NullabilityInfoContext();
+        var ctor = typeof(ProductRequest).GetConstructors().Single();
+        foreach (var name in new[] { "Code", "Type" })
+            Assert.Equal(NullabilityState.Nullable, ctx.Create(ctor.GetParameters().Single(p => p.Name == name)).WriteState);
+        Assert.Null(req.Type);
     }
 
     [Fact]

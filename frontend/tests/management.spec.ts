@@ -11,12 +11,14 @@ test("product lifecycle and inventory QC through the real admin interface", asyn
   await page.getByLabel("رمز عبور", { exact: true }).fill("local-browser-tests-only");
   await page.getByRole("button", { name: "ورود ↗", exact: true }).click();
   await page.getByRole("button", { name: "محصولات", exact: true }).click();
-  const code = `QA-${Date.now()}`;
-  await page.getByLabel("کد محصول", { exact: true }).fill(code);
-  await page.getByLabel("نام محصول", { exact: true }).fill("محصول آزمایش مرورگر");
+  // The product code is assigned by the server and shown in the success message.
+  await expect(page.getByLabel("کد محصول", { exact: true })).not.toBeEditable();
+  await page.getByLabel("نام محصول", { exact: true }).fill(`محصول آزمایش مرورگر ${Date.now()}`);
   await page.getByLabel("سری", { exact: true }).fill("Test series");
   await page.getByRole("button", { name: "ذخیره محصول", exact: true }).click();
-  await expect(page.getByText("محصول ذخیره شد.", { exact: true })).toBeVisible();
+  const saved = page.getByText(/^محصول ذخیره شد\. کد: TINT-\d{4}$/);
+  await expect(saved).toBeVisible();
+  const code = (await saved.textContent())!.split("کد: ")[1];
   // The product is published to the public catalog immediately.
   const catalog = await request.get(`${api}/api/catalog`);
   expect((await catalog.json()).some((p: { code: string }) => p.code === code)).toBe(true);
@@ -27,7 +29,7 @@ test("product lifecycle and inventory QC through the real admin interface", asyn
   await expect(page.getByLabel("کد مدل", { exact: true })).toHaveValue(code);
   const batch = `B-${Date.now()}`;
   await page.getByLabel("بچ", { exact: true }).fill(batch);
-  await page.getByLabel("کد تأمین‌کننده", { exact: true }).fill("TEST");
+  await page.getByLabel("کد تأمین‌کننده / کارخانه (۳ حرف انگلیسی)", { exact: true }).fill("TST");
   await page.getByLabel("عرض رول (سانتی‌متر)", { exact: true }).fill("152");
   await page.getByLabel("طول رول (متر)", { exact: true }).fill("30");
   for (const [label, value] of [["ضخامت (Mil)", "2"], ["VLT%", "70"], ["IRR% (950nm)", "90"], ["UV%", "99"], ["TSER%", "60"], ["گارانتی (سال)", "7"]] as const)
@@ -57,8 +59,8 @@ test("product lifecycle and inventory QC through the real admin interface", asyn
   await expect(editedRow).toContainText("76 × 30");
   await editedRow.getByRole("button", { name: "مدیریت", exact: true }).click();
   await expect(dialog).toContainText("بررسی کیفیت مرورگر");
-  await dialog.getByRole("button", { name: "حذف رول", exact: true }).click();
-  await expect(page.getByText("رول حذف شد.", { exact: true })).toBeVisible();
+  await dialog.getByRole("button", { name: "بستن موجودی", exact: true }).click();
+  await expect(dialog).toBeHidden();
 
   // ── Products can only be renamed; delete replaces the old archive flow ──
   await page.getByRole("button", { name: "محصولات", exact: true }).click();
@@ -66,7 +68,7 @@ test("product lifecycle and inventory QC through the real admin interface", asyn
   // Only the name is editable: type, series and description are disabled in edit mode.
   await expect(page.getByLabel("نوع محصول")).toBeDisabled();
   await expect(page.getByLabel("سری", { exact: true })).toBeDisabled();
-  const renamed = `محصول آزمایش مرورگر ۲`;
+  const renamed = `محصول آزمایش مرورگر ۲ ${Date.now()}`;
   await page.getByLabel("نام محصول", { exact: true }).fill(renamed);
   await page.getByRole("button", { name: "ذخیره محصول", exact: true }).click();
   await expect(page.getByRole("row").filter({ hasText: code })).toContainText(renamed);
@@ -75,7 +77,8 @@ test("product lifecycle and inventory QC through the real admin interface", asyn
   await expect(page.getByText("This product has rolls in inventory; delete or void its rolls first.", { exact: true })).toBeVisible();
   // Delete the roll, then the product deletes and the code is free again.
   await page.getByRole("button", { name: "رول‌ها", exact: true }).click();
-  await page.getByRole("row").filter({ hasText: batch2 }).getByRole("button", { name: "حذف", exact: true }).click();
+  await page.getByRole("row").filter({ hasText: batch2 }).getByRole("button", { name: "مدیریت", exact: true }).click();
+  await dialog.getByRole("button", { name: "حذف رول", exact: true }).click();
   await expect(page.getByText("رول حذف شد.", { exact: true })).toBeVisible();
   await page.getByRole("button", { name: "محصولات", exact: true }).click();
   await page.getByRole("row").filter({ hasText: code }).getByRole("button", { name: "حذف", exact: true }).click();
@@ -83,12 +86,13 @@ test("product lifecycle and inventory QC through the real admin interface", asyn
   await expect(page.getByRole("row").filter({ hasText: code })).toHaveCount(0);
   const afterDelete = await request.get(`${api}/api/catalog`);
   expect((await afterDelete.json()).some((p: { code: string }) => p.code === code)).toBe(false);
-  await page.getByLabel("کد محصول", { exact: true }).fill(code);
   await page.getByLabel("نام محصول", { exact: true }).fill(renamed);
   await page.getByRole("button", { name: "ذخیره محصول", exact: true }).click();
-  await expect(page.getByText("محصول ذخیره شد.", { exact: true })).toBeVisible();
+  const resaved = page.getByText(/^محصول ذخیره شد\. کد: TINT-\d{4}$/);
+  await expect(resaved).toBeVisible();
+  const code2 = (await resaved.textContent())!.split("کد: ")[1];
   // Clean up the re-created product so repeated runs stay small.
-  await page.getByRole("row").filter({ hasText: code }).getByRole("button", { name: "حذف", exact: true }).click();
+  await page.getByRole("row").filter({ hasText: code2 }).getByRole("button", { name: "حذف", exact: true }).click();
   await expect(page.getByText("محصول حذف شد.", { exact: true })).toBeVisible();
 
   // ── Server-side filters: QC + batch narrow the inventory; a contradicting status empties it ──

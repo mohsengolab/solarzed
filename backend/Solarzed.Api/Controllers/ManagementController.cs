@@ -59,9 +59,12 @@ public class ManagementController(AppDbContext db) : ControllerBase
     [HttpPost("products")]
     public async Task<IActionResult> Create(ProductRequest req)
     {
+        // The admin form leaves the code empty: the server assigns the next one for the product type.
+        var autoCode = string.IsNullOrWhiteSpace(req.Code);
+        if (autoCode) req = req with { Code = "AUTO" };
         var error = Validate(req, requireType: true);
         if (error != null) return BadRequest(new { error });
-        var code = req.Code.Trim().ToUpperInvariant();
+        var code = autoCode ? await NextCode(req.Type) : req.Code!.Trim().ToUpperInvariant();
         if (await db.Products.AnyAsync(p => p.Code == code)) return Conflict(new { error = "Product code already exists." });
         if (await NameTaken(req.Name, null)) return Conflict(new { error = "Product name already exists." });
         var product = new Product { Code = code };
@@ -83,7 +86,7 @@ public class ManagementController(AppDbContext db) : ControllerBase
         if (error != null) return BadRequest(new { error });
         var product = await db.Products.FindAsync(code);
         if (product == null) return NotFound();
-        if (!string.Equals(code, req.Code.Trim(), StringComparison.OrdinalIgnoreCase))
+        if (!string.Equals(code, req.Code!.Trim(), StringComparison.OrdinalIgnoreCase))
             return BadRequest(new { error = "Product code cannot change; delete it and create a new product." });
         // Only the product name is editable. Type, series, description and the technical specs are fixed at
         // creation: to change them, delete the product and create it again.
@@ -121,9 +124,18 @@ public class ManagementController(AppDbContext db) : ControllerBase
         return db.Products.AnyAsync(p => p.Code != exceptCode && p.Name.ToLower() == normalized);
     }
 
+    // Next code for a type: TINT-0001, TINT-0002 … / PPF-0001 … (one above the highest existing number).
+    async Task<string> NextCode(string? type)
+    {
+        var prefix = (Enum.TryParse<WarrantyType>(type, true, out var t) && t == WarrantyType.Ppf ? "PPF" : "TINT") + "-";
+        var existing = await db.Products.AsNoTracking().Where(p => p.Code.StartsWith(prefix)).Select(p => p.Code).ToListAsync();
+        var max = existing.Select(c => int.TryParse(c[prefix.Length..], out var n) ? n : 0).DefaultIfEmpty(0).Max();
+        return $"{prefix}{max + 1:D4}";
+    }
+
     static string? Validate(ProductRequest r, bool requireType = true)
     {
-        if (string.IsNullOrWhiteSpace(r.Code) || !System.Text.RegularExpressions.Regex.IsMatch(r.Code.Trim(), "^[A-Za-z0-9-]{1,24}$")) return "Code must be 1–24 letters, numbers or hyphens.";
+        if (string.IsNullOrWhiteSpace(r.Code) || !System.Text.RegularExpressions.Regex.IsMatch(r.Code!.Trim(), "^[A-Za-z0-9-]{1,24}$")) return "Code must be 1–24 letters, numbers or hyphens.";
         if (string.IsNullOrWhiteSpace(r.Name) || r.Name.Trim().Length > 120) return "Product name is required (maximum 120 characters).";
         if (requireType && (!Enum.TryParse<WarrantyType>(r.Type, true, out var type) || !Enum.IsDefined(type))) return "Invalid product type.";
         if ((r.Series?.Length ?? 0) > 80 || (r.Description?.Length ?? 0) > 2000) return "Series or description is too long.";
@@ -137,7 +149,7 @@ public class ManagementController(AppDbContext db) : ControllerBase
     }
     static void Apply(Product p, ProductRequest r)
     {
-        p.Name = r.Name.Trim(); p.Type = Enum.Parse<WarrantyType>(r.Type, true);
+        p.Name = r.Name.Trim(); p.Type = Enum.Parse<WarrantyType>(r.Type!, true);
         p.Series = r.Series?.Trim() ?? ""; p.Description = r.Description?.Trim() ?? "";
         p.Archived = r.Archived; p.UpdatedAt = DateTime.UtcNow;
         p.ThicknessMil = r.ThicknessMil; p.Vlt = r.Vlt; p.Irr = r.Irr;
@@ -189,6 +201,6 @@ public class CustomerSearch
     public int Page { get; set; } = 1;
     public int PageSize { get; set; } = 20;
 }
-public record ProductRequest(string Code, string Name, string Type, string? Series, string? Description, bool Archived,
+public record ProductRequest(string? Code, string Name, string? Type, string? Series, string? Description, bool Archived,
     decimal? ThicknessMil = null, int? Vlt = null, int? Irr = null, int? Uv = null, int? Tser = null, int? WarrantyYears = null);
 public record ChangePasswordRequest(string Username, string CurrentPassword, string NewPassword);
