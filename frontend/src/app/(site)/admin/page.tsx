@@ -5,7 +5,7 @@ import Link from "next/link";
 import QRCode from "qrcode";
 import {
   adminLogin, adminLogout, adminSession, adminOverview, adminWarranties, adminDecision,
-  adminRollsSearch, adminCreateRolls, adminUpdateRoll, adminDeleteRoll, issueCardsForRolls, adminGetSettings, adminSaveSettings,
+  adminRollsSearch, adminCreateRolls, adminUpdateRoll, adminDeleteRoll, adminGetSettings, adminSaveSettings,
   adminBoxLabels, managementFetch, ADMIN_UNAUTHORIZED, fa, qs, FA_DATE,
 } from "@/lib/api";
 import styles from "./admin.module.css";
@@ -849,18 +849,6 @@ function RollsPanel() {
     }
   }
 
-  // A roll whose carton Roll No is recorded and that can get its warranty card now.
-  const cardReady = (r: RollRow) => !!r.rollNo && !r.cards && r.qc === "approved" && r.status !== "void";
-  async function issueCards(ids: string[]) {
-    if (!ids.length) return;
-    setSaving(true); setMsg("");
-    try {
-      const result = await issueCardsForRolls(ids);
-      setMsg(`${result.labels.length.toLocaleString("fa-IR")} کارت گارانتی ساخته شد. چاپ کارت‌ها از بخش «برچسب‌ها».`);
-      list.reload();
-    } catch (e) { setMsg(fa(errorText(e, "ساخت کارت ناموفق بود."))); } finally { setSaving(false); }
-  }
-
   async function exportCsv() {
     try {
       const all = await adminRollsSearch<RollRow>(list.exportQuery);
@@ -973,9 +961,12 @@ function RollsPanel() {
                 <td>{r.installs.toLocaleString("fa-IR")}</td>
                 <td>{new Date(r.receivedAt).toLocaleDateString(FA_DATE)}</td>
                 <td><div className={styles.rowActions}>
-                  <button type="button" className={styles.ghost} onClick={() => { setEdit(r); setNote(""); setMsg(""); }}>مدیریت</button>
-                  {cardReady(r) && <button type="button" className={styles.ghost} disabled={saving} onClick={() => issueCards([r.id])}>ساخت کارت</button>}
-                  <button type="button" className={styles.danger} onClick={() => deleteRoll(r.id)}>حذف</button>
+                  <button type="button" className={`${styles.ghost} ${styles.iconBtn}`} title="مدیریت" aria-label={`مدیریت رول ${r.id}`} onClick={() => { setEdit(r); setNote(""); setMsg(""); }}>
+                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><path d="M12 20h9"/><path d="M16.5 3.5a2.1 2.1 0 0 1 3 3L7 19l-4 1 1-4z"/></svg>
+                  </button>
+                  <button type="button" className={`${styles.danger} ${styles.iconBtn}`} title="حذف" aria-label={`حذف رول ${r.id}`} onClick={() => deleteRoll(r.id)}>
+                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"/><path d="M10 11v6"/><path d="M14 11v6"/><path d="M9 6V4a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v2"/></svg>
+                  </button>
                 </div></td>
               </tr>
             ))}
