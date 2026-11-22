@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, useCallback, FormEvent, type JSX } from "react";
+import { useState, useEffect, useCallback, useRef, FormEvent, type JSX } from "react";
 import Link from "next/link";
 import QRCode from "qrcode";
 import {
@@ -778,6 +778,9 @@ function RollsPanel() {
   const [f, setF] = useState(R_EMPTY);
   const [edit, setEdit] = useState<RollRow | null>(null);
   const [note, setNote] = useState("");
+  // Rolls just received: highlighted in the inventory, which scrolls into view after saving.
+  const [created, setCreated] = useState<string[]>([]);
+  const inventoryRef = useRef<HTMLDivElement>(null);
   const list = usePaged<RollRow>(adminRollsSearch<RollRow>, f, { sort: "receivedAt" });
   const set = (k: keyof typeof R_EMPTY) => (e: { target: { value: string } }) => setF(p => ({ ...p, [k]: e.target.value }));
   // A QR of the roll ID for every listed roll, drawn right in the registry.
@@ -828,10 +831,17 @@ function RollsPanel() {
     try {
       const num = (v: string) => (v.trim() === "" ? null : Number(v));
       if (!selectedProduct) { setMsg("مدل فیلم را انتخاب کنید."); return; }
-      await adminCreateRolls({ ...form, modelCode: selectedProduct.code, quantity: rollNos.length || 1, rollNos, widthCm: num(form.widthCm), lengthM: num(form.lengthM) });
+      const made = await adminCreateRolls({ ...form, modelCode: selectedProduct.code, quantity: rollNos.length || 1, rollNos, widthCm: num(form.widthCm), lengthM: num(form.lengthM) }) as { id: string }[];
+      const ids = made.map(r => r.id);
       setRollNos([]);
-      setMsg(rollNos.length ? `${rollNos.length.toLocaleString("fa-IR")} رول با Roll No کارتن ساخته شد.` : "رول ساخته شد.");
+      setMsg(`${ids.length.toLocaleString("fa-IR")} رول ساخته شد: ${ids.join("، ")}`);
+      // Show the new rolls: clear filters, newest first, first page, then scroll down to them.
+      setCreated(ids);
+      setF(R_EMPTY);
+      list.setSort("receivedAt", "desc");
+      list.setPage(1);
       list.reload();
+      setTimeout(() => inventoryRef.current?.scrollIntoView({ behavior: "smooth", block: "start" }), 300);
     } catch (ex: unknown) {
       setMsg(fa(errorText(ex, fa("Error"))));
     } finally {
@@ -839,9 +849,8 @@ function RollsPanel() {
     }
   }
 
-  // Rolls on this page whose carton Roll No is recorded and that can get their warranty card now.
+  // A roll whose carton Roll No is recorded and that can get its warranty card now.
   const cardReady = (r: RollRow) => !!r.rollNo && !r.cards && r.qc === "approved" && r.status !== "void";
-  const readyRolls = list.items.filter(cardReady);
   async function issueCards(ids: string[]) {
     if (!ids.length) return;
     setSaving(true); setMsg("");
@@ -921,11 +930,9 @@ function RollsPanel() {
         </form>
       </div>
 
-      <div className={styles.panelHead} style={{ marginTop: 24, marginBottom: 12 }}>
+      <div ref={inventoryRef} className={styles.panelHead} style={{ marginTop: 24, marginBottom: 12, scrollMarginTop: 16 }}>
         <h2>موجودی</h2>
         <div className={styles.filters}>
-          <button type="button" className={styles.btnPrimary} onClick={() => issueCards(readyRolls.map(r => r.id))} disabled={saving || !readyRolls.length}
-            title="رول‌های این صفحه که Roll No دارند، QC تأییدشده‌اند و هنوز کارت ندارند">ساخت کارت گارانتی برای رول‌های آماده ({readyRolls.length.toLocaleString("fa-IR")})</button>
           <button type="button" className={styles.ghost} onClick={exportCsv} disabled={!list.total}>خروجی CSV (حداکثر ۲۰۰)</button>
         </div>
       </div>
@@ -949,12 +956,12 @@ function RollsPanel() {
             <SortTh column="status" label="وضعیت" {...sortProps} /><th>نصب‌ها</th><SortTh column="receivedAt" label="دریافت" {...sortProps} /><th>عملیات</th></tr></thead>
           <tbody>
             {list.items.map(r => (
-              <tr key={r.id}>
+              <tr key={r.id} style={created.includes(r.id) ? { background: "rgb(var(--sz-tint) / 0.08)" } : undefined}>
                 <td>{qrs[r.id] && <button type="button" onClick={() => openQr(r)} title="نمایش بزرگ و چاپ QR" aria-label={`نمایش بزرگ QR رول ${r.id}`}
                   style={{ display: "block", padding: 0, border: 0, background: "none", cursor: "zoom-in" }}>
                   <img src={qrs[r.id]} alt={`QR رول ${r.id}`} width={44} height={44} style={{ display: "block", background: "#fff", borderRadius: 4, padding: 2 }} />
                 </button>}</td>
-                <td><code dir="ltr">{r.id}</code></td>
+                <td><code dir="ltr" style={{ whiteSpace: "nowrap" }}>{r.id}</code></td>
                 <td>{r.rollNo ? <code dir="ltr">{r.rollNo}</code> : "—"}{r.cards > 0 && <small style={{ display: "block", opacity: .7 }}>کارت صادر شده</small>}</td>
                 <td>{r.modelCode}</td>
                 <td>{r.type}</td>
