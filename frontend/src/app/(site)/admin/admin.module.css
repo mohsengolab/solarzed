@@ -336,6 +336,15 @@
 }
 .table tbody tr:hover td { background: rgb(var(--sz-tint) / 0.03); }
 .table code { font-size: 12px; color: var(--sz-accent-fg); letter-spacing: 0.03em; }
+/* Wide tables scroll inside their card instead of spilling out of it. */
+.card:has(> .table) { overflow-x: auto; }
+.table th { white-space: nowrap; }
+/* Row action buttons: side by side and compact. */
+.rowActions { display: flex; gap: 6px; flex-wrap: nowrap; }
+.rowActions > button { padding: 5px 10px; white-space: nowrap; }
+/* Many-column tables: tighter cells so they fit the card on a normal screen. */
+.tableCompact th { padding: 0 8px 12px; }
+.tableCompact td { padding: 10px 8px; }
 
 .loading { color: var(--sz-fg-4); padding: 48px; text-align: center; font-size: 14px; }
 .empty   { color: var(--sz-fg-4); font-size: 13px; padding: 16px 0; line-height: 1.6; }
