@@ -13,6 +13,7 @@ import labelsStyle from "./labels.module.css";
 import BoxLabelsPanel from "./BoxLabelsPanel";
 import { printQrLabels, printQrImage } from "./qrPrint";
 import { ProductsPanel, CustomersPanel, AccountPanel, UsersPanel } from "./ManagementPanels";
+import { WarehousesPanel, WarehouseIcon, PersonIcon } from "./WarehousesPanel";
 import TicketsPanel from "./TicketsPanel";
 import SerialInput from "@/components/SerialInput";
 import SmsSettingsPanel from "./SmsSettingsPanel";
@@ -20,10 +21,10 @@ import { ClaimsPanel, HistoryPanel, WarrantyActivity } from "./ClaimsPanels";
 import { usePaged, SortTh, Pager, FilterBar, countActive, downloadCsv, errorText } from "./AdminKit";
 
 type Role = "superadmin" | "admin" | "carton";
-const VIEWS = ["overview", "reports", "warranties", "claims", "rolls", "products", "customers", "tickets", "labels", "history", "sms", "settings", "account", "users"] as const;
+const VIEWS = ["overview", "reports", "warranties", "claims", "rolls", "warehouses", "products", "customers", "tickets", "labels", "history", "sms", "settings", "account", "users"] as const;
 type View = typeof VIEWS[number];
 const LABELS: Record<View, string> = {
-  overview: "نمای کلی", reports: "گزارش‌ها", warranties: "گارانتی‌ها", claims: "ادعاها", history: "سابقه تغییرات", rolls: "رول‌ها", products: "محصولات",
+  overview: "نمای کلی", reports: "گزارش‌ها", warranties: "گارانتی‌ها", claims: "ادعاها", history: "سابقه تغییرات", rolls: "رول‌ها", warehouses: "انبارها", products: "محصولات",
   labels: "برچسب‌ها", customers: "مشتریان", tickets: "تیکت‌ها", sms: "پیامک", settings: "تنظیمات", account: "حساب کاربری", users: "کاربران",
 };
 // The customer list is confidential, and user management belongs to the super administrator alone.
@@ -41,6 +42,7 @@ const NavIcons: Record<View, JSX.Element> = {
   warranties:<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/><polyline points="9 12 11 14 15 10"/></svg>,
   claims:   <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="12" y1="12" x2="12" y2="15"/><line x1="12" y1="18" x2="12.01" y2="18"/></svg>,
   history:  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>,
+  warehouses: <WarehouseIcon />,
   rolls:    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><ellipse cx="12" cy="12" rx="10" ry="4"/><path d="M2 12v6c0 2.2 4.5 4 10 4s10-1.8 10-4v-6"/><path d="M2 6v6c0 2.2 4.5 4 10 4s10-1.8 10-4V6"/></svg>,
   products: <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"/></svg>,
   labels:   <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M20.59 13.41l-7.17 7.17a2 2 0 0 1-2.83 0L2 12V2h10l8.59 8.59a2 2 0 0 1 0 2.82z"/><line x1="7" y1="7" x2="7.01" y2="7"/></svg>,
@@ -138,7 +140,7 @@ function LoginView({ onLogin }: { onLogin: (role: Role) => void }) {
 
 const NAV_GROUPS: { label?: string; views: View[] }[] = [
   { views: ["overview", "reports"] },
-  { label: "مدیریت", views: ["warranties", "claims", "tickets", "rolls", "products", "customers", "labels", "history"] },
+  { label: "مدیریت", views: ["warranties", "claims", "tickets", "rolls", "warehouses", "products", "customers", "labels", "history"] },
   { label: "پیکربندی", views: ["sms", "settings"] },
   { label: "حساب", views: ["account", "users"] },
 ];
@@ -194,11 +196,12 @@ function AdminApp({ view, role, onNav, onLogout }: { view: View; role: Role; onN
         {view === "customers" && <CustomersPanel />}
         {view === "account"   && <AccountPanel role={role} />}
         {view === "users"     && <UsersPanel />}
-        {view === "warranties"&& <WarrantiesPanel />}
+        {view === "warranties"&& <WarrantiesPanel role={role} />}
         {view === "claims"    && <ClaimsPanel />}
         {view === "tickets"   && <TicketsPanel />}
         {view === "history"   && <HistoryPanel />}
-        {view === "rolls"     && <RollsPanel />}
+        {view === "rolls"     && <RollsPanel role={role} />}
+        {view === "warehouses"&& <WarehousesPanel />}
         {view === "labels"    && <BoxLabelsPanel onSettings={() => onNav("settings")} role={role} />}
         {view === "sms"       && <SmsSettingsPanel />}
         {view === "settings"  && <SettingsPanel />}
@@ -555,7 +558,14 @@ type WRow = { code: string; owner: string; phone: string; make: string; model: s
 const FLAGS = ["roll_unknown", "roll_not_approved", "roll_not_distributed", "roll_void", "type_mismatch", "vin_repeat"];
 const W_EMPTY = { q: "", type: "", flagged: "", flag: "", make: "", installer: "", installedFrom: "", installedTo: "", createdFrom: "", createdTo: "", expiringDays: "" };
 
-function WarrantiesPanel() {
+// Rows carry `ref`, an opaque handle for decisions; «مدیر» sees the code masked (last four characters).
+const loadWarranties = (q: string) => adminWarranties<WRow>(q).then(r => {
+  const refs = (r as unknown as { refs?: string[] }).refs ?? [];
+  return { ...r, items: r.items.map((w, i) => ({ ...w, ref: refs[i] ?? w.code })) };
+});
+
+function WarrantiesPanel({ role }: { role: Role }) {
+  const seesCodes = role === "superadmin";
   const [status, setStatus] = useState("pending");
   const [f, setF] = useState(W_EMPTY);
   const [selected, setSelected] = useState<WRow | null>(null);
@@ -570,7 +580,7 @@ function WarrantiesPanel() {
   const [width, setWidth] = useState(80);
   const [height, setHeight] = useState(50);
 
-  const list = usePaged<WRow>(adminWarranties<WRow>, { ...f, status }, { sort: "createdAt" });
+  const list = usePaged<WRow>(loadWarranties, { ...f, status }, { sort: "createdAt" });
   const set = (k: keyof typeof W_EMPTY) => (e: { target: { value: string } }) => setF(p => ({ ...p, [k]: e.target.value }));
 
   useEffect(() => {
@@ -595,7 +605,7 @@ function WarrantiesPanel() {
     setSaving(true);
     setMsg("");
     try {
-      await adminDecision(selected.code, decStatus, decNote);
+      await adminDecision(String(selected.ref ?? selected.code), decStatus, decNote);
       setMsg("ذخیره شد.");
       setSelected(null);
       list.reload();
@@ -668,9 +678,9 @@ function WarrantiesPanel() {
             <SortTh column="filmEnds" label="پایان فیلم" {...sortProps} /><SortTh column="status" label="وضعیت" {...sortProps} /><th>پرچم‌ها</th></tr></thead>
           <tbody>
             {list.items.map(w => (
-              <tr key={w.code} onClick={() => { setSelected(w); setDecStatus("active"); setDecNote(""); setMsg(""); }} style={{ cursor: "pointer" }}>
+              <tr key={String(w.ref ?? w.code)} onClick={() => { setSelected(w); setDecStatus("active"); setDecNote(""); setMsg(""); }} style={{ cursor: "pointer" }}>
                 <td onClick={e => e.stopPropagation()}>
-                  <input type="checkbox" aria-label={`انتخاب ${w.code} برای چاپ QR`} disabled={w.status === "rejected"}
+                  <input type="checkbox" aria-label={`انتخاب ${w.code} برای چاپ QR`} disabled={!seesCodes || w.status === "rejected"}
                     checked={!!checked[w.code]}
                     onChange={e => setChecked(c => { const n = { ...c }; if (e.target.checked) n[w.code] = w; else delete n[w.code]; return n; })} />
                 </td>
@@ -691,7 +701,7 @@ function WarrantiesPanel() {
         <Pager page={list.page} pageSize={list.pageSize} total={list.total} loading={list.loading} onPage={list.setPage} />
       </div>
 
-      <div className={`${styles.card} ${styles.adminForm}`} style={{ marginBottom: 20 }}>
+      {seesCodes && <div className={`${styles.card} ${styles.adminForm}`} style={{ marginBottom: 20 }}>
         <h2>کدهای QR گارانتی</h2>
         <p className={labelsStyle.help}>گارانتی‌های بالا را برای چاپ برچسب QR انتخاب کنید (انتخاب بین صفحه‌ها و فیلترها حفظ می‌شود). اسکن آن، صفحه بررسی عمومی گارانتی همان کد را روی {site ? new URL(site).host : "وب‌سایت عمومی"} باز می‌کند. گارانتی‌های رد شده قابل چاپ نیستند.</p>
         {qrError && <p role="alert" className={labelsStyle.error}>{qrError}</p>}
@@ -706,7 +716,7 @@ function WarrantiesPanel() {
           </button>
           {printable.length > 0 && <button type="button" className={styles.ghost} onClick={() => setChecked({})}>پاک کردن انتخاب</button>}
         </div>
-      </div>
+      </div>}
 
       <div className={labelsStyle.previews}>{printable.map(w => (
         <article key={w.code} className={labelsStyle.preview}>
@@ -727,7 +737,7 @@ function WarrantiesPanel() {
           <div className={styles.dialogInner}>
             <button type="button" onClick={() => setSelected(null)} className={styles.dialogClose} aria-label="بستن">×</button>
             <h2>تصمیم — <span dir="ltr">{selected.code}</span></h2>
-            <dl>{["owner", "phone", "make", "model", "vin", "plate", "filmSerial", "invoiceNumber", "installed", "sellerName", "sellerPhone", "installer", "rollId", "flagsJson", "reviewNote"].map(k => <div key={k}><dt>{fa(k)}</dt><dd>{String(selected[k] ?? "—")}</dd></div>)}</dl>
+            <dl>{["owner", "phone", "make", "model", "vin", "plate", "filmSerial", "invoiceNumber", "installed", "sellerName", "sellerPhone", "installer", ...(seesCodes ? ["rollId"] : []), "flagsJson", "reviewNote"].map(k => <div key={k}><dt>{fa(k)}</dt><dd>{String(selected[k] ?? "—")}</dd></div>)}</dl>
             <label>وضعیت
               <select value={decStatus} onChange={e => setDecStatus(e.target.value)}>
                 <option value="active">فعال‌سازی</option>
@@ -742,7 +752,7 @@ function WarrantiesPanel() {
               {saving ? "در حال ذخیره…" : "ذخیره تصمیم"}
             </button>
             {msg && <p>{msg}</p>}
-            <WarrantyActivity key={selected.code} code={selected.code} />
+            <WarrantyActivity key={String(selected.ref ?? selected.code)} code={String(selected.ref ?? selected.code)} />
           </div>
         </div>
       )}
@@ -752,7 +762,8 @@ function WarrantiesPanel() {
 
 // ── Rolls ─────────────────────────────────────────────────────────────────────
 
-type RollRow = { id: string; number: number; rollNo?: string | null; cards: number; modelCode: string; type: string; batch: string; supplier: string; qc: string; status: string; installs: number; historyJson: string; receivedAt: string; widthCm?: number | null; lengthM?: number | null };
+type RollLocation = { kind: "warehouse" | "user" | "person"; id: number; name: string; phone?: string | null };
+type RollRow = { id: string; number: number; warehouseId?: number | null; holderUserId?: number | null; location?: RollLocation | null; rollNo?: string | null; cards: number; modelCode: string; type: string; batch: string; supplier: string; qc: string; status: string; installs: number; historyJson: string; receivedAt: string; widthCm?: number | null; lengthM?: number | null };
 type SpecKey = "thicknessMil" | "vlt" | "irr" | "uv" | "tser" | "warrantyYears";
 const SPEC_FIELDS: { key: SpecKey; label: string; min: number; max: number; step: number; placeholder: string }[] = [
   { key: "thicknessMil", label: "ضخامت (Mil)", min: 0.1, max: 20, step: 0.1, placeholder: "مثلاً 2" },
@@ -762,10 +773,39 @@ const SPEC_FIELDS: { key: SpecKey; label: string; min: number; max: number; step
   { key: "tser", label: "TSER%", min: 0, max: 100, step: 1, placeholder: "رد کل انرژی خورشیدی" },
   { key: "warrantyYears", label: "گارانتی (سال)", min: 1, max: 30, step: 1, placeholder: "مثلاً 7" },
 ];
-const R_EMPTY = { q: "", model: "", type: "", qc: "", status: "", supplier: "", batch: "", receivedFrom: "", receivedTo: "", hasInstalls: "" };
+const R_EMPTY = { location: "", q: "", model: "", type: "", qc: "", status: "", supplier: "", batch: "", receivedFrom: "", receivedTo: "", hasInstalls: "" };
 
-function RollsPanel() {
-  const [form, setForm] = useState({ modelCode: "", type: "tint", batch: "", supplier: "", qc: "pending", widthCm: "", lengthM: "" });
+/** Where a roll is: warehouse icon + name, or person icon + the user / carton holder. */
+function LocationCell({ loc }: { loc?: RollLocation | null }) {
+  if (!loc) return <span style={{ opacity: .6 }}>نامشخص</span>;
+  return (
+    <span style={{ display: "inline-flex", alignItems: "center", gap: 6 }} title={loc.kind === "warehouse" ? "در انبار" : "دست شخص"}>
+      <span style={{ color: loc.kind === "warehouse" ? "var(--sz-teal)" : "var(--sz-amber)", display: "inline-flex" }}>{loc.kind === "warehouse" ? <WarehouseIcon /> : <PersonIcon />}</span>
+      <span>{loc.name}{loc.phone && <small dir="ltr" style={{ display: "block", opacity: .7 }}>{loc.phone}</small>}</span>
+    </span>
+  );
+}
+
+/** QC as a single mark: OK (approved), waiting, or rejected. */
+function QcMark({ qc }: { qc: string }) {
+  const [label, color, icon] = qc === "approved" ? ["OK", "var(--sz-green)", "M5 12l5 5 9-10"]
+    : qc === "rejected" ? ["رد", "var(--sz-red)", "M6 6l12 12M18 6L6 18"]
+    : ["در انتظار", "var(--sz-amber)", "M12 7v5l3 2"];
+  return (
+    <span style={{ display: "inline-flex", alignItems: "center", gap: 4, color, fontWeight: 700 }} title={fa(qc)}>
+      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+        {qc === "pending" && <circle cx="12" cy="12" r="9" />}<path d={icon} />
+      </svg>{label}
+    </span>
+  );
+}
+
+function RollsPanel({ role }: { role: Role }) {
+  const seesCodes = role === "superadmin";
+  const [form, setForm] = useState({ modelCode: "", type: "tint", batch: "", supplier: "", qc: "pending", widthCm: "", lengthM: "", warehouseId: "" });
+  // Location choices: warehouses (for receipt and moves) and system users (who can hold a roll).
+  const [locations, setLocations] = useState<{ warehouses: { id: number; name: string }[]; users: { id: number; name: string }[] }>({ warehouses: [], users: [] });
+  const [editLocation, setEditLocation] = useState("");
   // Carton Roll Nos scanned at receipt, one per line: each becomes one roll.
   const [rollNos, setRollNos] = useState<string[]>([]);
   const [msg, setMsg] = useState("");
@@ -785,7 +825,7 @@ function RollsPanel() {
   const set = (k: keyof typeof R_EMPTY) => (e: { target: { value: string } }) => setF(p => ({ ...p, [k]: e.target.value }));
   // A QR of the roll ID for every listed roll, drawn right in the registry.
   const [qrs, setQrs] = useState<Record<string, string>>({});
-  const rowKey = list.items.map(r => r.id).join("|");
+  const rowKey = list.items.map(r => r.id).filter(Boolean).join("|");
   useEffect(() => {
     let cancelled = false;
     Promise.all(rowKey.split("|").filter(Boolean).map(async id =>
@@ -803,15 +843,20 @@ function RollsPanel() {
   }
 
   useEffect(() => {
+    managementFetch<typeof locations>("locations").then(setLocations).catch(() => {});
+  }, []);
+  const receiveWarehouse = form.warehouseId || String(locations.warehouses[0]?.id ?? "");
+
+  useEffect(() => {
     managementFetch<{ items: typeof products }>("products?pageSize=200").then(r => setProducts(r.items)).catch(e => setMsg(fa(errorText(e, "بارگذاری محصولات ناموفق بود."))));
   }, []);
 
   async function updateRoll(e: FormEvent) {
     e.preventDefault(); if (!edit) return; setSaving(true); setMsg("");
     try {
-      await adminUpdateRoll(edit.id, {
+      await adminUpdateRoll(edit.id || String(edit.number), {
         qc: edit.qc, status: edit.status, note,
-        batch: edit.batch, supplier: edit.supplier, widthCm: edit.widthCm ?? null, lengthM: edit.lengthM ?? null, rollNo: edit.rollNo ?? "",
+        batch: edit.batch, supplier: edit.supplier, widthCm: edit.widthCm ?? null, lengthM: edit.lengthM ?? null, rollNo: edit.rollNo ?? "", location: editLocation,
       });
       list.reload(); setEdit(null); setMsg("موجودی به‌روزرسانی شد.");
     }
@@ -831,7 +876,7 @@ function RollsPanel() {
     try {
       const num = (v: string) => (v.trim() === "" ? null : Number(v));
       if (!selectedProduct) { setMsg("مدل فیلم را انتخاب کنید."); return; }
-      const made = await adminCreateRolls({ ...form, modelCode: selectedProduct.code, quantity: rollNos.length || 1, rollNos, widthCm: num(form.widthCm), lengthM: num(form.lengthM) }) as { id: string }[];
+      const made = await adminCreateRolls({ ...form, modelCode: selectedProduct.code, quantity: rollNos.length || 1, rollNos, widthCm: num(form.widthCm), lengthM: num(form.lengthM), warehouseId: receiveWarehouse ? Number(receiveWarehouse) : null }) as { id: string }[];
       const ids = made.map(r => r.id);
       setRollNos([]);
       setMsg(`${ids.length.toLocaleString("fa-IR")} رول ساخته شد: ${ids.join("، ")}`);
@@ -861,7 +906,7 @@ function RollsPanel() {
   return (
     <section>
       <header className={styles.panelHead}><div><span className={styles.eyebrow}>ثبت رول‌ها</span><h1>رول‌ها و Batchها</h1></div></header>
-      <div className={styles.card}>
+      {seesCodes && <div className={styles.card}>
         <h2>دریافت رول</h2>
         <form onSubmit={onSubmit} className={styles.adminForm}>
           <div className={styles.row2}>
@@ -902,6 +947,12 @@ function RollsPanel() {
               <input type="number" required min="1" max="1000" step="0.1" placeholder="مثلاً 152" value={form.widthCm} dir="ltr"
                 onChange={e => setForm(p => ({ ...p, widthCm: e.target.value }))} />
             </label>
+            <label>انبار
+              <select value={receiveWarehouse} onChange={e => setForm(p => ({ ...p, warehouseId: e.target.value }))}>
+                {!locations.warehouses.length && <option value="">ابتدا در «انبارها» انبار تعریف کنید</option>}
+                {locations.warehouses.map(w => <option key={w.id} value={w.id}>{w.name}</option>)}
+              </select>
+            </label>
             <label>طول رول (متر)
               <input type="number" required min="1" max="10000" step="0.1" placeholder="مثلاً 30" value={form.lengthM} dir="ltr"
                 onChange={e => setForm(p => ({ ...p, lengthM: e.target.value }))} />
@@ -916,7 +967,7 @@ function RollsPanel() {
           </button>
           {msg && <p>{msg}</p>}
         </form>
-      </div>
+      </div>}
 
       <div ref={inventoryRef} className={styles.panelHead} style={{ marginTop: 24, marginBottom: 12, scrollMarginTop: 16 }}>
         <h2>موجودی</h2>
@@ -925,10 +976,14 @@ function RollsPanel() {
         </div>
       </div>
       <FilterBar active={countActive(f)} onClear={() => setF(R_EMPTY)}>
-        <label className={styles.wide}>جستجوی موجودی<input type="search" placeholder="شماره، شناسه رول، Roll No، مدل، Batch یا تأمین‌کننده" value={f.q} onChange={set("q")} /></label>
+        <label className={styles.wide}>جستجوی موجودی<input type="search" placeholder={seesCodes ? "شماره، شناسه رول، Roll No، مدل، Batch یا تأمین‌کننده" : "شماره، Roll No، مدل، Batch یا تأمین‌کننده"} value={f.q} onChange={set("q")} /></label>
         <label>محصول<select value={f.model} onChange={set("model")}><option value="">همه محصولات</option>{products.map(p => <option key={p.code} value={p.code}>{p.code}</option>)}</select></label>
         <label>نوع<select value={f.type} onChange={set("type")}><option value="">همه انواع</option><option value="tint">فیلم شیشه</option><option value="ppf">PPF</option></select></label>
         <label>فیلتر QC<select value={f.qc} onChange={set("qc")}><option value="">هر QC</option><option value="pending">در انتظار</option><option value="approved">تأیید شده</option><option value="rejected">رد شده</option></select></label>
+        <label>لوکیشن<select value={f.location} onChange={set("location")}><option value="">همه جا</option>
+          <optgroup label="انبارها">{locations.warehouses.map(w => <option key={w.id} value={`warehouse:${w.id}`}>{w.name}</option>)}</optgroup>
+          <optgroup label="دست کاربر">{locations.users.map(u => <option key={u.id} value={`user:${u.id}`}>{u.name}</option>)}</optgroup>
+        </select></label>
         <label>فیلتر وضعیت انبار<select value={f.status} onChange={set("status")}><option value="">هر وضعیت</option><option value="instock">موجود در انبار</option><option value="shipped">ارسال شده</option><option value="consumed">مصرف شده</option><option value="void">باطل</option></select></label>
         <label>Batch شامل<input value={f.batch} onChange={set("batch")} /></label>
         <label>تأمین‌کننده شامل<input value={f.supplier} onChange={set("supplier")} /></label>
@@ -937,36 +992,36 @@ function RollsPanel() {
         <label>نصب‌ها<select value={f.hasInstalls} onChange={set("hasInstalls")}><option value="">هر</option><option value="true">دارای نصب</option><option value="false">بدون نصب</option></select></label>
       </FilterBar>
       {list.error && <p role="alert" className={styles.errorText}>{list.error}</p>}
-      <div className={styles.card}>
-        <table className={`${styles.table} ${styles.tableCompact} ${list.loading ? styles.tableBusy : ""}`}>
-          <thead><tr><SortTh column="number" label="#" {...sortProps} /><th>QR</th><SortTh column="id" label="شناسه رول" {...sortProps} /><SortTh column="rollNo" label="Roll No کارتن" {...sortProps} /><SortTh column="modelCode" label="مدل" {...sortProps} /><SortTh column="type" label="نوع" {...sortProps} />
-            <SortTh column="batch" label="Batch" {...sortProps} /><th>ابعاد (cm × m)</th><SortTh column="qc" label="QC" {...sortProps} />
-            <SortTh column="status" label="وضعیت" {...sortProps} /><th>نصب‌ها</th><SortTh column="receivedAt" label="دریافت" {...sortProps} /><th>عملیات</th></tr></thead>
+      <div className={`${styles.card} ${styles.rollsCard}`}>
+        <table className={`${styles.table} ${styles.tableCompact} ${seesCodes ? "" : styles.noCodes} ${list.loading ? styles.tableBusy : ""}`}>
+          <thead><tr><SortTh column="number" label="#" {...sortProps} /><th>QR</th><SortTh column="id" label="شناسه رول" {...sortProps} /><SortTh column="rollNo" label="Roll No" {...sortProps} /><SortTh column="modelCode" label="مدل" {...sortProps} /><SortTh column="type" label="نوع" {...sortProps} />
+            <SortTh column="batch" label="Batch" {...sortProps} /><th>ابعاد</th><SortTh column="qc" label="QC" {...sortProps} />
+            <th>لوکیشن</th><th>نصب‌ها</th><SortTh column="receivedAt" label="دریافت" {...sortProps} /><th>عملیات</th></tr></thead>
           <tbody>
             {list.items.map(r => (
-              <tr key={r.id} style={created.includes(r.id) ? { background: "rgb(var(--sz-tint) / 0.08)" } : undefined}>
+              <tr key={r.id || r.number} style={created.includes(r.id) ? { background: "rgb(var(--sz-tint) / 0.08)" } : undefined}>
                 <td><b>{r.number.toLocaleString("fa-IR")}</b></td>
                 <td>{qrs[r.id] && <button type="button" onClick={() => openQr(r)} title="نمایش بزرگ و چاپ QR" aria-label={`نمایش بزرگ QR رول ${r.id}`}
                   style={{ display: "block", padding: 0, border: 0, background: "none", cursor: "zoom-in" }}>
                   <img src={qrs[r.id]} alt={`QR رول ${r.id}`} width={44} height={44} style={{ display: "block", background: "#fff", borderRadius: 4, padding: 2 }} />
                 </button>}</td>
-                <td><code dir="ltr" style={{ whiteSpace: "nowrap" }}>{r.id}</code></td>
+                <td><code dir="ltr">{r.id}</code></td>
                 <td>{r.rollNo ? <code dir="ltr">{r.rollNo}</code> : "—"}{r.cards > 0 && <small style={{ display: "block", opacity: .7 }}>کارت صادر شده</small>}</td>
-                <td style={{ whiteSpace: "nowrap" }}>{r.modelCode}</td>
+                <td>{r.modelCode}</td>
                 <td>{r.type}</td>
                 <td>{r.batch}</td>
-                <td dir="ltr" style={{ whiteSpace: "nowrap" }}>{r.widthCm != null && r.lengthM != null ? `${r.widthCm} × ${r.lengthM}` : "—"}</td>
-                <td><Badge value={r.qc} /></td>
-                <td style={{ whiteSpace: "nowrap" }}>{fa(r.status)}</td>
+                <td dir="ltr" style={{ whiteSpace: "nowrap" }}>{r.widthCm != null && r.lengthM != null ? `${r.widthCm}×${r.lengthM}` : "—"}</td>
+                <td><QcMark qc={r.qc} /></td>
+                <td><LocationCell loc={r.location} />{r.status !== "instock" && <small style={{ display: "block", opacity: .7 }}>{fa(r.status)}</small>}</td>
                 <td>{r.installs.toLocaleString("fa-IR")}</td>
                 <td>{new Date(r.receivedAt).toLocaleDateString(FA_DATE)}</td>
                 <td><div className={styles.rowActions}>
-                  <button type="button" className={`${styles.ghost} ${styles.iconBtn}`} title="مدیریت" aria-label={`مدیریت رول ${r.id}`} onClick={() => { setEdit(r); setNote(""); setMsg(""); }}>
+                  <button type="button" className={`${styles.ghost} ${styles.iconBtn}`} title="مدیریت" aria-label={`مدیریت رول ${r.number}`} onClick={() => { setEdit(r); setEditLocation(r.holderUserId ? `user:${r.holderUserId}` : r.warehouseId ? `warehouse:${r.warehouseId}` : ""); setNote(""); setMsg(""); }}>
                     <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><path d="M12 20h9"/><path d="M16.5 3.5a2.1 2.1 0 0 1 3 3L7 19l-4 1 1-4z"/></svg>
                   </button>
-                  <button type="button" className={`${styles.danger} ${styles.iconBtn}`} title="حذف" aria-label={`حذف رول ${r.id}`} onClick={() => deleteRoll(r.id)}>
+                  {seesCodes && <button type="button" className={`${styles.danger} ${styles.iconBtn}`} title="حذف" aria-label={`حذف رول ${r.id}`} onClick={() => deleteRoll(r.id)}>
                     <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"/><path d="M10 11v6"/><path d="M14 11v6"/><path d="M9 6V4a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v2"/></svg>
-                  </button>
+                  </button>}
                 </div></td>
               </tr>
             ))}
@@ -976,10 +1031,16 @@ function RollsPanel() {
         <Pager page={list.page} pageSize={list.pageSize} total={list.total} loading={list.loading} onPage={list.setPage} />
       </div>
       {edit && <div className={styles.dialog} role="dialog" aria-modal="true" aria-label="مدیریت موجودی"><form className={`${styles.dialogInner} ${styles.adminForm}`} onSubmit={updateRoll}>
-        <h2 dir="ltr">#{edit.number} · {edit.id}</h2><button type="button" className={styles.dialogClose} aria-label="بستن موجودی" onClick={() => setEdit(null)}>×</button>
-        <label>کنترل کیفیت<select value={edit.qc} onChange={e => setEdit({ ...edit, qc: e.target.value })}>{["pending", "approved", "rejected"].map(v => <option key={v} value={v}>{fa(v)}</option>)}</select></label>
+        <h2 dir="ltr">#{edit.number}{seesCodes && ` · ${edit.id}`}</h2><button type="button" className={styles.dialogClose} aria-label="بستن موجودی" onClick={() => setEdit(null)}>×</button>
+        <label>کنترل کیفیت<select disabled={!seesCodes} value={edit.qc} onChange={e => setEdit({ ...edit, qc: e.target.value })}>{["pending", "approved", "rejected"].map(v => <option key={v} value={v}>{fa(v)}</option>)}</select></label>
+        <label>لوکیشن (کجاست)<select value={editLocation} onChange={e => setEditLocation(e.target.value)}>
+          <option value="">نامشخص</option>
+          <optgroup label="انبارها">{locations.warehouses.map(w => <option key={w.id} value={`warehouse:${w.id}`}>{w.name}</option>)}</optgroup>
+          <optgroup label="دست کاربر">{locations.users.map(u => <option key={u.id} value={`user:${u.id}`}>{u.name}</option>)}</optgroup>
+        </select></label>
         <label>وضعیت انبار<select value={edit.status} onChange={e => setEdit({ ...edit, status: e.target.value })}>{["instock", "shipped", "consumed", "void"].map(v => <option key={v} value={v}>{fa(v)}</option>)}</select></label>
-        <div className={styles.row2}>
+        {!seesCodes && <p style={{ margin: 0, fontSize: 13, opacity: .75 }}>شما فقط لوکیشن و وضعیت را تغییر می‌دهید.</p>}
+        <fieldset disabled={!seesCodes} className={styles.row2} style={{ border: 0, padding: 0, margin: 0, minWidth: 0 }}>
           <label>Roll No کارتن (بارکد کارخانه){edit.cards > 0 && " — کارت صادر شده، قابل تغییر نیست"}<input maxLength={32} value={edit.rollNo ?? ""} dir="ltr" disabled={edit.cards > 0} placeholder="مثلاً CPT30614374"
             onChange={e => setEdit({ ...edit, rollNo: e.target.value.replace(/\s+/g, "").toUpperCase() })} /></label>
           <label>Batch<input maxLength={32} value={edit.batch} dir="ltr" onChange={e => setEdit({ ...edit, batch: e.target.value })} /></label>
@@ -988,11 +1049,11 @@ function RollsPanel() {
             onChange={e => setEdit({ ...edit, widthCm: e.target.value === "" ? null : Number(e.target.value) })} /></label>
           <label>طول (متر)<input type="number" min={1} max={10000} step="0.1" value={edit.lengthM ?? ""} dir="ltr"
             onChange={e => setEdit({ ...edit, lengthM: e.target.value === "" ? null : Number(e.target.value) })} /></label>
-        </div>
+        </fieldset>
         <label>یادداشت تغییر<textarea maxLength={1000} value={note} onChange={e => setNote(e.target.value)} /></label>
         <div className={styles.filters}>
           <button className={styles.btnPrimary} disabled={saving}>{saving ? "در حال ذخیره…" : "ذخیره موجودی"}</button>
-          <button type="button" className={styles.danger} disabled={saving} onClick={() => { deleteRoll(edit.id); setEdit(null); }}>حذف رول</button>
+          {seesCodes && <button type="button" className={styles.danger} disabled={saving} onClick={() => { deleteRoll(edit.id); setEdit(null); }}>حذف رول</button>}
         </div>
         {msg && <p role="alert">{msg}</p>}
         <h3>تاریخچه</h3><div className={styles.history}>{(JSON.parse(edit.historyJson || "[]") as { at: string; action: string; note: string }[]).map((h, i) => <p key={i}>{h.at} · {h.action} · {h.note}</p>)}</div>

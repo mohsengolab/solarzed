@@ -16,10 +16,12 @@ namespace Solarzed.Api.Controllers;
 [ApiController]
 [Route("api/admin")]
 [Authorize(Policy = "StaffPolicy")]
-public class AdminController(AppDbContext db, IConfiguration cfg) : ControllerBase
+public class AdminController(AppDbContext db, IConfiguration cfg, Microsoft.AspNetCore.DataProtection.IDataProtectionProvider? protection = null) : ControllerBase
 {
     string JwtKey => cfg["Jwt:Key"] ?? throw new InvalidOperationException("Jwt:Key missing");
     string Actor => AuditLog.Actor(HttpContext?.User);
+    // Roll IDs and warranty codes are shown to the super administrator only (see Confidential).
+    bool SeesCodes => Confidential.SeesCodes(HttpContext?.User);
 
     // ── Auth ────────────────────────────────────────────────────────────────
 
@@ -119,13 +121,15 @@ public class AdminController(AppDbContext db, IConfiguration cfg) : ControllerBa
             .Take(20)
             .Select(w => new { w.Code, w.Type, w.Make, w.Model, w.Owner, w.Installed, w.FlagsJson, w.CreatedAt })
             .ToListAsync();
+        var shownQueue = queue.Select(w => new { Code = SeesCodes ? w.Code : Confidential.Mask(w.Code), Ref = Confidential.Ref(w.Code, protection),
+            w.Type, w.Make, w.Model, w.Owner, w.Installed, w.FlagsJson, w.CreatedAt });
 
         var awaitingDecision = await db.WarrantyClaims.AsNoTracking().Where(c => c.Stage < ClaimStage.Decided).ToListAsync();
         var openClaims = await db.WarrantyClaims.CountAsync(c => c.Stage != ClaimStage.Closed);
         var now = DateTime.UtcNow;
         var overdueClaims = awaitingDecision.Count(c => ClaimService.Due(c, now).Overdue);
 
-        return Ok(new { total, pending, active, rejected, rollCount, openClaims, overdueClaims, queue });
+        return Ok(new { total, pending, active, rejected, rollCount, openClaims, overdueClaims, queue = shownQueue });
     }
 
     // ── Warranties ──────────────────────────────────────────────────────────
@@ -168,21 +172,30 @@ public class AdminController(AppDbContext db, IConfiguration cfg) : ControllerBa
         }
         if (Paging.Term(f.Q) is { } q)
         {
-            query = query.Where(w =>
-                w.Code.Contains(q) || w.Vin.Contains(q) || w.Phone.Contains(q) || w.Plate.Contains(q) ||
-                w.FilmSerial.Contains(q) || w.Owner.Contains(q) || w.InvoiceNumber.Contains(q) ||
-                (w.RollId != null && w.RollId.Contains(q)));
+            query = SeesCodes
+                ? query.Where(w =>
+                    w.Code.Contains(q) || w.Vin.Contains(q) || w.Phone.Contains(q) || w.Plate.Contains(q) ||
+                    w.FilmSerial.Contains(q) || w.Owner.Contains(q) || w.InvoiceNumber.Contains(q) ||
+                    (w.RollId != null && w.RollId.Contains(q)))
+                : query.Where(w => w.Vin.Contains(q) || w.Phone.Contains(q) || w.Plate.Contains(q) ||
+                    w.FilmSerial.Contains(q) || w.Owner.Contains(q) || w.InvoiceNumber.Contains(q));
         }
 
         var page = new PageQuery(f.Page, f.PageSize, f.Sort, f.Dir);
-        return Ok(await query.OrderBy(f.Sort, page.Desc, WarrantySort, "createdAt").ToPage(page, ct));
+        var result = await query.OrderBy(f.Sort, page.Desc, WarrantySort, "createdAt").ToPage(page, ct);
+        // Every row carries a reference to act on it; other staff see the code masked and no roll ID.
+        var refs = result.Items.Select(w => Confidential.Ref(w.Code, protection)).ToList();
+        if (!SeesCodes)
+            foreach (var w in result.Items) { w.Code = Confidential.Mask(w.Code); w.RollId = null; }
+        return Ok(new { items = result.Items, refs, total = result.Total, page = result.Page, pageSize = result.PageSize });
     }
 
     [HttpPost("warranties/{code}/decision")]
     [Authorize(Policy = "AdminPolicy")]
     public async Task<IActionResult> Decision(string code, [FromBody] DecisionRequest req)
     {
-        var w = await db.WarrantyRegistrations.FirstOrDefaultAsync(x => x.Code == code);
+        if (Confidential.Resolve(code, HttpContext?.User, protection) is not { } resolved) return NotFound();
+        var w = await db.WarrantyRegistrations.FirstOrDefaultAsync(x => x.Code == resolved);
         if (w == null) return NotFound();
 
         if (!Enum.TryParse<WarrantyStatus>(req.Status, true, out var st) || !Enum.IsDefined(st))
@@ -242,11 +255,15 @@ public class AdminController(AppDbContext db, IConfiguration cfg) : ControllerBa
         if (Paging.Term(f.Q) is { } q)
         {
             var number = int.TryParse(q, out var n) ? n : -1;   // the register number, e.g. 12
-            query = query.Where(r => r.Number == number || r.Id.Contains(q) || (r.RollNo != null && r.RollNo.Contains(q)) || r.ModelCode.Contains(q) || r.Batch.Contains(q) || r.Supplier.Contains(q));
+            var byId = SeesCodes;
+            query = query.Where(r => r.Number == number || (byId && r.Id.Contains(q)) || (r.RollNo != null && r.RollNo.Contains(q)) || r.ModelCode.Contains(q) || r.Batch.Contains(q) || r.Supplier.Contains(q));
         }
         if (Paging.Term(f.Model) is { } model) { var m = model.ToUpperInvariant(); query = query.Where(r => r.ModelCode == m); }
         if (Paging.Term(f.Batch) is { } batch) query = query.Where(r => r.Batch.Contains(batch));
         if (Paging.Term(f.Supplier) is { } supplier) query = query.Where(r => r.Supplier.Contains(supplier));
+        if (ParseLocation(f.Location) is { } loc)
+            query = loc.Kind == "user" ? query.Where(r => r.HolderUserId == loc.Id)
+                : query.Where(r => r.HolderUserId == null && r.WarehouseId == loc.Id);
         if (!string.IsNullOrEmpty(f.Type) && Enum.TryParse<WarrantyType>(f.Type, true, out var t) && Enum.IsDefined(t))
             query = query.Where(r => r.Type == t);
         if (!string.IsNullOrEmpty(f.Qc) && Enum.TryParse<RollQc>(f.Qc, true, out var qc) && Enum.IsDefined(qc))
@@ -275,13 +292,28 @@ public class AdminController(AppDbContext db, IConfiguration cfg) : ControllerBa
             .GroupBy(b => b.RollId!)
             .Select(g => new { RollId = g.Key, Count = g.Count() })
             .ToDictionaryAsync(x => x.RollId, x => x.Count, ct);
+        // Where each roll is: a system user holding it, the person its carton was handed to, or its warehouse.
+        var warehouseIds = result.Items.Where(r => r.WarehouseId != null).Select(r => r.WarehouseId!.Value).Distinct().ToList();
+        var warehouses = await db.Warehouses.Where(w => warehouseIds.Contains(w.Id)).ToDictionaryAsync(w => w.Id, w => w.Name, ct);
+        var userIds = result.Items.Where(r => r.HolderUserId != null).Select(r => r.HolderUserId!.Value).Distinct().ToList();
+        var users = await db.AdminUsers.Where(u => userIds.Contains(u.Id))
+            .ToDictionaryAsync(u => u.Id, u => string.IsNullOrWhiteSpace(u.DisplayName) ? u.Username : u.DisplayName!, ct);
+        var holders = (await db.BoxLabels.Where(b => b.RollId != null && ids.Contains(b.RollId) && b.Holder != null)
+            .Select(b => new { RollId = b.RollId!, b.Holder, b.HolderPhone }).ToListAsync(ct))
+            .GroupBy(b => b.RollId).ToDictionary(g => g.Key, g => g.First());
+        RollLocation? Location(Roll r) =>
+            r.HolderUserId is { } u ? new RollLocation("user", u, users.GetValueOrDefault(u, "?"), null)
+            : holders.TryGetValue(r.Id, out var h) ? new RollLocation("person", 0, h.Holder!, h.HolderPhone)
+            : r.WarehouseId is { } w ? new RollLocation("warehouse", w, warehouses.GetValueOrDefault(w, "?"), null)
+            : null;
 
         return Ok(new
         {
             items = result.Items.Select(r => new
             {
-                r.Id, r.Number, r.RollNo, r.ModelCode, r.Type, r.Batch, r.Supplier, r.HistoryJson, r.WidthCm, r.LengthM,
+                Id = SeesCodes ? r.Id : null, r.Number, r.RollNo, r.ModelCode, r.Type, r.Batch, r.Supplier, r.HistoryJson, r.WidthCm, r.LengthM,
                 Qc = r.Qc.ToString().ToLower(), Status = r.Status.ToString().ToLower(),
+                r.WarehouseId, r.HolderUserId, Location = Location(r),
                 r.ReceivedAt,
                 Installs = counts.GetValueOrDefault(r.Id, 0),
                 Cards = cards.GetValueOrDefault(r.Id, 0)
@@ -291,7 +323,7 @@ public class AdminController(AppDbContext db, IConfiguration cfg) : ControllerBa
     }
 
     [HttpPost("rolls")]
-    [Authorize(Policy = "AdminPolicy")]
+    [Authorize(Policy = "SuperAdminPolicy")]   // receiving shows the new roll IDs
     public async Task<IActionResult> ReceiveRolls([FromBody] CreateRollsRequest req)
     {
         if (string.IsNullOrWhiteSpace(req.ModelCode)) return BadRequest(new { error = "modelCode required" });
@@ -321,6 +353,8 @@ public class AdminController(AppDbContext db, IConfiguration cfg) : ControllerBa
             return BadRequest(new { error = "Product is archived or its type does not match." });
         if (req.WidthCm is { } w && (w <= 0 || w > 1000)) return BadRequest(new { error = "Width must be between 0 and 1000 cm." });
         if (req.LengthM is { } l && (l <= 0 || l > 10000)) return BadRequest(new { error = "Length must be between 0 and 10000 m." });
+        if (req.WarehouseId is { } wh && !await db.Warehouses.AnyAsync(x => x.Id == wh && !x.Archived))
+            return BadRequest(new { error = "Choose an active warehouse." });
         // Technical specs belong to the product and are fixed there; a receipt never changes them.
 
         Roll[] rolls;
@@ -331,12 +365,36 @@ public class AdminController(AppDbContext db, IConfiguration cfg) : ControllerBa
         return Ok(rolls.Select(r => new { r.Id, r.Number, r.RollNo, r.ModelCode, r.Type, r.Batch }));
     }
 
+    record LocationRef(string Kind, int Id);
+    static LocationRef? ParseLocation(string? raw)
+    {
+        var parts = (raw ?? "").Trim().Split(':');
+        return parts.Length == 2 && parts[0] is "warehouse" or "user" && int.TryParse(parts[1], out var id) && id > 0
+            ? new LocationRef(parts[0], id) : null;
+    }
+
+    /// <summary>Choices for a roll's location: active warehouses and active system users (names only).</summary>
+    [HttpGet("locations")]
+    public async Task<IActionResult> Locations(CancellationToken ct) => Ok(new
+    {
+        warehouses = await db.Warehouses.AsNoTracking().Where(w => !w.Archived).OrderBy(w => w.Name)
+            .Select(w => new { w.Id, w.Name }).ToListAsync(ct),
+        users = await db.AdminUsers.AsNoTracking().Where(u => u.Active).OrderBy(u => u.Username)
+            .Select(u => new { u.Id, Name = string.IsNullOrEmpty(u.DisplayName) ? u.Username : u.DisplayName }).ToListAsync(ct),
+    });
+
     [HttpPost("rolls/{id}")]
     [Authorize(Policy = "AdminPolicy")]
     public async Task<IActionResult> UpdateRoll(string id, [FromBody] UpdateRollRequest req)
     {
-        var roll = await db.Rolls.FirstOrDefaultAsync(r => r.Id == id);
+        // Other staff address a roll by its register number, since they do not see roll IDs.
+        var roll = int.TryParse(id, out var number)
+            ? await db.Rolls.FirstOrDefaultAsync(r => r.Number == number)
+            : await db.Rolls.FirstOrDefaultAsync(r => r.Id == id);
         if (roll == null) return NotFound();
+        id = roll.Id;
+        // Other staff may only move a roll (location) and change its stock status.
+        if (!SeesCodes) req = req with { Qc = null, Batch = null, Supplier = null, WidthCm = null, LengthM = null, RollNo = null };
 
         var st = roll.Status;
         var qc = roll.Qc;
@@ -363,12 +421,31 @@ public class AdminController(AppDbContext db, IConfiguration cfg) : ControllerBa
                 return Conflict(new { error = $"These Roll Nos are already registered: {rollNo}" });
         }
 
+        // Location: "warehouse:{id}", "user:{id}", or "" to clear; null leaves it unchanged.
+        int? warehouseId = roll.WarehouseId, holderUserId = roll.HolderUserId;
+        if (req.Location != null)
+        {
+            var loc = ParseLocation(req.Location);
+            if (req.Location.Trim() != "" && loc == null) return BadRequest(new { error = "Invalid location." });
+            if (loc?.Kind == "warehouse" && !await db.Warehouses.AnyAsync(x => x.Id == loc.Id && !x.Archived))
+                return BadRequest(new { error = "Choose an active warehouse." });
+            if (loc?.Kind == "user" && !await db.AdminUsers.AnyAsync(x => x.Id == loc.Id && x.Active))
+                return BadRequest(new { error = "Choose an active user." });
+            holderUserId = loc?.Kind == "user" ? loc.Id : null;
+            // Handing a roll to a user keeps its warehouse, so it shows there again when the user returns it.
+            if (loc?.Kind == "warehouse") warehouseId = loc.Id;
+            else if (loc == null) warehouseId = null;
+        }
+
         var before = new { roll.Status, roll.Qc, roll.Batch, roll.Supplier, roll.WidthCm, roll.LengthM, roll.RollNo };
         AuditLog.Add(db, Actor, "roll", roll.Id, "updated", AuditLog.Diff(
             ("status", before.Status, st), ("qc", before.Qc, qc), ("rollNo", before.RollNo, rollNo),
             ("batch", before.Batch, string.IsNullOrWhiteSpace(req.Batch) ? before.Batch : req.Batch.Trim()),
             ("supplier", before.Supplier, supplier ?? before.Supplier),
-            ("widthCm", before.WidthCm, req.WidthCm), ("lengthM", before.LengthM, req.LengthM)), req.Note);
+            ("widthCm", before.WidthCm, req.WidthCm ?? before.WidthCm), ("lengthM", before.LengthM, req.LengthM ?? before.LengthM),
+            ("warehouseId", roll.WarehouseId, warehouseId), ("holderUserId", roll.HolderUserId, holderUserId)), req.Note);
+        roll.WarehouseId = warehouseId;
+        roll.HolderUserId = holderUserId;
         roll.Status = st;
         roll.Qc = qc;
         roll.RollNo = rollNo;
@@ -397,7 +474,7 @@ public class AdminController(AppDbContext db, IConfiguration cfg) : ControllerBa
     /// cannot be given to another carton. Warranty registrations are customer records and are only unlinked.
     /// </summary>
     [HttpDelete("rolls/{id}")]
-    [Authorize(Policy = "AdminPolicy")]
+    [Authorize(Policy = "SuperAdminPolicy")]
     public async Task<IActionResult> DeleteRoll(string id)
     {
         var roll = await db.Rolls.FirstOrDefaultAsync(r => r.Id == id);
@@ -527,13 +604,15 @@ public class RollSearch
     public DateOnly? ReceivedFrom { get; set; }
     public DateOnly? ReceivedTo { get; set; }
     public bool? HasInstalls { get; set; }
+    public string? Location { get; set; }   // "warehouse:{id}" or "user:{id}"
     public int Page { get; set; } = 1;
     public int PageSize { get; set; } = 25;
     public string? Sort { get; set; }
     public string? Dir { get; set; }
 }
 public record DecisionRequest(string Status, string? Note);
-public record UpdateRollRequest(string? Status, string? Qc, string? Note, string? Batch = null, string? Supplier = null, decimal? WidthCm = null, decimal? LengthM = null, string? RollNo = null);
+public record UpdateRollRequest(string? Status, string? Qc, string? Note, string? Batch = null, string? Supplier = null, decimal? WidthCm = null, decimal? LengthM = null, string? RollNo = null, string? Location = null);
+public record RollLocation(string Kind, int Id, string Name, string? Phone);
 public record SettingsRequest(DurationsDto? Durations, int? WarrantyCodeLength);
 public record DurationsDto(PeriodDto? Tint, PeriodDto? Ppf);
 public record PeriodDto(int? Film, int? Install);

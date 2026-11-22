@@ -192,6 +192,64 @@ public class ManagementTests
     }
 
     [Fact]
+    public async Task AdminSeesNoRollIdsOrWarrantyCodesAndMayOnlyMoveRolls()
+    {
+        using var db = Database();
+        db.Rolls.Add(new Roll { Id = "SZ-CPT3001-2611-1234567-ABC", Number = 1, ModelCode = "TEST", Type = WarrantyType.Tint, Batch = "B", Supplier = "ABC",
+            Qc = RollQc.Approved, HistoryJson = "[]" });
+        db.WarrantyRegistrations.Add(new WarrantyRegistration { Code = "4827153", Owner = "O", Phone = "09120000000", Make = "M", Model = "X", Vin = "V", Plate = "P",
+            FilmSerial = "CPT3001", RollId = "SZ-CPT3001-2611-1234567-ABC", Installer = "I", SellerName = "S", SellerPhone = "09120000001", InvoiceNumber = "1",
+            Installed = new DateOnly(2026, 1, 1), Status = WarrantyStatus.Pending });
+        await db.SaveChangesAsync();
+        var admin = new AdminController(db, new ConfigurationBuilder().Build())
+        {
+            ControllerContext = new() { HttpContext = new Microsoft.AspNetCore.Http.DefaultHttpContext {
+                User = new System.Security.Claims.ClaimsPrincipal(new System.Security.Claims.ClaimsIdentity(
+                    [new System.Security.Claims.Claim(System.Security.Claims.ClaimTypes.Name, "manager"), new System.Security.Claims.Claim(System.Security.Claims.ClaimTypes.Role, "admin")], "test")) } },
+        };
+
+        var rolls = System.Text.Json.JsonSerializer.Serialize(((OkObjectResult)await admin.GetRolls(new RollSearch(), default)).Value);
+        Assert.DoesNotContain("1234567", rolls);
+        var warranties = System.Text.Json.JsonSerializer.Serialize(((OkObjectResult)await admin.Warranties(new WarrantySearch(), default)).Value);
+        Assert.DoesNotContain("4827153", warranties);
+        Assert.Contains("7153", warranties);   // last four characters only
+
+        // By register number; anything but location and status is ignored.
+        Assert.IsType<OkObjectResult>(await admin.UpdateRoll("1", new("shipped", "rejected", null, Batch: "CHANGED")));
+        var roll = await db.Rolls.SingleAsync();
+        Assert.Equal((RollStatus.Shipped, RollQc.Approved, "B"), (roll.Status, roll.Qc, roll.Batch));
+    }
+
+    [Fact]
+    public async Task RollsAreReceivedIntoAWarehouseAndCanMoveToAUser()
+    {
+        using var db = Database();
+        var api = new ManagementController(db); var admin = new AdminController(db, new ConfigurationBuilder().Build());
+        Assert.IsType<OkObjectResult>(await api.CreateWarehouse(new("Main")));
+        Assert.IsType<BadRequestObjectResult>(await api.CreateWarehouse(new(" main ")));   // names are unique
+        var main = await db.Warehouses.SingleAsync();
+        db.Products.Add(new Product { Code = "TEST", Name = "Film", Type = WarrantyType.Tint });
+        db.AdminUsers.Add(new AdminUser { Id = 7, Username = "rep", DisplayName = "Rep", PasswordHash = "x", Role = "admin" });
+        await db.SaveChangesAsync();
+
+        Assert.IsType<BadRequestObjectResult>(await admin.ReceiveRolls(new("TEST", "tint", "B", "ABC", "approved", 1, WarehouseId: 999)));
+        Assert.IsType<OkObjectResult>(await admin.ReceiveRolls(new("TEST", "tint", "B", "ABC", "approved", 1, RollNos: ["CPT2001"], WarehouseId: main.Id)));
+        var roll = await db.Rolls.SingleAsync();
+        Assert.Equal(main.Id, roll.WarehouseId);
+
+        // Handing it to a user keeps the warehouse for when it comes back.
+        Assert.IsType<OkObjectResult>(await admin.UpdateRoll(roll.Id, new(null, null, null, Location: "user:7")));
+        Assert.Equal((7, main.Id), (roll.HolderUserId!.Value, roll.WarehouseId!.Value));
+        Assert.IsType<BadRequestObjectResult>(await admin.UpdateRoll(roll.Id, new(null, null, null, Location: "user:99")));
+        Assert.IsType<BadRequestObjectResult>(await admin.UpdateRoll(roll.Id, new(null, null, null, Location: "garage")));
+        Assert.IsType<OkObjectResult>(await admin.UpdateRoll(roll.Id, new(null, null, null, Location: $"warehouse:{main.Id}")));
+        Assert.Null(roll.HolderUserId);
+
+        // A warehouse with rolls cannot be deleted; archive it instead.
+        Assert.IsType<ConflictObjectResult>(await api.DeleteWarehouse(main.Id));
+    }
+
+    [Fact]
     public async Task ReceivingRollNosCreatesOneRollPerCartonAndKeepsThemUnique()
     {
         using var db = Database(); var admin = new AdminController(db, new ConfigurationBuilder().Build());

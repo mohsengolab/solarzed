@@ -515,6 +515,9 @@ namespace Solarzed.Api.Migrations
                         .IsRequired()
                         .HasColumnType("nvarchar(max)");
 
+                    b.Property<int?>("HolderUserId")
+                        .HasColumnType("int");
+
                     b.Property<decimal?>("LengthM")
                         .HasColumnType("decimal(7,2)");
 
@@ -547,10 +550,15 @@ namespace Solarzed.Api.Migrations
                     b.Property<int>("Type")
                         .HasColumnType("int");
 
+                    b.Property<int?>("WarehouseId")
+                        .HasColumnType("int");
+
                     b.Property<decimal?>("WidthCm")
                         .HasColumnType("decimal(7,2)");
 
                     b.HasKey("Id");
+
+                    b.HasIndex("HolderUserId");
 
                     b.HasIndex("Number")
                         .IsUnique();
@@ -558,6 +566,8 @@ namespace Solarzed.Api.Migrations
                     b.HasIndex("RollNo")
                         .IsUnique()
                         .HasFilter("[RollNo] IS NOT NULL");
+
+                    b.HasIndex("WarehouseId");
 
                     b.ToTable("Rolls");
                 });
@@ -669,6 +679,35 @@ namespace Solarzed.Api.Migrations
                     b.HasIndex("TicketId", "CreatedAt");
 
                     b.ToTable("TicketReplies");
+                });
+
+            modelBuilder.Entity("Solarzed.Api.Domain.Warehouse", b =>
+                {
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("int");
+
+                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("Id"));
+
+                    b.Property<string>("Address")
+                        .IsRequired()
+                        .HasMaxLength(300)
+                        .HasColumnType("nvarchar(300)");
+
+                    b.Property<bool>("Archived")
+                        .HasColumnType("bit");
+
+                    b.Property<string>("Name")
+                        .IsRequired()
+                        .HasMaxLength(100)
+                        .HasColumnType("nvarchar(100)");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("Name")
+                        .IsUnique();
+
+                    b.ToTable("Warehouses");
                 });
 
             modelBuilder.Entity("Solarzed.Api.Domain.WarrantyClaim", b =>
@@ -909,6 +948,19 @@ namespace Solarzed.Api.Migrations
                         .HasForeignKey("LabelId")
                         .OnDelete(DeleteBehavior.Restrict)
                         .IsRequired();
+                });
+
+            modelBuilder.Entity("Solarzed.Api.Domain.Roll", b =>
+                {
+                    b.HasOne("Solarzed.Api.Domain.AdminUser", null)
+                        .WithMany()
+                        .HasForeignKey("HolderUserId")
+                        .OnDelete(DeleteBehavior.Restrict);
+
+                    b.HasOne("Solarzed.Api.Domain.Warehouse", null)
+                        .WithMany()
+                        .HasForeignKey("WarehouseId")
+                        .OnDelete(DeleteBehavior.Restrict);
                 });
 
             modelBuilder.Entity("Solarzed.Api.Domain.TicketReply", b =>

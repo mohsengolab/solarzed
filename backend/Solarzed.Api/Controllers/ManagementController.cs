@@ -147,6 +147,68 @@ public class ManagementController(AppDbContext db) : ControllerBase
         p.Uv = r.Uv; p.Tser = r.Tser; p.WarrantyYears = r.WarrantyYears;
     }
 
+    // ── Warehouses ──────────────────────────────────────────────────────────
+
+    /// <summary>All warehouses with how many rolls are in each (rolls held by a user are not counted).</summary>
+    [HttpGet("warehouses")]
+    public async Task<IActionResult> Warehouses(CancellationToken ct)
+    {
+        var counts = await db.Rolls.Where(r => r.WarehouseId != null && r.HolderUserId == null)
+            .GroupBy(r => r.WarehouseId!.Value).Select(g => new { Id = g.Key, Count = g.Count() })
+            .ToDictionaryAsync(x => x.Id, x => x.Count, ct);
+        var items = await db.Warehouses.AsNoTracking().OrderBy(w => w.Archived).ThenBy(w => w.Name).ToListAsync(ct);
+        return Ok(new { items = items.Select(w => new { w.Id, w.Name, w.Address, w.Archived, Rolls = counts.GetValueOrDefault(w.Id, 0) }) });
+    }
+
+    [HttpPost("warehouses")]
+    public async Task<IActionResult> CreateWarehouse(WarehouseRequest req)
+    {
+        if (await ValidateWarehouse(req, null) is { } error) return BadRequest(new { error });
+        var w = new Warehouse { Name = req.Name.Trim(), Address = req.Address?.Trim() ?? "", Archived = req.Archived };
+        db.Warehouses.Add(w);
+        await db.SaveChangesAsync();
+        AuditLog.Add(db, AuditLog.Actor(HttpContext?.User), "warehouse", w.Id.ToString(), "created", AuditLog.Diff(("name", null, w.Name), ("address", null, w.Address)));
+        await db.SaveChangesAsync();
+        return Ok(w);
+    }
+
+    [HttpPut("warehouses/{id:int}")]
+    public async Task<IActionResult> UpdateWarehouse(int id, WarehouseRequest req)
+    {
+        var w = await db.Warehouses.FindAsync(id);
+        if (w == null) return NotFound();
+        if (await ValidateWarehouse(req, id) is { } error) return BadRequest(new { error });
+        AuditLog.Add(db, AuditLog.Actor(HttpContext?.User), "warehouse", id.ToString(), "updated", AuditLog.Diff(
+            ("name", w.Name, req.Name.Trim()), ("address", w.Address, req.Address?.Trim() ?? ""), ("archived", w.Archived, req.Archived)));
+        w.Name = req.Name.Trim(); w.Address = req.Address?.Trim() ?? ""; w.Archived = req.Archived;
+        await db.SaveChangesAsync();
+        return Ok(w);
+    }
+
+    /// <summary>Deletes a warehouse. Blocked while any roll is recorded there; archive it instead.</summary>
+    [HttpDelete("warehouses/{id:int}")]
+    public async Task<IActionResult> DeleteWarehouse(int id)
+    {
+        var w = await db.Warehouses.FindAsync(id);
+        if (w == null) return NotFound();
+        if (await db.Rolls.AnyAsync(r => r.WarehouseId == id))
+            return Conflict(new { error = "Rolls are recorded in this warehouse; move them or archive the warehouse instead." });
+        AuditLog.Add(db, AuditLog.Actor(HttpContext?.User), "warehouse", id.ToString(), "deleted", AuditLog.Diff(("name", w.Name, null)));
+        db.Warehouses.Remove(w);
+        await db.SaveChangesAsync();
+        return Ok(new { ok = true });
+    }
+
+    async Task<string?> ValidateWarehouse(WarehouseRequest r, int? exceptId)
+    {
+        var name = r.Name?.Trim() ?? "";
+        if (name.Length is 0 or > 100) return "Warehouse name is required (maximum 100 characters).";
+        if ((r.Address?.Length ?? 0) > 300) return "Address is limited to 300 characters.";
+        var lower = name.ToLower();
+        if (await db.Warehouses.AnyAsync(w => w.Id != exceptId && w.Name.ToLower() == lower)) return "A warehouse with this name already exists.";
+        return null;
+    }
+
     // The customer list is confidential: only the super administrator may read it.
     [Authorize(Policy = "SuperAdminPolicy")]
     [HttpGet("customers")]
@@ -195,3 +257,5 @@ public class CustomerSearch
 public record ProductRequest(string? Code, string Name, string? Type, string? Series, string? Description, bool Archived,
     decimal? ThicknessMil = null, int? Vlt = null, int? Irr = null, int? Uv = null, int? Tser = null, int? WarrantyYears = null);
 public record ChangePasswordRequest(string Username, string CurrentPassword, string NewPassword);
+
+public record WarehouseRequest(string Name, string? Address = null, bool Archived = false);

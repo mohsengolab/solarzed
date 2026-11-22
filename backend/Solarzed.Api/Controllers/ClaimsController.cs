@@ -9,7 +9,7 @@ using Solarzed.Api.Infrastructure;
 namespace Solarzed.Api.Controllers;
 
 [ApiController, Route("api/admin"), Authorize(Policy = "AdminPolicy")]
-public class ClaimsController(AppDbContext db) : ControllerBase
+public class ClaimsController(AppDbContext db, Microsoft.AspNetCore.DataProtection.IDataProtectionProvider? protection = null) : ControllerBase
 {
     string Actor => AuditLog.Actor(HttpContext?.User);
 
@@ -19,9 +19,12 @@ public class ClaimsController(AppDbContext db) : ControllerBase
         ["stage"] = c => c.Stage, ["decision"] = c => c.Decision, ["warrantyCode"] = c => c.WarrantyCode,
     };
 
+    bool SeesCodes => Confidential.SeesCodes(HttpContext?.User);
+    string Code(string code) => SeesCodes ? code : Confidential.Mask(code);
+
     object Row(WarrantyClaim c, DateTime now) => new
     {
-        c.Id, c.WarrantyCode, c.Channel, c.Description, c.RequiredDocuments, c.Stage, c.Cause, c.Decision, c.DecisionNote,
+        c.Id, WarrantyCode = Code(c.WarrantyCode), WarrantyRef = Confidential.Ref(c.WarrantyCode, protection), c.Channel, c.Description, c.RequiredDocuments, c.Stage, c.Cause, c.Decision, c.DecisionNote,
         c.Remedy, c.RemedyNote, c.LaborCost, c.PartsCost, c.OtherCost,
         TotalCost = (c.LaborCost ?? 0) + (c.PartsCost ?? 0) + (c.OtherCost ?? 0),
         c.CreatedAt, c.CreatedBy, c.AcknowledgedAt, c.InitialReviewedAt, c.DocumentsCompleteAt, c.DecidedAt, c.ClosedAt, c.UpdatedAt, c.Revision,
@@ -70,12 +73,12 @@ public class ClaimsController(AppDbContext db) : ControllerBase
         if (c == null) return NotFound(new { error = "Claim not found." });
         var w = await db.WarrantyRegistrations.AsNoTracking().FirstAsync(x => x.Code == c.WarrantyCode, ct);
         var roll = w.RollId == null ? null : await db.Rolls.AsNoTracking().Where(r => r.Id == w.RollId)
-            .Select(r => new { r.Id, r.ModelCode, r.Batch, r.Supplier }).FirstOrDefaultAsync(ct);
+            .Select(r => new { Id = SeesCodes ? r.Id : null, r.ModelCode, r.Batch, r.Supplier }).FirstOrDefaultAsync(ct);
         var history = await History("claim", c.Id, ct);
         return Ok(new
         {
             claim = Row(c, DateTime.UtcNow),
-            warranty = new { w.Code, w.Type, w.Status, w.Owner, w.Phone, w.Make, w.Model, w.Vin, w.Plate, w.Installed, w.FilmEnds, w.InstallEnds, w.Installer, w.SellerName, w.FilmSerial },
+            warranty = new { Code = Code(w.Code), Ref = Confidential.Ref(w.Code, protection), w.Type, w.Status, w.Owner, w.Phone, w.Make, w.Model, w.Vin, w.Plate, w.Installed, w.FilmEnds, w.InstallEnds, w.Installer, w.SellerName, w.FilmSerial },
             roll, history,
         });
     }
@@ -83,7 +86,9 @@ public class ClaimsController(AppDbContext db) : ControllerBase
     [HttpPost("claims")]
     public async Task<IActionResult> Create([FromBody] CreateClaimRequest req)
     {
-        var code = (req.WarrantyCode ?? "").Trim().ToUpperInvariant();
+        // A claim opened from a warranty row sends its reference; one typed by hand sends the customer's code.
+        var raw = (req.WarrantyCode ?? "").Trim();
+        var code = (Confidential.Resolve(raw, null, protection) ?? raw).ToUpperInvariant();
         var description = (req.Description ?? "").Trim();
         if (!Enum.TryParse<ClaimChannel>(req.Channel, true, out var channel) || !Enum.IsDefined(channel)) return BadRequest(new { error = "Invalid channel." });
         if (description.Length is < 10 or > 2000) return BadRequest(new { error = "Describe the problem in 10–2000 characters." });
@@ -136,15 +141,19 @@ public class ClaimsController(AppDbContext db) : ControllerBase
         (await db.AuditEntries.AsNoTracking().Where(a => a.EntityType == type && a.EntityId == id).OrderByDescending(a => a.At).Take(200).ToListAsync(ct))
         .Select(Shape).ToList();
 
-    static object Shape(AuditEntry a) => new
+    object Shape(AuditEntry a) => new
     {
-        a.Id, a.EntityType, a.EntityId, a.Action, a.Actor, a.At, a.Reason,
+        a.Id, a.EntityType,
+        // Roll IDs and warranty codes stay with the super administrator.
+        EntityId = SeesCodes || a.EntityType is not ("roll" or "warranty") ? a.EntityId : Confidential.Mask(a.EntityId), a.Action, a.Actor, a.At, a.Reason,
         Changes = JsonSerializer.Deserialize<Dictionary<string, JsonElement[]>>(a.ChangesJson) ?? [],
     };
 
     [HttpGet("warranties/{code}/activity")]
     public async Task<IActionResult> WarrantyActivity(string code, CancellationToken ct)
     {
+        if (Confidential.Resolve(code, HttpContext?.User, protection) is not { } resolved) return NotFound();
+        code = resolved;
         var now = DateTime.UtcNow;
         var claims = await db.WarrantyClaims.AsNoTracking().Where(c => c.WarrantyCode == code).OrderByDescending(c => c.CreatedAt).ToListAsync(ct);
         return Ok(new { claims = claims.Select(c => Row(c, now)), history = await History("warranty", code, ct) });
