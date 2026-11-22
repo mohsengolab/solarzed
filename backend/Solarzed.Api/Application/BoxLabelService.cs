@@ -22,8 +22,9 @@ public record ActivationResult(WarrantyPublic Warranty, decimal? RemainingLength
 /// <summary>
 /// Every carton is identified by the roll number already printed (with its barcode) on the box, e.g. CPT30614374,
 /// which is used to hand the carton from the company to representatives and onward. Inside the box is one warranty
-/// card whose QR holds Serial-Warranty, where Warranty is a 7-digit number. Only the person who opens the box can
-/// activate its warranty. The factory code is kept internally and is never printed on the card.
+/// card whose QR holds RollNo-Warranty-Factory, where Warranty is a 7-digit number and Factory the 3-letter
+/// supplier code (e.g. CPT30614374-4827153-ABC). Only the person who opens the box can activate its warranty.
+/// Cards printed earlier as RollNo-Warranty (no factory) still open.
 /// </summary>
 public class BoxLabelService(AppDbContext db, IDataProtectionProvider protection, IActivationSmsSender sms, IConfiguration? config = null)
 {
@@ -32,8 +33,9 @@ public class BoxLabelService(AppDbContext db, IDataProtectionProvider protection
     static readonly Regex TokenPattern = new("^[a-fA-F0-9]{64}$");
     // Cards printed before 7-digit codes: Factory-SZB…-SZ…
     static readonly Regex LegacyCardPattern = new(@"^([A-Z]{1,4})-(SZB-[0-9A-F]{16})-(SZ-[A-Z0-9]{6,29})$");
-    // Current cards: CartonSerial-1234567 (the serial may itself contain dashes; the last 7 digits are the warranty).
-    static readonly Regex CardPattern = new(@"^(.+)-([1-9][0-9]{6})$");
+    // Cards: RollNo-1234567-ABC (current) or RollNo-1234567 (printed before the factory was added).
+    // The roll number may itself contain dashes; the 7 digits after it are the warranty, then the optional factory.
+    static readonly Regex CardPattern = new(@"^(.+)-([1-9][0-9]{6})(?:-([A-Z]{3}))?$");
     /// <summary>Carton serial: the roll number printed on the box (letters, digits, inner dashes; 4–32 chars), or a legacy SZB-… serial.</summary>
     public static readonly Regex SerialPattern = new(@"^[A-Z0-9][A-Z0-9-]{2,30}[A-Z0-9]$");
     public const int MaxBatch = 200;
@@ -42,7 +44,7 @@ public class BoxLabelService(AppDbContext db, IDataProtectionProvider protection
 
     public static string? FullCode(BoxLabel label) => label.CardCode == null ? null
         : Legacy(label.CardCode) ? (label.FactoryCode == null ? null : $"{label.FactoryCode}-{label.Id}-{label.CardCode}")
-        : $"{label.Id}-{label.CardCode}";
+        : label.FactoryCode == null ? $"{label.Id}-{label.CardCode}" : $"{label.Id}-{label.CardCode}-{label.FactoryCode}";
 
     public static string NormalizeSerial(string? raw) => Regex.Replace(raw ?? "", @"\s+", "").ToUpperInvariant();
 
@@ -64,8 +66,16 @@ public class BoxLabelService(AppDbContext db, IDataProtectionProvider protection
     // New cards encode the card code itself; labels issued before card codes keep their original random token.
     public LabelView View(BoxLabel label, string site) => new(label.Id, label.RollId, label.Product,
         label.Type.ToString().ToLowerInvariant(), label.FilmYears, label.InstallYears, label.CreatedAt,
-        label.ActivatedAt, label.WarrantyCode, $"{site}/activate#{FullCode(label) ?? protector.Unprotect(label.ProtectedToken)}",
+        label.ActivatedAt, label.WarrantyCode, FullCode(label) is { } code ? $"{site}/activate#{code}" : LegacyUrl(label, site),
         label.Holder, label.HolderPhone, label.HeldSince, label.FactoryCode, label.CardCode, FullCode(label), label.RemainingLengthM);
+
+    // A legacy token that can no longer be decrypted (lost Data Protection key ring) cannot be reprinted,
+    // but it must not take the whole label list down with it.
+    string LegacyUrl(BoxLabel label, string site)
+    {
+        try { return $"{site}/activate#{protector.Unprotect(label.ProtectedToken)}"; }
+        catch (CryptographicException) { return ""; }
+    }
 
     // The carton role may only see the serial printed on the box: no QR, no card code and no warranty code.
     public static LabelSerialView Restricted(BoxLabel label) => new(label.Id, label.RollId, label.Product,
@@ -181,7 +191,7 @@ public class BoxLabelService(AppDbContext db, IDataProtectionProvider protection
     }
 
     /// <summary>
-    /// Accepts the card code (Serial-1234567, scanned or typed), a legacy Factory-Serial-Warranty card code,
+    /// Accepts the card code (RollNo-1234567-ABC or RollNo-1234567, scanned or typed), a legacy Factory-Serial-Warranty card code,
     /// or a legacy 64-hex label token.
     /// </summary>
     async Task<BoxLabel> Find(string token)
@@ -194,19 +204,21 @@ public class BoxLabelService(AppDbContext db, IDataProtectionProvider protection
                 ?? throw new ActivationError(404, "This activation label is invalid.");
         }
         value = value.ToUpperInvariant();
-        string serial, secret; string? factory = null;
+        string serial, secret; string? factory = null; var old = false;
         var legacy = LegacyCardPattern.Match(value);
-        if (legacy.Success) { factory = legacy.Groups[1].Value; serial = legacy.Groups[2].Value; secret = legacy.Groups[3].Value; }
+        if (legacy.Success) { old = true; factory = legacy.Groups[1].Value; serial = legacy.Groups[2].Value; secret = legacy.Groups[3].Value; }
         else
         {
             var card = CardPattern.Match(value);
             if (!card.Success || !SerialPattern.IsMatch(card.Groups[1].Value)) throw new ActivationError(404, "This activation label is invalid.");
             serial = card.Groups[1].Value; secret = card.Groups[2].Value;
+            factory = card.Groups[3].Success ? card.Groups[3].Value : null;
         }
         var label = await db.BoxLabels.SingleOrDefaultAsync(x => x.Id == serial);
         // The warranty part is the secret printed only inside the box; compare it in constant time.
-        // A legacy card must name its factory; a 7-digit card never does.
-        if (label?.CardCode == null || (factory == null ? Legacy(label.CardCode) : label.FactoryCode != factory) ||
+        // A legacy SZ- card must name its factory. A 7-digit card may omit it (printed before it was added),
+        // but if it names one, it must be the carton's.
+        if (label?.CardCode == null || Legacy(label.CardCode) != old || (factory != null && label.FactoryCode != factory) ||
             !CryptographicOperations.FixedTimeEquals(Encoding.UTF8.GetBytes(label.CardCode), Encoding.UTF8.GetBytes(secret)))
             throw new ActivationError(404, "This activation label is invalid.");
         return label;

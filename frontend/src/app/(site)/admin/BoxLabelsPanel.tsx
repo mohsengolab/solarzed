@@ -8,6 +8,7 @@ import labelsStyle from "./labels.module.css";
 import BoxTransfers, { holderName } from "./BoxTransfers";
 import { printQrLabels } from "./qrPrint";
 import { printBarcodeLabels } from "./barcode";
+import SerialInput from "@/components/SerialInput";
 
 type Role = "superadmin" | "admin" | "carton";
 type Roll = { id: string; rollNo?: string | null; modelCode: string; type: "tint" | "ppf"; qc: string; status: string; supplier: string; lengthM: number | null };
@@ -19,7 +20,7 @@ export default function BoxLabelsPanel({ onSettings, role }: { onSettings: () =>
   const [labels, setLabels] = useState<BoxLabel[]>([]);
   const [rolls, setRolls] = useState<Roll[]>([]);
   const [rollId, setRollId] = useState("");
-  const [serialText, setSerialText] = useState("");
+  const [serials, setSerials] = useState<string[]>([]);
   const [site, setSite] = useState("https://solarzed.com");
   const [smsReady, setSmsReady] = useState(false);
   const [selected, setSelected] = useState<string[]>([]);
@@ -58,7 +59,7 @@ export default function BoxLabelsPanel({ onSettings, role }: { onSettings: () =>
     event.preventDefault(); setError(""); setBusy(true);
     try {
       const result = await issueBoxLabels(rollId, serials);
-      setSerialText("");
+      setSerials([]);
       await load(); setSelected(result.labels.map(label => label.id));
     } catch (ex) { setError(message(ex)); } finally { setBusy(false); }
   }
@@ -79,7 +80,7 @@ export default function BoxLabelsPanel({ onSettings, role }: { onSettings: () =>
     await printBarcodeLabels(width, height, validSelection.map(label => ({ serial: label.id, lines: [`${label.product} · ${label.type.toUpperCase()}`] })));
   }
 
-  // Inside the carton: warranty card with the QR (carton roll number + 7-digit warranty code). Only the box opener sees it.
+  // Inside the carton: warranty card with the QR (carton roll number + 7-digit warranty code + factory code). Only the box opener sees it.
   async function printCards() {
     setError("");
     if (!sizeOk()) return;
@@ -93,8 +94,6 @@ export default function BoxLabelsPanel({ onSettings, role }: { onSettings: () =>
     })));
   }
 
-  // One roll number per line (a barcode scanner types the number and presses Enter).
-  const serials = [...new Set(serialText.split(/[\s,]+/).map(item => item.trim().toUpperCase()).filter(Boolean))];
   const roll = rolls.find(item => item.id === rollId);
   const validSupplier = !!roll && /^[A-Za-z]{3}$/.test(roll.supplier.trim());
   const period = roll && coverage?.durations[roll.type];
@@ -142,11 +141,11 @@ export default function BoxLabelsPanel({ onSettings, role }: { onSettings: () =>
         <form className={`${styles.card} ${styles.adminForm}`} onSubmit={create}>
           <h2>ساخت برچسب برای کارتن‌ها</h2>
           <p className={labelsStyle.help}>بارکد Roll No روی هر کارتن را اسکن کنید (مثلاً CPT30614374). برای هر کارتن یک کارت گارانتی با کد ۷ رقمی ساخته می‌شود که داخل همان کارتن قرار می‌گیرد. دورهٔ گارانتی از تنظیمات کپی می‌شود.</p>
-          <label>{fa("Product roll")}<select required value={rollId} onChange={event => { setRollId(event.target.value); const picked = rolls.find(item => item.id === event.target.value); if (picked?.rollNo) setSerialText(picked.rollNo); }}><option value="">{fa("Select a roll")}</option>{rolls.map(item => <option key={item.id} value={item.id}>{item.id}{item.rollNo ? ` · ${item.rollNo}` : ""} · {item.qc} · {item.status}</option>)}</select></label>
+          <label>{fa("Product roll")}<select required value={rollId} onChange={event => { setRollId(event.target.value); const picked = rolls.find(item => item.id === event.target.value); if (picked?.rollNo) setSerials([picked.rollNo]); }}><option value="">{fa("Select a roll")}</option>{rolls.map(item => <option key={item.id} value={item.id}>{item.id}{item.rollNo ? ` · ${item.rollNo}` : ""} · {item.qc} · {item.status}</option>)}</select></label>
           {roll && !period?.film && <div className={labelsStyle.notice}>{fa("Set the approved warranty period for")} {roll.type === "tint" ? fa("Window film") : "PPF"} {fa("before generating labels.")} <button type="button" className={styles.ghost} onClick={onSettings}>{fa("Open coverage settings")}</button></div>}
           {roll?.qc === "approved" && roll.status === "instock" && <><p className={labelsStyle.help}>{fa("You can generate and print QR labels now. Mark the roll as shipped when it is ready for customers to activate.")}</p><button type="button" className={styles.ghost} disabled={busy} onClick={async () => { setBusy(true); setError(""); try { await releaseRoll(roll.id); await load(); } catch (ex) { setError(message(ex)); } finally { setBusy(false); } }}>{fa("Mark roll as shipped — enable customer activation")}</button></>}
-          {roll && <p className={labelsStyle.help}>{validSupplier ? <>کد کارخانه (از تأمین‌کنندهٔ رول): <code dir="ltr">{roll.supplier.trim().toUpperCase()}</code> — روی کارت چاپ نمی‌شود.</> : "کد سه‌حرفی تأمین‌کننده را در موجودی رول اصلاح کنید."} {(roll.lengthM ?? 0) > 0 ? ` طول هر رول: ${roll.lengthM} متر.` : " طول رول را در موجودی ثبت کنید."}</p>}
-          <label>Roll No کارتن‌ها (هر خط یکی، با بارکدخوان) — {serials.length.toLocaleString("fa-IR")} کارتن<textarea dir="ltr" rows={5} required value={serialText} onChange={event => setSerialText(event.target.value)} placeholder={"CPT30614374\nCPT30614375"} /></label>
+          {roll && <p className={labelsStyle.help}>{validSupplier ? <>کد کارخانه (از تأمین‌کنندهٔ رول): <code dir="ltr">{roll.supplier.trim().toUpperCase()}</code> — در انتهای QR کارت گارانتی می‌آید.</> : "کد سه‌حرفی تأمین‌کننده را در موجودی رول اصلاح کنید."} {(roll.lengthM ?? 0) > 0 ? ` طول هر رول: ${roll.lengthM} متر.` : " طول رول را در موجودی ثبت کنید."}</p>}
+          <SerialInput label="Roll No کارتن‌ها (با بارکدخوان، تایپ یا فایل اکسل)" value={serials} onChange={setSerials} />
           <button className={styles.btnPrimary} disabled={busy || !loaded || !roll || !period?.film || roll.qc !== "approved" || roll.status === "void" || !validSupplier || !(roll.lengthM && roll.lengthM > 0) || !serials.length || serials.length > 200}>{busy ? fa("Working…") : "ساخت برچسب و کارت گارانتی"}</button>
         </form>
         <div className={`${styles.card} ${styles.adminForm}`}>
@@ -154,7 +153,7 @@ export default function BoxLabelsPanel({ onSettings, role }: { onSettings: () =>
           <label>{fa("Public website")}<input type="url" dir="ltr" value={site} onChange={event => setSite(event.target.value)} /></label>
           <button type="button" className={styles.ghost} disabled={busy || !loaded} onClick={async () => { setBusy(true); setError(""); try { await saveLabelSite(site); await load(); } catch (ex) { setError(message(ex)); } finally { setBusy(false); } }}>{fa("Save QR website")}</button>
           {sizeFields}
-          <p className={labelsStyle.help}>بارکد Roll No که روی کارتن چاپ شده برای انتقال به نماینده و نفرات بعدی است؛ برای کارتن‌هایی که این بارکد را ندارند می‌توانید بارکد چاپ کنید. کارت گارانتی داخل کارتن گذاشته می‌شود؛ QR آن Roll No + کد ۷ رقمی گارانتی است و سایت {site.replace(/^https:\/\//, "")} را باز می‌کند. کاغذ هم‌اندازه، مقیاس ۱۰۰٪ و بدون سربرگ/پاورقی مرورگر چاپ کنید.</p>
+          <p className={labelsStyle.help}>بارکد Roll No که روی کارتن چاپ شده برای انتقال به نماینده و نفرات بعدی است؛ برای کارتن‌هایی که این بارکد را ندارند می‌توانید بارکد چاپ کنید. کارت گارانتی داخل کارتن گذاشته می‌شود؛ QR آن به ترتیب Roll No، کد ۷ رقمی گارانتی و کد کارخانه است (مثلاً CPT30614374-4827153-ABC) و سایت {site.replace(/^https:\/\//, "")} را باز می‌کند. کاغذ هم‌اندازه، مقیاس ۱۰۰٪ و بدون سربرگ/پاورقی مرورگر چاپ کنید.</p>
           {barcodeButton}
           <button type="button" className={styles.btnPrimary} onClick={() => { printCards().catch(ex => setError(message(ex))); }} disabled={busy || !validSelection.length || validSelection.some(label => !previews[label.id])}>چاپ کارت گارانتی داخل کارتن ({validSelection.length.toLocaleString("fa-IR")})</button>
         </div>

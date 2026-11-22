@@ -23,7 +23,9 @@ workspace because port 5000 belongs to another service.
    activation**. The existing printed codes become eligible without reprinting.
    Until then, the customer page explains that activation is awaiting release.
 
-The current QR contains `https://solarzed.com/activate#<carton-serial>-<7-digit-code>`.
+The current QR contains `https://solarzed.com/activate#<carton-roll-no>-<7-digit-code>-<factory-code>`,
+for example `CPT30614374-4827153-ABC`. Cards printed earlier without the factory code
+(`CPT30614374-4827153`) still open.
 QR generation is local; no customer data goes to an external QR service. Codes have a four-module
 quiet zone and black modules on white. Readability is verified by decoding the
 actual rendered QR in the browser test. The local activation-preview link is for
@@ -31,7 +33,7 @@ development; printed labels always contain the configured public domain.
 
 Every label uses the printed carton serial (or a generated `SZB-…` serial), linked
 internally to its inventory record. Warranties use the carton serial in `FilmSerial`
-and the inventory record in `RollId`. The supplier code is not included on new cards.
+and the inventory record in `RollId`. The supplier (factory) code is the last part of the card's QR code.
 Reprinting retains the same activation code.
 Changing the public domain is blocked once labels exist, to avoid silently
 invalidating printed stock. Keep the domain and `/activate` route reachable.
