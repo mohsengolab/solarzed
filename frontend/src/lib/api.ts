@@ -1,5 +1,8 @@
 const BASE = process.env.NEXT_PUBLIC_API_URL ?? "";
 
+/** Persian digits with the Gregorian calendar: plain "fa-IR" would show Jalali (Solar Hijri) dates. */
+export const FA_DATE = "fa-IR-u-ca-gregory";
+
 // Persian admin UI: every interface string and server message goes through this map.
 export function fa(value: string): string {
   const table = FarsiStrings as Record<string, string>;

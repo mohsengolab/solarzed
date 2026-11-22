@@ -1,7 +1,7 @@
 "use client";
 
 import { FormEvent, useCallback, useEffect, useState } from "react";
-import { managementFetch, type Paged } from "@/lib/api";
+import { managementFetch, FA_DATE, type Paged } from "@/lib/api";
 import s from "./admin.module.css";
 import { usePaged, SortTh, Pager, FilterBar, countActive, errorText } from "./AdminKit";
 
@@ -43,7 +43,7 @@ const valueLabel = (v: unknown) => {
   const key = camel(String(v));
   return STAGES[key] ?? DECISIONS[key] ?? CAUSES[key] ?? REMEDIES[key] ?? CHANNELS[key] ?? String(v);
 };
-const when = (v?: string | null) => v ? new Date(v).toLocaleString("fa-IR", { dateStyle: "short", timeStyle: "short" }) : "—";
+const when = (v?: string | null) => v ? new Date(v).toLocaleString(FA_DATE, { dateStyle: "short", timeStyle: "short" }) : "—";
 const money = (v?: number | null) => v == null ? "—" : Number(v).toLocaleString("fa-IR");
 
 // ── Types ─────────────────────────────────────────────────────────────────────

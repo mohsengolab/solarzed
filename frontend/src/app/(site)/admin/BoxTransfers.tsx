@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState, FormEvent } from "react";
-import { boxHistory, boxHolders, transferBoxes, BoxHistory, HolderSummary, fa } from "@/lib/api";
+import { boxHistory, boxHolders, transferBoxes, BoxHistory, HolderSummary, fa, FA_DATE } from "@/lib/api";
 import styles from "./admin.module.css";
 import labelsStyle from "./labels.module.css";
 import SerialInput from "@/components/SerialInput";
@@ -21,7 +21,7 @@ const message = (error: unknown) => {
 // A holder is a mobile (representative/shop account) with an optional display name; none = central warehouse.
 const holderName = (holder: string | null, phone?: string | null) =>
   holder && phone && holder !== phone ? `${holder} (${phone})` : holder ?? phone ?? fa("Central warehouse");
-const date = (value: string) => new Date(value).toLocaleString("fa-IR");
+const date = (value: string) => new Date(value).toLocaleString(FA_DATE);
 const ANY = "__any__", WAREHOUSE = "__warehouse__";
 
 export default function BoxTransfers({ selected = [], onChanged }: { selected?: string[]; onChanged: () => void }) {

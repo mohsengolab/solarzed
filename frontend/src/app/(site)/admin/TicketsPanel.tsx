@@ -1,12 +1,12 @@
 "use client";
 
 import { FormEvent, useCallback, useEffect, useState } from "react";
-import { adminTickets, adminTicketDetail, adminTicketReply, adminTicketClose, adminTicketOpen, fa, type AdminTicketRow, type AdminTicketDetail } from "@/lib/api";
+import { adminTickets, adminTicketDetail, adminTicketReply, adminTicketClose, adminTicketOpen, fa, FA_DATE, type AdminTicketRow, type AdminTicketDetail } from "@/lib/api";
 import s from "./admin.module.css";
 import { usePaged, SortTh, Pager, FilterBar, countActive, errorText } from "./AdminKit";
 
 const T_EMPTY = { q: "" };
-const date = (value: string) => new Date(value).toLocaleString("fa-IR");
+const date = (value: string) => new Date(value).toLocaleString(FA_DATE);
 
 /** Support inbox: every ticket shows who is writing (mobile, name, profile) — never masked. */
 export default function TicketsPanel() {

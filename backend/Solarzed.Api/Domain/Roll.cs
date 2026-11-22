@@ -10,7 +10,7 @@ public class Roll
 {
     [Key]
     [MaxLength(60)]
-    public string Id { get; set; } = default!;   // SZ-{MODEL}-{YY}-{NNNNNN}
+    public string Id { get; set; } = default!;   // SZ-{MODEL}-{YYMM}-{NNNNNN}, e.g. SZ-1015-2611-000001 (older rolls: SZ-{MODEL}-{YY}-{NNNNNN})
 
     [MaxLength(24)]
     public string ModelCode { get; set; } = default!;

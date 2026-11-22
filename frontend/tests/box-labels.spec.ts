@@ -10,10 +10,10 @@ test("real QR generation and print dimensions, then customer activation form wit
   expect((await request.get(`${api}/api/admin/box-labels`)).status()).toBe(401);
   await request.post(`${api}/api/admin/settings`, { headers, data: { durations: { tint: { film: 5, install: 2 }, ppf: { film: 7, install: 3 } } } });
   // Rolls can only be received for a film model defined in Products (409 = left over from an earlier run).
-  const product = await request.post(`${api}/api/admin/products`, { headers, data: { code: "QRE2E", name: "QR E2E film", type: "tint", archived: false } });
+  const product = await request.post(`${api}/api/admin/products`, { headers, data: { code: "990001", name: "QR E2E film 990001", type: "tint", archived: false } });
   expect([200, 409], await product.text()).toContain(product.status());
   const suffix = Date.now().toString(36).toUpperCase();
-  const received = await request.post(`${api}/api/admin/rolls`, { headers, data: { modelCode: "QRE2E", type: "tint", batch: `QR-${suffix}`, supplier: "ABC", qc: "approved", quantity: 1, lengthM: 150 } });
+  const received = await request.post(`${api}/api/admin/rolls`, { headers, data: { modelCode: "990001", type: "tint", batch: `QR-${suffix}`, supplier: "ABC", qc: "approved", quantity: 1, lengthM: 150 } });
   expect(received.ok()).toBeTruthy();
   const [roll] = await received.json();
   await context.addInitScript(() => { window.print = () => {}; });

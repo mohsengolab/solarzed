@@ -11,7 +11,7 @@ namespace Solarzed.Api.Tests;
 public class ManagementTests
 {
     static AppDbContext Database() => new(new DbContextOptionsBuilder<AppDbContext>().UseInMemoryDatabase(Guid.NewGuid().ToString()).Options);
-    static ProductRequest Product(string code = "TEST") => new(code, "Test film", "tint", "Test series", "Description", false);
+    static ProductRequest Product(string code = "1001") => new(code, "Test film", "tint", "Test series", "Description", false);
     static WarrantyRegistration Registration(string rollId) => new()
     {
         Code = "W-" + rollId, Vin = "VIN" + rollId, Owner = "Owner", Phone = "09120000000",
@@ -24,19 +24,29 @@ public class ManagementTests
     public async Task ProductDuplicateCodeIsRejected()
     {
         using var db = Database(); var api = new ManagementController(db);
-        Assert.IsType<OkObjectResult>(await api.Create(Product("test")));
+        Assert.IsType<OkObjectResult>(await api.Create(Product(" 1001 ")));
         Assert.IsType<ConflictObjectResult>(await api.Create(Product()));
         Assert.Single(db.Products);
     }
 
     [Fact]
-    public async Task ProductCodeIsTheModelEnteredByTheAdmin()
+    public async Task ProductCodeIsANumberEnteredByTheAdmin()
     {
         using var db = Database(); var api = new ManagementController(db);
         Assert.IsType<BadRequestObjectResult>(await api.Create(Product("") with { Name = "No code" }));
-        var saved = (Product)((OkObjectResult)await api.Create(Product(" pc15 ") with { Name = "Solarzed PC15" })).Value!;
-        Assert.Equal("PC15", saved.Code);
-        Assert.IsType<ConflictObjectResult>(await api.Create(Product("PC15") with { Name = "Another" }));
+        var saved = (Product)((OkObjectResult)await api.Create(Product(" 1015 ") with { Name = "Solarzed 1015" })).Value!;
+        Assert.Equal("1015", saved.Code);
+        Assert.IsType<ConflictObjectResult>(await api.Create(Product("1015") with { Name = "Another" }));
+    }
+
+    [Fact]
+    public async Task ProductsCreatedBeforeNumericCodesCanStillBeRenamed()
+    {
+        using var db = Database(); var api = new ManagementController(db);
+        db.Products.Add(new Product { Code = "PC15", Name = "Old film", Type = WarrantyType.Tint });
+        await db.SaveChangesAsync();
+        Assert.IsType<OkObjectResult>(await api.Update("PC15", Product("PC15") with { Name = "Old film renamed" }));
+        Assert.Equal("Old film renamed", (await db.Products.FindAsync("PC15"))!.Name);
     }
 
     [Fact]
@@ -56,15 +66,15 @@ public class ManagementTests
     public async Task ProductDuplicateNameIsRejectedOnCreateAndRename()
     {
         using var db = Database(); var api = new ManagementController(db);
-        Assert.IsType<OkObjectResult>(await api.Create(Product("A")));
+        Assert.IsType<OkObjectResult>(await api.Create(Product("1")));
         // Same name, different code: rejected regardless of case and surrounding spaces.
-        Assert.IsType<ConflictObjectResult>(await api.Create(Product("B") with { Name = "  TEST FILM " }));
-        Assert.IsType<OkObjectResult>(await api.Create(Product("B") with { Name = "Other film" }));
-        Assert.IsType<ConflictObjectResult>(await api.Update("B", Product("B") with { Name = "test film" }));
+        Assert.IsType<ConflictObjectResult>(await api.Create(Product("2") with { Name = "  TEST FILM " }));
+        Assert.IsType<OkObjectResult>(await api.Create(Product("2") with { Name = "Other film" }));
+        Assert.IsType<ConflictObjectResult>(await api.Update("2", Product("2") with { Name = "test film" }));
         // Re-saving a product under its own name is fine.
-        Assert.IsType<OkObjectResult>(await api.Update("A", Product("A")));
+        Assert.IsType<OkObjectResult>(await api.Update("1", Product("1")));
         Assert.Equal(2, await db.Products.CountAsync());
-        Assert.Equal("Other film", (await db.Products.FindAsync("B"))!.Name);
+        Assert.Equal("Other film", (await db.Products.FindAsync("2"))!.Name);
     }
 
     [Fact]
@@ -73,7 +83,7 @@ public class ManagementTests
         using var db = Database(); var api = new ManagementController(db);
         await api.Create(Product());
         // A rename request that also "tries" to change type, series and description only renames.
-        Assert.IsType<OkObjectResult>(await api.Update("TEST", Product() with
+        Assert.IsType<OkObjectResult>(await api.Update("1001", Product() with
         {
             Name = "Renamed film", Type = "ppf", Series = "other series", Description = "changed",
         }));
@@ -83,8 +93,8 @@ public class ManagementTests
         Assert.Equal("Test series", product.Series);
         Assert.Equal("Description", product.Description);
         // The code itself is immutable: delete it and create a new product instead.
-        Assert.IsType<BadRequestObjectResult>(await api.Update("TEST", Product("OTHER")));
-        Assert.IsType<NotFoundResult>(await api.Update("GHOST", Product()));
+        Assert.IsType<BadRequestObjectResult>(await api.Update("1001", Product("1002")));
+        Assert.IsType<NotFoundResult>(await api.Update("9999", Product()));
     }
 
     [Fact]
@@ -92,14 +102,14 @@ public class ManagementTests
     {
         using var db = Database(); var api = new ManagementController(db);
         await api.Create(Product());
-        db.Rolls.Add(new Roll { Id = "TEST-ROLL", ModelCode = "TEST", Type = WarrantyType.Tint, Batch = "B", Supplier = "S" });
+        db.Rolls.Add(new Roll { Id = "TEST-ROLL", ModelCode = "1001", Type = WarrantyType.Tint, Batch = "B", Supplier = "S" });
         await db.SaveChangesAsync();
 
-        Assert.IsType<ConflictObjectResult>(await api.Delete("TEST"));
+        Assert.IsType<ConflictObjectResult>(await api.Delete("1001"));
         Assert.Single(db.Products);
 
         db.Rolls.Remove(await db.Rolls.SingleAsync()); await db.SaveChangesAsync();
-        Assert.IsType<OkObjectResult>(await api.Delete("TEST"));
+        Assert.IsType<OkObjectResult>(await api.Delete("1001"));
         Assert.Empty(db.Products);
         // The code is immediately free again for a re-create.
         Assert.IsType<OkObjectResult>(await api.Create(Product()));
@@ -133,7 +143,9 @@ public class ManagementTests
 
     [Theory]
     [InlineData("bad/code", "tint")]
-    [InlineData("TEST", "other")]
+    [InlineData("1001", "other")]
+    [InlineData("PC15", "tint")]   // new codes are digits only
+    [InlineData("1234567890123", "tint")]
     public async Task RejectsInvalidProduct(string code, string type)
     {
         using var db = Database();

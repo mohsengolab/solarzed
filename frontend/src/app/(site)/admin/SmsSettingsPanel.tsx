@@ -1,6 +1,6 @@
 "use client";
 import { FormEvent, useCallback, useEffect, useState } from "react";
-import { managementFetch, fa } from "@/lib/api";
+import { managementFetch, fa, FA_DATE } from "@/lib/api";
 import s from "./admin.module.css";
 import { errorText } from "./AdminKit";
 
@@ -79,7 +79,7 @@ export default function SmsSettingsPanel() {
       <div className={s.kpi}><span>ارائه‌دهنده</span><b style={{ fontSize: 16 }}>{status?.mode === "soap" ? "فراز · SOAP" : "فراز · HTTPS"}</b></div>
       <div className={s.kpi}><span>خط فرستنده</span><b style={{ fontSize: 16 }} dir="ltr">{status?.line || "—"}</b></div>
       <div className={s.kpi}><span>الگو</span><b style={{ fontSize: 16 }} dir="ltr">{status?.pattern || "—"}</b></div>
-      <div className={s.kpi}><span>آخرین تأیید</span><b style={{ fontSize: 14 }}>{status?.updatedAt ? new Date(status.updatedAt).toLocaleString("fa-IR") : "—"}</b></div>
+      <div className={s.kpi}><span>آخرین تأیید</span><b style={{ fontSize: 14 }}>{status?.updatedAt ? new Date(status.updatedAt).toLocaleString(FA_DATE) : "—"}</b></div>
     </div>
     {status && !status.configured && <p className={s.empty}>{fa(status.connected ? "Sending is paused. Customer activation is unavailable until sending is resumed." : "SMS is not connected. Customer activation remains unavailable.")}</p>}
 
@@ -156,7 +156,7 @@ export default function SmsSettingsPanel() {
       <h2>فعالیت اخیر</h2>
       {log.length === 0 ? <p className={s.empty}>از زمان راه‌اندازی سرور پیامی ارسال نشده است.</p> :
         <table className={s.table}><thead><tr><th>زمان</th><th>موبایل</th><th>هدف</th><th>نتیجه</th><th>جزئیات</th></tr></thead><tbody>
-          {log.map((x, i) => <tr key={i}><td>{new Date(x.at).toLocaleString("fa-IR")}</td><td dir="ltr">{x.phone}</td><td>{fa(x.purpose)}</td>
+          {log.map((x, i) => <tr key={i}><td>{new Date(x.at).toLocaleString(FA_DATE)}</td><td dir="ltr">{x.phone}</td><td>{fa(x.purpose)}</td>
             <td><span className={s.badge} data-tone={x.ok ? "ok" : "fail"}>{x.ok ? "ارسال شد" : "ناموفق"}</span></td><td>{x.error ?? "—"}</td></tr>)}
         </tbody></table>}
       <p className={s.empty}>شماره‌ها پوشیده می‌شوند و کدهای تأیید هرگز ذخیره نمی‌شوند. گزارش در حافظه نگه داشته می‌شود و با راه‌اندازی مجدد سرور پاک می‌شود.</p>

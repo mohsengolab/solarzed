@@ -11,9 +11,9 @@ test("product lifecycle and inventory QC through the real admin interface", asyn
   await page.getByLabel("رمز عبور", { exact: true }).fill("local-browser-tests-only");
   await page.getByRole("button", { name: "ورود ↗", exact: true }).click();
   await page.getByRole("button", { name: "محصولات", exact: true }).click();
-  // The product code is the film model printed on the carton, entered by the admin.
-  const code = `QA-${Date.now()}`;
-  await page.getByLabel("کد محصول (مدل روی کارتن)", { exact: true }).fill(code);
+  // The product code is a numeric item code entered by the admin.
+  const code = String(Date.now()).slice(-12);   // numeric item code
+  await page.getByLabel("کد محصول (فقط عدد)", { exact: true }).fill(code);
   await page.getByLabel("نام محصول", { exact: true }).fill(`محصول آزمایش مرورگر ${Date.now()}`);
   await page.getByLabel("سری", { exact: true }).fill("Test series");
   await page.getByRole("button", { name: "ذخیره محصول", exact: true }).click();
@@ -84,7 +84,7 @@ test("product lifecycle and inventory QC through the real admin interface", asyn
   await expect(page.getByRole("row").filter({ hasText: code })).toHaveCount(0);
   const afterDelete = await request.get(`${api}/api/catalog`);
   expect((await afterDelete.json()).some((p: { code: string }) => p.code === code)).toBe(false);
-  await page.getByLabel("کد محصول (مدل روی کارتن)", { exact: true }).fill(code);
+  await page.getByLabel("کد محصول (فقط عدد)", { exact: true }).fill(code);
   await page.getByLabel("نام محصول", { exact: true }).fill(renamed);
   await page.getByRole("button", { name: "ذخیره محصول", exact: true }).click();
   await expect(page.getByText("محصول ذخیره شد.", { exact: true })).toBeVisible();
