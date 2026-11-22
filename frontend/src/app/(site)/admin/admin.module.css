@@ -336,9 +336,9 @@
 }
 .table tbody tr:hover td { background: rgb(var(--sz-tint) / 0.03); }
 .table code { font-size: 12px; color: var(--sz-accent-fg); letter-spacing: 0.03em; }
-/* Wide tables scroll inside their card instead of spilling out of it. */
-.card:has(> .table) { overflow-x: auto; }
+/* Tables never scroll sideways: cells wrap instead, and long codes break at any point. */
 .table th { white-space: nowrap; }
+.table td code { overflow-wrap: anywhere; }
 /* Row action buttons: side by side and compact. */
 .rowActions { display: flex; gap: 6px; flex-wrap: nowrap; }
 .rowActions > button { padding: 5px 10px; white-space: nowrap; }
@@ -346,6 +346,22 @@
 /* Many-column tables: tighter cells so they fit the card on a normal screen. */
 .tableCompact th { padding: 0 8px 12px; }
 .tableCompact td { padding: 10px 8px; }
+/* Rolls list: on a narrow card, drop the secondary columns (type, dimensions, installs,
+   received date — columns 6, 8, 11, 12) so the table fits without scrolling sideways. */
+.rollsCard { container-type: inline-size; }
+/* «مدیر» does not see roll IDs: hide the QR and roll ID columns (2 and 3). */
+.noCodes :is(th, td):is(:nth-child(2), :nth-child(3)) { display: none; }
+@container (max-width: 980px) {
+  .rollsCard .table :is(th, td):is(:nth-child(6), :nth-child(8), :nth-child(11), :nth-child(12)) { display: none; }
+}
+/* Phone width: each roll becomes a small card (rows wrap) instead of a table row. */
+@container (max-width: 640px) {
+  .rollsCard .table thead { display: none; }
+  .rollsCard .table, .rollsCard .table tbody { display: block; }
+  .rollsCard .table tr { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 12px; padding: 12px 0; border-top: 1px solid rgb(var(--sz-tint) / 0.08); }
+  .rollsCard .table td { display: block; padding: 0; border: 0; }
+  .rollsCard .table td:nth-child(3) { flex-basis: 100%; order: -1; }   /* roll ID on its own line first */
+}
 
 .loading { color: var(--sz-fg-4); padding: 48px; text-align: center; font-size: 14px; }
 .empty   { color: var(--sz-fg-4); font-size: 13px; padding: 16px 0; line-height: 1.6; }
@@ -376,6 +392,7 @@
 
 .dialog {
   position: fixed;
+  overscroll-behavior: contain;
   inset: 0;
   background: rgb(var(--sz-bg-rgb) / 0.85);
   backdrop-filter: blur(4px);
@@ -527,7 +544,7 @@
 /* ── Filter bar & pager ──────────────────────────────────────────────────── */
 
 .filterBar { margin-bottom: 20px; display: flex; flex-direction: column; gap: 12px; }
-.filterGrid { display: grid; grid-template-columns: repeat(auto-fill, minmax(190px, 1fr)); gap: 12px; }
+.filterGrid { display: grid; grid-template-columns: repeat(auto-fill, minmax(min(190px, 100%), 1fr)); gap: 12px; }
 .filterGrid label {
   display: flex;
   flex-direction: column;
@@ -536,7 +553,7 @@
   font-weight: 600;
   color: var(--sz-fg-3);
 }
-.filterGrid .wide { grid-column: span 2; }
+.filterGrid .wide { grid-column: 1 / -1; }   /* full row, so it never adds a column the card cannot fit */
 .filterGrid input, .filterGrid select {
   padding: 9px 12px;
   background: rgb(var(--sz-tint) / 0.05);

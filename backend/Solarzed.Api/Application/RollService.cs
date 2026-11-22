@@ -10,7 +10,7 @@ public record CreateRollsRequest(
     string ModelCode, string Type, string Batch, string Supplier, string Qc, int Quantity,
     decimal? WidthCm = null, decimal? LengthM = null,
     decimal? ThicknessMil = null, int? Vlt = null, int? Irr = null, int? Uv = null, int? Tser = null, int? WarrantyYears = null,
-    string[]? RollNos = null);
+    string[]? RollNos = null, int? WarehouseId = null);
 
 public static class RollService
 {
@@ -62,6 +62,7 @@ public static class RollService
             {
                 Id = ids[i],
                 Number = lastNumber + i + 1,
+                WarehouseId = req.WarehouseId,
                 ModelCode = model,
                 RollNo = rollNos?[i],
                 Type = type,
@@ -81,7 +82,7 @@ public static class RollService
         foreach (var r in rolls)
             AuditLog.Add(db, actor, "roll", r.Id, "received", AuditLog.Diff(
                 ("modelCode", null, r.ModelCode), ("rollNo", null, r.RollNo), ("batch", null, r.Batch), ("supplier", null, r.Supplier), ("qc", null, r.Qc),
-                ("widthCm", null, r.WidthCm), ("lengthM", null, r.LengthM)));
+                ("widthCm", null, r.WidthCm), ("lengthM", null, r.LengthM), ("warehouseId", null, r.WarehouseId)));
         await db.SaveChangesAsync();
         return [.. rolls];
     }

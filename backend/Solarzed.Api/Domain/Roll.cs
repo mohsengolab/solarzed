@@ -32,6 +32,10 @@ public class Roll
     [MaxLength(16)]
     public string Supplier { get; set; } = default!;   // confidential
 
+    // Where the roll is: in a warehouse, or with a specific system user (the user wins when both are set).
+    public int? WarehouseId { get; set; }
+    public int? HolderUserId { get; set; }
+
     public RollQc Qc { get; set; } = RollQc.Pending;
     public RollStatus Status { get; set; } = RollStatus.InStock;
 

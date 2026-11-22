@@ -110,7 +110,7 @@ const FarsiStrings = {
   // Users
   "User management": "مدیریت کاربران",
   "Create user": "ساخت کاربر", "Add a manager or a carton/serial operator.": "یک مدیر یا اپراتور کارتن/سریال اضافه کنید.",
-  "Name (optional)": "نام (اختیاری)", "Role": "نقش", "Manager — everything": "مدیر — همه چیز",
+  "Name (optional)": "نام (اختیاری)", "Role": "نقش", "Manager — everything": "مدیر — بدون شناسه رول و کد گارانتی؛ رول‌ها: فقط لوکیشن و وضعیت",
   "Carton — only the serial on the box": "کارتن — فقط سریال روی جعبه",
   "Password": "رمز عبور", "Create": "ساخت", "Actions": "عملی‌ها",
   "Disable": "غیرفعال", "Enable": "فعال", "Reset password": "بازنشانی رمز",
@@ -380,7 +380,7 @@ export function adminCreateRolls(data: Record<string, unknown>) {
 }
 
 /** Updates a roll's stock fields plus its batch, supplier and physical dimensions. */
-export function adminUpdateRoll(id: string, data: { qc?: string; status?: string; note?: string; batch?: string; supplier?: string; widthCm?: number | null; lengthM?: number | null; rollNo?: string }) {
+export function adminUpdateRoll(id: string, data: { qc?: string; status?: string; note?: string; batch?: string; supplier?: string; widthCm?: number | null; lengthM?: number | null; rollNo?: string; location?: string }) {
   return apiFetch(`/api/admin/rolls/${encodeURIComponent(id)}`, { method: "POST", body: JSON.stringify(data) });
 }
 

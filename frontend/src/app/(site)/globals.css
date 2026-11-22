@@ -144,3 +144,7 @@ a { color: inherit; text-decoration: none; }
   color: var(--sz-fg-2);
 }
 .sz-btn-ghost:hover { border-color: var(--sz-teal); color: var(--sz-fg); }
+
+/* While a modal dialog is open, the page behind it must not scroll. */
+html:has([role="dialog"][aria-modal="true"]),
+html:has([role="dialog"][aria-modal="true"]) body { overflow: hidden; }

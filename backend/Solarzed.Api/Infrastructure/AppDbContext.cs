@@ -8,6 +8,7 @@ public class AppDbContext(DbContextOptions<AppDbContext> options) : DbContext(op
     public DbSet<Product> Products => Set<Product>();
     public DbSet<WarrantyRegistration> WarrantyRegistrations => Set<WarrantyRegistration>();
     public DbSet<Roll> Rolls => Set<Roll>();
+    public DbSet<Warehouse> Warehouses => Set<Warehouse>();
     public DbSet<CoverageSetting> CoverageSettings => Set<CoverageSetting>();
     public DbSet<AdminUser> AdminUsers => Set<AdminUser>();
     public DbSet<BoxLabel> BoxLabels => Set<BoxLabel>();
@@ -38,6 +39,9 @@ public class AppDbContext(DbContextOptions<AppDbContext> options) : DbContext(op
 
         mb.Entity<Roll>().HasIndex(x => x.RollNo).IsUnique().HasFilter("[RollNo] IS NOT NULL");
         mb.Entity<Roll>().HasIndex(x => x.Number).IsUnique();
+        mb.Entity<Roll>().HasOne<Warehouse>().WithMany().HasForeignKey(x => x.WarehouseId).OnDelete(DeleteBehavior.Restrict);
+        mb.Entity<Roll>().HasOne<AdminUser>().WithMany().HasForeignKey(x => x.HolderUserId).OnDelete(DeleteBehavior.Restrict);
+        mb.Entity<Warehouse>().HasIndex(x => x.Name).IsUnique();
         mb.Entity<BoxLabel>().HasIndex(x => x.TokenHash).IsUnique();
         mb.Entity<BoxLabel>().HasIndex(x => x.WarrantyCode).IsUnique().HasFilter("[WarrantyCode] IS NOT NULL");
         mb.Entity<BoxLabel>().HasOne<Roll>().WithMany().HasForeignKey(x => x.RollId).OnDelete(DeleteBehavior.Restrict);

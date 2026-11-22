@@ -208,7 +208,7 @@ export function UsersPanel() {
         <label>رمز عبور<input required minLength={12} maxLength={72} type="password" autoComplete="new-password" value={form.password} onChange={e => setForm({ ...form, password: e.target.value })} dir="ltr" /></label>
         <label>نقش<select value={form.role} onChange={e => setForm({ ...form, role: e.target.value as AdminRole })}>
           <option value="superadmin">مدیر کل — همه چیز + لیست مشتریان</option>
-          <option value="admin">مدیر — همه چیز</option>
+          <option value="admin">مدیر — بدون شناسه رول و کد گارانتی؛ رول‌ها: فقط لوکیشن و وضعیت</option>
           <option value="carton">کارتن — فقط سریال روی جعبه</option>
         </select></label>
         <label>وضعیت<select value={String(form.active)} onChange={e => setForm({ ...form, active: e.target.value === "true" })}><option value="true">فعال</option><option value="false">غیرفعال</option></select></label>
