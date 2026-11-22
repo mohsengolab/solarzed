@@ -15,6 +15,11 @@ public class Roll
     [MaxLength(24)]
     public string ModelCode { get; set; } = default!;
 
+    // Roll No the factory prints (with its barcode) on the carton, e.g. CPT30614374. One carton holds one roll,
+    // so this becomes the carton serial (BoxLabel.Id) when its warranty card is issued. Null for older rolls.
+    [MaxLength(32)]
+    public string? RollNo { get; set; }
+
     public WarrantyType Type { get; set; }
 
     [MaxLength(32)]

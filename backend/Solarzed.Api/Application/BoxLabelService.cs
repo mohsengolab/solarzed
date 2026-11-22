@@ -75,11 +75,11 @@ public class BoxLabelService(AppDbContext db, IDataProtectionProvider protection
     public Task<LabelView[]> Issue(string rollId, int quantity)
     {
         if (quantity is < 1 or > MaxBatch) throw new ActivationError(400, $"Quantity must be 1–{MaxBatch} boxes.");
-        return Create(rollId, Enumerable.Range(0, quantity).Select(_ => "SZB-" + Convert.ToHexString(RandomNumberGenerator.GetBytes(8))).ToArray());
+        return Create([(rollId, Enumerable.Range(0, quantity).Select(_ => "SZB-" + Convert.ToHexString(RandomNumberGenerator.GetBytes(8))).ToArray())]);
     }
 
-    /// <summary>Issues one label per carton, keyed by the roll number printed on each box (scanned or typed).</summary>
-    public async Task<LabelView[]> Issue(string rollId, IEnumerable<string>? serials)
+    /// <summary>Normalizes scanned roll numbers and rejects an empty, oversized, repeated or malformed list.</summary>
+    public static string[] ParseSerials(IEnumerable<string>? serials)
     {
         var list = (serials ?? []).Select(NormalizeSerial).Where(x => x.Length > 0).ToArray();
         if (list.Length is 0 or > MaxBatch) throw new ActivationError(400, $"Scan 1–{MaxBatch} carton roll numbers.");
@@ -87,33 +87,71 @@ public class BoxLabelService(AppDbContext db, IDataProtectionProvider protection
         if (repeated.Length > 0) throw new ActivationError(400, $"Roll number entered twice: {string.Join(", ", repeated.Take(10))}");
         var malformed = list.Where(x => !SerialPattern.IsMatch(x)).ToArray();
         if (malformed.Length > 0) throw new ActivationError(400, $"Invalid roll number: {string.Join(", ", malformed.Take(10))}");
-        var existing = await db.BoxLabels.Where(x => list.Contains(x.Id)).Select(x => x.Id).ToListAsync();
-        if (existing.Count > 0) throw new ActivationError(409, $"These cartons already have a warranty card: {string.Join(", ", existing.Take(10))}");
-        return await Create(rollId, list);
+        return list;
     }
 
-    async Task<LabelView[]> Create(string rollId, string[] serials)
+    /// <summary>Issues one label per carton, keyed by the roll number printed on each box (scanned or typed).</summary>
+    public async Task<LabelView[]> Issue(string rollId, IEnumerable<string>? serials)
     {
-        var roll = await db.Rolls.FindAsync(rollId) ?? throw new ActivationError(404, "Roll not found.");
-        if (roll.Qc != RollQc.Approved || roll.Status == RollStatus.Void)
-            throw new ActivationError(409, "Only QC-approved, non-void products can have box labels.");
-        var factory = RollService.SupplierCode(roll.Supplier) ?? throw new ActivationError(400, "Supplier code must be exactly 3 English letters.");
-        if (roll.LengthM is not > 0) throw new ActivationError(400, "Set the roll length before issuing labels.");
+        var list = ParseSerials(serials);
+        await EnsureNoCards(list);
+        return await Create([(rollId, list)]);
+    }
+
+    /// <summary>Issues the warranty card of each selected roll's carton, using the Roll No recorded on the roll.</summary>
+    public async Task<LabelView[]> IssueForRolls(IEnumerable<string>? rollIds)
+    {
+        var ids = (rollIds ?? []).Where(x => !string.IsNullOrWhiteSpace(x)).Distinct().ToArray();
+        if (ids.Length is 0 or > MaxBatch) throw new ActivationError(400, $"Select 1–{MaxBatch} rolls.");
+        var rolls = await db.Rolls.Where(r => ids.Contains(r.Id)).Select(r => new { r.Id, r.RollNo }).ToListAsync();
+        if (rolls.Count != ids.Length) throw new ActivationError(404, "Roll not found.");
+        var missing = rolls.Where(r => r.RollNo == null).Select(r => r.Id).ToArray();
+        if (missing.Length > 0) throw new ActivationError(400, $"Enter the carton Roll No on these rolls first: {string.Join(", ", missing.Take(10))}");
+        await EnsureNoCards(rolls.Select(r => r.RollNo!).ToArray());
+        return await Create(rolls.Select(r => (r.Id, new[] { r.RollNo! })).ToArray());
+    }
+
+    async Task EnsureNoCards(string[] serials)
+    {
+        var existing = await db.BoxLabels.Where(x => serials.Contains(x.Id)).Select(x => x.Id).ToListAsync();
+        if (existing.Count > 0) throw new ActivationError(409, $"These cartons already have a warranty card: {string.Join(", ", existing.Take(10))}");
+    }
+
+    async Task<LabelView[]> Create(IReadOnlyList<(string RollId, string[] Serials)> items)
+    {
         var setting = await db.CoverageSettings.FirstOrDefaultAsync() ?? new CoverageSetting();
-        int? film = roll.Type == WarrantyType.Tint ? setting.TintFilmYears : setting.PpfFilmYears;
-        int? install = roll.Type == WarrantyType.Tint ? setting.TintInstallYears : setting.PpfInstallYears;
-        if (film is not (3 or 5 or 7 or 10) || install is not (null or 1 or 2 or 3))
-            throw new ActivationError(400, "Set the approved film and installation periods in Settings before issuing labels.");
         var site = await Site();
-        var codes = await NewCardCodes(serials.Length);
-        var labels = serials.Select((serial, i) =>
+        var codes = await NewCardCodes(items.Sum(x => x.Serials.Length));
+        var labels = new List<BoxLabel>();
+        foreach (var (rollId, serials) in items)
         {
-            var token = Convert.ToHexString(RandomNumberGenerator.GetBytes(32)).ToLowerInvariant();
-            return new BoxLabel { Id = serial,
-                TokenHash = Hash(token), ProtectedToken = protector.Protect(token), RollId = roll.Id,
-                Product = roll.ModelCode, Type = roll.Type, FilmYears = film.Value, InstallYears = install,
-                FactoryCode = factory, CardCode = codes[i], RemainingLengthM = roll.LengthM };
-        }).ToArray();
+            var roll = await db.Rolls.FindAsync(rollId) ?? throw new ActivationError(404, "Roll not found.");
+            // Name the roll when several are issued at once, so the error says which one to fix.
+            var which = items.Count > 1 ? $" ({roll.Id})" : "";
+            if (roll.Qc != RollQc.Approved || roll.Status == RollStatus.Void)
+                throw new ActivationError(409, $"Only QC-approved, non-void products can have box labels.{which}");
+            // A roll whose carton Roll No is recorded has exactly that one carton.
+            if (roll.RollNo != null && serials.Any(s => s != roll.RollNo))
+                throw new ActivationError(400, $"This roll's carton Roll No is {roll.RollNo}.{which}");
+            var claimed = await db.Rolls.Where(r => r.Id != roll.Id && r.RollNo != null && serials.Contains(r.RollNo))
+                .Select(r => r.RollNo!).ToListAsync();
+            if (claimed.Count > 0)
+                throw new ActivationError(409, $"These Roll Nos belong to other rolls: {string.Join(", ", claimed.Take(10))}");
+            var factory = RollService.SupplierCode(roll.Supplier) ?? throw new ActivationError(400, $"Supplier code must be exactly 3 English letters.{which}");
+            if (roll.LengthM is not > 0) throw new ActivationError(400, $"Set the roll length before issuing labels.{which}");
+            int? film = roll.Type == WarrantyType.Tint ? setting.TintFilmYears : setting.PpfFilmYears;
+            int? install = roll.Type == WarrantyType.Tint ? setting.TintInstallYears : setting.PpfInstallYears;
+            if (film is not (3 or 5 or 7 or 10) || install is not (null or 1 or 2 or 3))
+                throw new ActivationError(400, "Set the approved film and installation periods in Settings before issuing labels.");
+            foreach (var serial in serials)
+            {
+                var token = Convert.ToHexString(RandomNumberGenerator.GetBytes(32)).ToLowerInvariant();
+                labels.Add(new BoxLabel { Id = serial,
+                    TokenHash = Hash(token), ProtectedToken = protector.Protect(token), RollId = roll.Id,
+                    Product = roll.ModelCode, Type = roll.Type, FilmYears = film.Value, InstallYears = install,
+                    FactoryCode = factory, CardCode = codes[labels.Count], RemainingLengthM = roll.LengthM });
+            }
+        }
         db.BoxLabels.AddRange(labels);
         try { await db.SaveChangesAsync(); }
         // A concurrent issue of the same carton or card code trips the unique indexes.

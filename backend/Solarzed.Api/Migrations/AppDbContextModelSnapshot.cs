@@ -529,6 +529,10 @@ namespace Solarzed.Api.Migrations
                     b.Property<DateTime>("ReceivedAt")
                         .HasColumnType("datetime2");
 
+                    b.Property<string>("RollNo")
+                        .HasMaxLength(32)
+                        .HasColumnType("nvarchar(32)");
+
                     b.Property<int>("Status")
                         .HasColumnType("int");
 
@@ -544,6 +548,10 @@ namespace Solarzed.Api.Migrations
                         .HasColumnType("decimal(7,2)");
 
                     b.HasKey("Id");
+
+                    b.HasIndex("RollNo")
+                        .IsUnique()
+                        .HasFilter("[RollNo] IS NOT NULL");
 
                     b.ToTable("Rolls");
                 });

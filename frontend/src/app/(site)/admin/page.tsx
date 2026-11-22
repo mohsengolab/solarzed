@@ -5,7 +5,7 @@ import Link from "next/link";
 import QRCode from "qrcode";
 import {
   adminLogin, adminLogout, adminSession, adminOverview, adminWarranties, adminDecision,
-  adminRollsSearch, adminCreateRolls, adminUpdateRoll, adminDeleteRoll, adminGetSettings, adminSaveSettings,
+  adminRollsSearch, adminCreateRolls, adminUpdateRoll, adminDeleteRoll, issueCardsForRolls, adminGetSettings, adminSaveSettings,
   adminBoxLabels, managementFetch, ADMIN_UNAUTHORIZED, fa, qs,
 } from "@/lib/api";
 import styles from "./admin.module.css";
@@ -751,7 +751,7 @@ function WarrantiesPanel() {
 
 // ── Rolls ─────────────────────────────────────────────────────────────────────
 
-type RollRow = { id: string; modelCode: string; type: string; batch: string; supplier: string; qc: string; status: string; installs: number; historyJson: string; receivedAt: string; widthCm?: number | null; lengthM?: number | null };
+type RollRow = { id: string; rollNo?: string | null; cards: number; modelCode: string; type: string; batch: string; supplier: string; qc: string; status: string; installs: number; historyJson: string; receivedAt: string; widthCm?: number | null; lengthM?: number | null };
 type SpecKey = "thicknessMil" | "vlt" | "irr" | "uv" | "tser" | "warrantyYears";
 const SPEC_FIELDS: { key: SpecKey; label: string; min: number; max: number; step: number; placeholder: string }[] = [
   { key: "thicknessMil", label: "ضخامت (Mil)", min: 0.1, max: 20, step: 0.1, placeholder: "مثلاً 2" },
@@ -768,6 +768,9 @@ const R_EMPTY = { q: "", model: "", type: "", qc: "", status: "", supplier: "", 
 
 function RollsPanel() {
   const [form, setForm] = useState({ modelCode: "", type: "tint", batch: "", supplier: "", qc: "pending", quantity: "1", widthCm: "", lengthM: "" });
+  // Carton Roll Nos scanned at receipt, one per line: each becomes one roll.
+  const [rollNoText, setRollNoText] = useState("");
+  const rollNos = [...new Set(rollNoText.split(/[\s,]+/).map(x => x.trim().toUpperCase()).filter(Boolean))];
   const [specs, setSpecs] = useState<Record<SpecKey, string>>(SPEC_EMPTY);
   const [msg, setMsg] = useState("");
   const [saving, setSaving] = useState(false);
@@ -806,7 +809,7 @@ function RollsPanel() {
     try {
       await adminUpdateRoll(edit.id, {
         qc: edit.qc, status: edit.status, note,
-        batch: edit.batch, supplier: edit.supplier, widthCm: edit.widthCm ?? null, lengthM: edit.lengthM ?? null,
+        batch: edit.batch, supplier: edit.supplier, widthCm: edit.widthCm ?? null, lengthM: edit.lengthM ?? null, rollNo: edit.rollNo ?? "",
       });
       list.reload(); setEdit(null); setMsg("موجودی به‌روزرسانی شد.");
     }
@@ -826,10 +829,11 @@ function RollsPanel() {
     try {
       const num = (v: string) => (v.trim() === "" ? null : Number(v));
       const specValues = Object.fromEntries(SPEC_FIELDS.map(s => [s.key, num(specs[s.key])]));
-      await adminCreateRolls({ ...form, quantity: Number(form.quantity), widthCm: num(form.widthCm), lengthM: num(form.lengthM), ...specValues });
+      await adminCreateRolls({ ...form, quantity: rollNos.length || Number(form.quantity), rollNos, widthCm: num(form.widthCm), lengthM: num(form.lengthM), ...specValues });
+      setRollNoText("");
       if (selectedProduct) setProducts(ps => ps.map(p => p.code === selectedProduct.code
         ? { ...p, ...Object.fromEntries(Object.entries(specValues).filter(([, v]) => v != null)) } : p));
-      setMsg("رول‌ها ساخته شدند.");
+      setMsg(rollNos.length ? `${rollNos.length.toLocaleString("fa-IR")} رول با Roll No کارتن ساخته شد.` : "رول‌ها ساخته شدند.");
       list.reload();
     } catch (ex: unknown) {
       setMsg(fa(errorText(ex, fa("Error"))));
@@ -838,10 +842,23 @@ function RollsPanel() {
     }
   }
 
+  // Rolls on this page whose carton Roll No is recorded and that can get their warranty card now.
+  const cardReady = (r: RollRow) => !!r.rollNo && !r.cards && r.qc === "approved" && r.status !== "void";
+  const readyRolls = list.items.filter(cardReady);
+  async function issueCards(ids: string[]) {
+    if (!ids.length) return;
+    setSaving(true); setMsg("");
+    try {
+      const result = await issueCardsForRolls(ids);
+      setMsg(`${result.labels.length.toLocaleString("fa-IR")} کارت گارانتی ساخته شد. چاپ کارت‌ها از بخش «برچسب‌ها».`);
+      list.reload();
+    } catch (e) { setMsg(fa(errorText(e, "ساخت کارت ناموفق بود."))); } finally { setSaving(false); }
+  }
+
   async function exportCsv() {
     try {
       const all = await adminRollsSearch<RollRow>(list.exportQuery);
-      downloadCsv("rolls", all.items, [["id", "شناسه رول"], ["modelCode", "مدل"], ["type", "نوع"], ["batch", "بچ"], ["supplier", "تأمین‌کننده"],
+      downloadCsv("rolls", all.items, [["id", "شناسه رول"], ["rollNo", "Roll No کارتن"], ["modelCode", "مدل"], ["type", "نوع"], ["batch", "بچ"], ["supplier", "تأمین‌کننده"],
         ["widthCm", "عرض (cm)"], ["lengthM", "طول (m)"], ["qc", "QC"], ["status", "وضعیت"], ["installs", "نصب‌ها"], ["receivedAt", "دریافت"]]);
     } catch (e) { setMsg(fa(errorText(e, "خروجی ناموفق بود."))); }
   }
@@ -883,8 +900,8 @@ function RollsPanel() {
                 <option value="rejected">رد شده</option>
               </select>
             </label>
-            <label>تعداد
-              <input type="number" required min="1" max="200" value={form.quantity}
+            <label>تعداد {rollNos.length > 0 && "(از روی Roll Noها)"}
+              <input type="number" required min="1" max="200" value={rollNos.length || form.quantity} disabled={rollNos.length > 0}
                 onChange={e => setForm(p => ({ ...p, quantity: e.target.value }))} />
             </label>
             <label>عرض رول (سانتی‌متر)
@@ -896,6 +913,10 @@ function RollsPanel() {
                 onChange={e => setForm(p => ({ ...p, lengthM: e.target.value }))} />
             </label>
           </div>
+          <label>Roll No کارتن‌ها (بارکد کارخانه روی کارتن؛ هر خط یکی، با بارکدخوان) — {rollNos.length.toLocaleString("fa-IR")} کارتن
+            <textarea dir="ltr" rows={4} value={rollNoText} onChange={e => setRollNoText(e.target.value)} placeholder={"CPT30614374\nCPT30614375"} />
+            <small style={{ opacity: .75 }}>هر کارتن یک رول است: برای هر Roll No یک رول ساخته می‌شود و «تعداد» از روی آن‌ها پر می‌شود. اگر خالی بماند، Roll No را بعداً در «مدیریت» همان رول وارد کنید.</small>
+          </label>
           <fieldset className={styles.row2} style={{ border: "1px solid rgba(127,127,127,.25)", borderRadius: 12, padding: 12 }}>
             <legend style={{ padding: "0 6px", fontWeight: 600 }}>
               مشخصات فنی محصول {selectedProduct ? `(${selectedProduct.code})` : ""}
@@ -919,10 +940,14 @@ function RollsPanel() {
 
       <div className={styles.panelHead} style={{ marginTop: 24, marginBottom: 12 }}>
         <h2>موجودی</h2>
-        <button type="button" className={styles.ghost} onClick={exportCsv} disabled={!list.total}>خروجی CSV (حداکثر ۲۰۰)</button>
+        <div className={styles.filters}>
+          <button type="button" className={styles.btnPrimary} onClick={() => issueCards(readyRolls.map(r => r.id))} disabled={saving || !readyRolls.length}
+            title="رول‌های این صفحه که Roll No دارند، QC تأییدشده‌اند و هنوز کارت ندارند">ساخت کارت گارانتی برای رول‌های آماده ({readyRolls.length.toLocaleString("fa-IR")})</button>
+          <button type="button" className={styles.ghost} onClick={exportCsv} disabled={!list.total}>خروجی CSV (حداکثر ۲۰۰)</button>
+        </div>
       </div>
       <FilterBar active={countActive(f)} onClear={() => setF(R_EMPTY)}>
-        <label className={styles.wide}>جستجوی موجودی<input type="search" placeholder="شناسه رول، مدل، بچ یا تأمین‌کننده" value={f.q} onChange={set("q")} /></label>
+        <label className={styles.wide}>جستجوی موجودی<input type="search" placeholder="شناسه رول، Roll No، مدل، بچ یا تأمین‌کننده" value={f.q} onChange={set("q")} /></label>
         <label>محصول<select value={f.model} onChange={set("model")}><option value="">همه محصولات</option>{products.map(p => <option key={p.code} value={p.code}>{p.code}</option>)}</select></label>
         <label>نوع<select value={f.type} onChange={set("type")}><option value="">همه انواع</option><option value="tint">فیلم شیشه</option><option value="ppf">PPF</option></select></label>
         <label>فیلتر QC<select value={f.qc} onChange={set("qc")}><option value="">هر QC</option><option value="pending">در انتظار</option><option value="approved">تأیید شده</option><option value="rejected">رد شده</option></select></label>
@@ -936,7 +961,7 @@ function RollsPanel() {
       {list.error && <p role="alert" className={styles.errorText}>{list.error}</p>}
       <div className={styles.card}>
         <table className={`${styles.table} ${list.loading ? styles.tableBusy : ""}`}>
-          <thead><tr><th>QR</th><SortTh column="id" label="شناسه رول" {...sortProps} /><SortTh column="modelCode" label="مدل" {...sortProps} /><SortTh column="type" label="نوع" {...sortProps} />
+          <thead><tr><th>QR</th><SortTh column="id" label="شناسه رول" {...sortProps} /><SortTh column="rollNo" label="Roll No کارتن" {...sortProps} /><SortTh column="modelCode" label="مدل" {...sortProps} /><SortTh column="type" label="نوع" {...sortProps} />
             <SortTh column="batch" label="بچ" {...sortProps} /><th>ابعاد (cm × m)</th><SortTh column="supplier" label="تأمین‌کننده" {...sortProps} /><SortTh column="qc" label="QC" {...sortProps} />
             <SortTh column="status" label="وضعیت" {...sortProps} /><th>نصب‌ها</th><SortTh column="receivedAt" label="دریافت" {...sortProps} /><th>عملیات</th></tr></thead>
           <tbody>
@@ -947,6 +972,7 @@ function RollsPanel() {
                   <img src={qrs[r.id]} alt={`QR رول ${r.id}`} width={44} height={44} style={{ display: "block", background: "#fff", borderRadius: 4, padding: 2 }} />
                 </button>}</td>
                 <td><code dir="ltr">{r.id}</code></td>
+                <td>{r.rollNo ? <code dir="ltr">{r.rollNo}</code> : "—"}{r.cards > 0 && <small style={{ display: "block", opacity: .7 }}>کارت صادر شده</small>}</td>
                 <td>{r.modelCode}</td>
                 <td>{r.type}</td>
                 <td>{r.batch}</td>
@@ -958,6 +984,7 @@ function RollsPanel() {
                 <td>{new Date(r.receivedAt).toLocaleDateString("fa-IR")}</td>
                 <td>
                   <button type="button" className={styles.ghost} onClick={() => { setEdit(r); setNote(""); setMsg(""); }}>مدیریت</button>
+                  {cardReady(r) && <button type="button" className={styles.ghost} disabled={saving} onClick={() => issueCards([r.id])}>ساخت کارت</button>}
                   <button type="button" className={styles.danger} onClick={() => deleteRoll(r.id)}>حذف</button>
                 </td>
               </tr>
@@ -972,6 +999,8 @@ function RollsPanel() {
         <label>کنترل کیفیت<select value={edit.qc} onChange={e => setEdit({ ...edit, qc: e.target.value })}>{["pending", "approved", "rejected"].map(v => <option key={v} value={v}>{fa(v)}</option>)}</select></label>
         <label>وضعیت انبار<select value={edit.status} onChange={e => setEdit({ ...edit, status: e.target.value })}>{["instock", "shipped", "consumed", "void"].map(v => <option key={v} value={v}>{fa(v)}</option>)}</select></label>
         <div className={styles.row2}>
+          <label>Roll No کارتن (بارکد کارخانه){edit.cards > 0 && " — کارت صادر شده، قابل تغییر نیست"}<input maxLength={32} value={edit.rollNo ?? ""} dir="ltr" disabled={edit.cards > 0} placeholder="مثلاً CPT30614374"
+            onChange={e => setEdit({ ...edit, rollNo: e.target.value.replace(/\s+/g, "").toUpperCase() })} /></label>
           <label>بچ<input maxLength={32} value={edit.batch} dir="ltr" onChange={e => setEdit({ ...edit, batch: e.target.value })} /></label>
           <label>کد تأمین‌کننده / کارخانه (۳ حرف انگلیسی)<input maxLength={Math.max(3, edit.supplier.length)} value={edit.supplier} dir="ltr" onChange={e => setEdit({ ...edit, supplier: e.target.value.toUpperCase() })} /></label>
           <label>عرض (سانتی‌متر)<input type="number" min={1} max={1000} step="0.1" value={edit.widthCm ?? ""} dir="ltr"

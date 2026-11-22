@@ -345,4 +345,36 @@ public class BoxLabelTests
         Assert.True(new ActivationSmsSender(new HttpClient(), Cfg("soap")).Configured);
         Assert.False(new ActivationSmsSender(new HttpClient(), Cfg("legacy")).Configured);
     }
+
+    [Fact]
+    public async Task CardIsIssuedFromTheRollNoRecordedOnTheRoll()
+    {
+        using var f = new Fixture();
+        f.Db.Rolls.Add(new Roll { Id = "SZ-TEST-26-000002", RollNo = "CPT30614374", ModelCode = "TEST", Type = WarrantyType.Tint,
+            Batch = "TEST", Supplier = "ABC", LengthM = 30, Qc = RollQc.Approved, Status = RollStatus.InStock });
+        await f.Db.SaveChangesAsync();
+
+        var card = Assert.Single(await f.Service.IssueForRolls(["SZ-TEST-26-000002"]));
+        Assert.Equal("CPT30614374", card.Id);
+        Assert.Equal("SZ-TEST-26-000002", card.RollId);
+        Assert.Equal(30m, card.RemainingLengthM);
+        Assert.Matches("^CPT30614374-[1-9][0-9]{6}$", card.FullCode);
+        await Error(409, () => f.Service.IssueForRolls(["SZ-TEST-26-000002"]));   // one card per carton
+        await Error(400, () => f.Service.IssueForRolls(["SZ-TEST-26-000001"]));   // no Roll No recorded
+        await Error(404, () => f.Service.IssueForRolls(["SZ-MISSING"]));
+    }
+
+    [Fact]
+    public async Task RollWithRollNoOnlyAcceptsItsOwnCarton()
+    {
+        using var f = new Fixture();
+        f.Db.Rolls.Add(new Roll { Id = "SZ-TEST-26-000002", RollNo = "CPT30614374", ModelCode = "TEST", Type = WarrantyType.Tint,
+            Batch = "TEST", Supplier = "ABC", LengthM = 30, Qc = RollQc.Approved, Status = RollStatus.Shipped });
+        await f.Db.SaveChangesAsync();
+
+        await Error(400, () => f.Service.Issue("SZ-TEST-26-000002", ["CPT99999999"]));
+        await Error(400, () => f.Service.Issue("SZ-TEST-26-000002", 1));            // no generated SZB serial either
+        await Error(409, () => f.Service.Issue("SZ-TEST-26-000001", ["CPT30614374"])); // another roll owns this carton
+        Assert.Equal("CPT30614374", Assert.Single(await f.Service.Issue("SZ-TEST-26-000002", ["cpt30614374"])).Id);
+    }
 }

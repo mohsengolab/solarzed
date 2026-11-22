@@ -181,4 +181,28 @@ public class ManagementTests
         Assert.IsType<OkObjectResult>(await api.Password(new("admin", "old-test-password", "new-test-password")));
         Assert.True(BCrypt.Net.BCrypt.Verify("new-test-password", (await db.AdminUsers.SingleAsync()).PasswordHash));
     }
+
+    [Fact]
+    public async Task ReceivingRollNosCreatesOneRollPerCartonAndKeepsThemUnique()
+    {
+        using var db = Database(); var admin = new AdminController(db, new ConfigurationBuilder().Build());
+        Assert.IsType<OkObjectResult>(await admin.ReceiveRolls(new("TEST", "tint", "B", "ABC", "approved", 1, RollNos: ["cpt1001", " CPT1002 "])));
+        var rolls = await db.Rolls.OrderBy(r => r.Id).ToListAsync();
+        Assert.Equal(["CPT1001", "CPT1002"], rolls.Select(r => r.RollNo));
+        Assert.All(rolls, r => Assert.StartsWith("SZ-TEST-", r.Id));
+
+        Assert.IsType<ConflictObjectResult>(await admin.ReceiveRolls(new("TEST", "tint", "B", "ABC", "approved", 1, RollNos: ["CPT1002"])));
+        Assert.IsType<BadRequestObjectResult>(await admin.ReceiveRolls(new("TEST", "tint", "B", "ABC", "approved", 1, RollNos: ["CPT1003", "CPT1003"])));
+        Assert.Equal(2, await db.Rolls.CountAsync());
+
+        // The Roll No can be corrected until a card is issued for the carton.
+        var first = rolls[0].Id;
+        Assert.IsType<ConflictObjectResult>(await admin.UpdateRoll(first, new(null, null, null, RollNo: "CPT1002")));
+        Assert.IsType<OkObjectResult>(await admin.UpdateRoll(first, new(null, null, null, RollNo: "cpt1009")));
+        Assert.Equal("CPT1009", (await db.Rolls.FindAsync(first))!.RollNo);
+        db.BoxLabels.Add(new BoxLabel { Id = "CPT1009", TokenHash = "h", ProtectedToken = "p", RollId = first, Product = "TEST", Type = WarrantyType.Tint, FilmYears = 5 });
+        await db.SaveChangesAsync();
+        Assert.IsType<ConflictObjectResult>(await admin.UpdateRoll(first, new(null, null, null, RollNo: "CPT1010")));
+        Assert.IsType<OkObjectResult>(await admin.UpdateRoll(first, new(null, null, null, RollNo: "CPT1009")));   // unchanged is fine
+    }
 }

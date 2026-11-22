@@ -231,7 +231,7 @@ public class AdminController(AppDbContext db, IConfiguration cfg) : ControllerBa
 
     static readonly Dictionary<string, System.Linq.Expressions.Expression<Func<Roll, object>>> RollSort = new()
     {
-        ["receivedAt"] = r => r.ReceivedAt, ["id"] = r => r.Id, ["modelCode"] = r => r.ModelCode,
+        ["receivedAt"] = r => r.ReceivedAt, ["id"] = r => r.Id, ["modelCode"] = r => r.ModelCode, ["rollNo"] = r => r.RollNo!,
         ["batch"] = r => r.Batch, ["supplier"] = r => r.Supplier, ["qc"] = r => r.Qc, ["status"] = r => r.Status, ["type"] = r => r.Type,
     };
 
@@ -240,7 +240,7 @@ public class AdminController(AppDbContext db, IConfiguration cfg) : ControllerBa
     {
         var query = db.Rolls.AsNoTracking();
         if (Paging.Term(f.Q) is { } q)
-            query = query.Where(r => r.Id.Contains(q) || r.ModelCode.Contains(q) || r.Batch.Contains(q) || r.Supplier.Contains(q));
+            query = query.Where(r => r.Id.Contains(q) || (r.RollNo != null && r.RollNo.Contains(q)) || r.ModelCode.Contains(q) || r.Batch.Contains(q) || r.Supplier.Contains(q));
         if (Paging.Term(f.Model) is { } model) { var m = model.ToUpperInvariant(); query = query.Where(r => r.ModelCode == m); }
         if (Paging.Term(f.Batch) is { } batch) query = query.Where(r => r.Batch.Contains(batch));
         if (Paging.Term(f.Supplier) is { } supplier) query = query.Where(r => r.Supplier.Contains(supplier));
@@ -266,15 +266,22 @@ public class AdminController(AppDbContext db, IConfiguration cfg) : ControllerBa
             .GroupBy(w => w.RollId!)
             .Select(g => new { RollId = g.Key, Count = g.Count() })
             .ToDictionaryAsync(x => x.RollId, x => x.Count, ct);
+        // Warranty cards already issued for each roll's carton(s).
+        var cards = await db.BoxLabels
+            .Where(b => b.RollId != null && ids.Contains(b.RollId))
+            .GroupBy(b => b.RollId!)
+            .Select(g => new { RollId = g.Key, Count = g.Count() })
+            .ToDictionaryAsync(x => x.RollId, x => x.Count, ct);
 
         return Ok(new
         {
             items = result.Items.Select(r => new
             {
-                r.Id, r.ModelCode, r.Type, r.Batch, r.Supplier, r.HistoryJson, r.WidthCm, r.LengthM,
+                r.Id, r.RollNo, r.ModelCode, r.Type, r.Batch, r.Supplier, r.HistoryJson, r.WidthCm, r.LengthM,
                 Qc = r.Qc.ToString().ToLower(), Status = r.Status.ToString().ToLower(),
                 r.ReceivedAt,
-                Installs = counts.GetValueOrDefault(r.Id, 0)
+                Installs = counts.GetValueOrDefault(r.Id, 0),
+                Cards = cards.GetValueOrDefault(r.Id, 0)
             }),
             total = result.Total, page = result.Page, pageSize = result.PageSize
         });
@@ -285,7 +292,17 @@ public class AdminController(AppDbContext db, IConfiguration cfg) : ControllerBa
     public async Task<IActionResult> ReceiveRolls([FromBody] CreateRollsRequest req)
     {
         if (string.IsNullOrWhiteSpace(req.ModelCode)) return BadRequest(new { error = "modelCode required" });
-        if (req.Quantity < 1 || req.Quantity > 200) return BadRequest(new { error = "quantity 1–200" });
+        // Scanned carton Roll Nos: one roll per carton, so they also set the quantity.
+        string[]? rollNos = null;
+        if (req.RollNos is { Length: > 0 })
+        {
+            try { rollNos = BoxLabelService.ParseSerials(req.RollNos); }
+            catch (ActivationError ex) { return BadRequest(new { error = ex.Message }); }
+            var taken = await db.Rolls.Where(r => r.RollNo != null && rollNos.Contains(r.RollNo)).Select(r => r.RollNo!).ToListAsync();
+            taken.AddRange(await db.BoxLabels.Where(b => rollNos.Contains(b.Id)).Select(b => b.Id).ToListAsync());
+            if (taken.Count > 0) return Conflict(new { error = $"These Roll Nos are already registered: {string.Join(", ", taken.Distinct().Take(10))}" });
+        }
+        else if (req.Quantity < 1 || req.Quantity > 200) return BadRequest(new { error = "quantity 1–200" });
         if (!System.Text.RegularExpressions.Regex.IsMatch(req.ModelCode, "^[A-Za-z0-9-]{1,24}$") ||
             string.IsNullOrWhiteSpace(req.Batch) || req.Batch.Length > 32)
             return BadRequest(new { error = "Valid model code and batch (max 32) are required." });
@@ -317,8 +334,11 @@ public class AdminController(AppDbContext db, IConfiguration cfg) : ControllerBa
             if (changed) product.UpdatedAt = DateTime.UtcNow;
         }
 
-        var rolls = await RollService.CreateRolls(req with { Supplier = supplier }, db, Actor);
-        return Ok(rolls.Select(r => new { r.Id, r.ModelCode, r.Type, r.Batch }));
+        Roll[] rolls;
+        try { rolls = await RollService.CreateRolls(req with { Supplier = supplier, RollNos = rollNos }, db, Actor); }
+        // Two receipts of the same carton at once trip the unique Roll No index.
+        catch (DbUpdateException) when (rollNos != null) { return Conflict(new { error = "Some of these Roll Nos were just registered by another request. Refresh and try again." }); }
+        return Ok(rolls.Select(r => new { r.Id, r.RollNo, r.ModelCode, r.Type, r.Batch }));
     }
 
     [HttpPost("rolls/{id}")]
@@ -342,15 +362,26 @@ public class AdminController(AppDbContext db, IConfiguration cfg) : ControllerBa
             return BadRequest(new { error = "Supplier code must be exactly 3 English letters." });
         if (req.WidthCm is { } w && (w <= 0 || w > 1000)) return BadRequest(new { error = "Width must be between 0 and 1000 cm." });
         if (req.LengthM is { } l && (l <= 0 || l > 10000)) return BadRequest(new { error = "Length must be between 0 and 10000 m." });
+        var rollNo = string.IsNullOrWhiteSpace(req.RollNo) ? roll.RollNo : BoxLabelService.NormalizeSerial(req.RollNo);
+        if (rollNo != roll.RollNo)
+        {
+            if (!BoxLabelService.SerialPattern.IsMatch(rollNo!)) return BadRequest(new { error = $"Invalid roll number: {rollNo}" });
+            // The issued card's QR already carries the old carton number.
+            if (await db.BoxLabels.AnyAsync(b => b.RollId == id))
+                return Conflict(new { error = "A warranty card was already issued for this roll, so its Roll No cannot change." });
+            if (await db.Rolls.AnyAsync(r => r.RollNo == rollNo && r.Id != id) || await db.BoxLabels.AnyAsync(b => b.Id == rollNo))
+                return Conflict(new { error = $"These Roll Nos are already registered: {rollNo}" });
+        }
 
-        var before = new { roll.Status, roll.Qc, roll.Batch, roll.Supplier, roll.WidthCm, roll.LengthM };
+        var before = new { roll.Status, roll.Qc, roll.Batch, roll.Supplier, roll.WidthCm, roll.LengthM, roll.RollNo };
         AuditLog.Add(db, Actor, "roll", roll.Id, "updated", AuditLog.Diff(
-            ("status", before.Status, st), ("qc", before.Qc, qc),
+            ("status", before.Status, st), ("qc", before.Qc, qc), ("rollNo", before.RollNo, rollNo),
             ("batch", before.Batch, string.IsNullOrWhiteSpace(req.Batch) ? before.Batch : req.Batch.Trim()),
             ("supplier", before.Supplier, supplier ?? before.Supplier),
             ("widthCm", before.WidthCm, req.WidthCm), ("lengthM", before.LengthM, req.LengthM)), req.Note);
         roll.Status = st;
         roll.Qc = qc;
+        roll.RollNo = rollNo;
         if (!string.IsNullOrWhiteSpace(req.Batch)) roll.Batch = req.Batch.Trim();
         if (supplier != null) roll.Supplier = supplier;
         if (req.WidthCm is { } width) roll.WidthCm = width;
@@ -409,7 +440,7 @@ public class AdminController(AppDbContext db, IConfiguration cfg) : ControllerBa
         db.BoxLabels.RemoveRange(removed);
 
         AuditLog.Add(db, Actor, "roll", roll.Id, "deleted", AuditLog.Diff(
-            ("modelCode", roll.ModelCode, null), ("batch", roll.Batch, null), ("supplier", roll.Supplier, null),
+            ("modelCode", roll.ModelCode, null), ("rollNo", roll.RollNo, null), ("batch", roll.Batch, null), ("supplier", roll.Supplier, null),
             ("qc", roll.Qc, null), ("status", roll.Status, null),
             ("labels", removed.Count, null), ("activatedLabelsKept", kept.Count, null), ("warrantiesUnlinked", warranties.Count, null)));
         db.Rolls.Remove(roll);
@@ -512,7 +543,7 @@ public class RollSearch
     public string? Dir { get; set; }
 }
 public record DecisionRequest(string Status, string? Note);
-public record UpdateRollRequest(string? Status, string? Qc, string? Note, string? Batch = null, string? Supplier = null, decimal? WidthCm = null, decimal? LengthM = null);
+public record UpdateRollRequest(string? Status, string? Qc, string? Note, string? Batch = null, string? Supplier = null, decimal? WidthCm = null, decimal? LengthM = null, string? RollNo = null);
 public record SettingsRequest(DurationsDto? Durations, int? WarrantyCodeLength);
 public record DurationsDto(PeriodDto? Tint, PeriodDto? Ppf);
 public record PeriodDto(int? Film, int? Install);

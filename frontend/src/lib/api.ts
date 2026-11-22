@@ -377,7 +377,7 @@ export function adminCreateRolls(data: Record<string, unknown>) {
 }
 
 /** Updates a roll's stock fields plus its batch, supplier and physical dimensions. */
-export function adminUpdateRoll(id: string, data: { qc?: string; status?: string; note?: string; batch?: string; supplier?: string; widthCm?: number | null; lengthM?: number | null }) {
+export function adminUpdateRoll(id: string, data: { qc?: string; status?: string; note?: string; batch?: string; supplier?: string; widthCm?: number | null; lengthM?: number | null; rollNo?: string }) {
   return apiFetch(`/api/admin/rolls/${encodeURIComponent(id)}`, { method: "POST", body: JSON.stringify(data) });
 }
 
@@ -430,6 +430,10 @@ export function adminBoxLabels() { return apiFetch<BoxLabelsResult>("/api/admin/
 /** One warranty card per carton, keyed by the roll number printed on each box (e.g. CPT30614374). */
 export function issueBoxLabels(rollId: string, serials: string[]) {
   return apiFetch<{ labels: BoxLabel[] }>("/api/admin/box-labels", { method: "POST", body: JSON.stringify({ rollId, quantity: serials.length, serials }) });
+}
+/** One warranty card per roll, keyed by the carton Roll No recorded on each roll. */
+export function issueCardsForRolls(rollIds: string[]) {
+  return apiFetch<{ labels: BoxLabel[] }>("/api/admin/box-labels/from-rolls", { method: "POST", body: JSON.stringify({ rollIds }) });
 }
 // ── Box transfers: the roll number printed on the carton (e.g. CPT30614374) moves boxes from mobile to mobile ──
 export interface BoxTransfer { id: number; labelId: string; batchId: string; fromHolder: string | null; fromPhone: string | null; toHolder: string | null; toPhone: string | null; note: string | null; actor: string; at: string }

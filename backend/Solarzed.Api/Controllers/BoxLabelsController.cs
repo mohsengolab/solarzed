@@ -55,6 +55,14 @@ public class BoxLabelsController(AppDbContext db, BoxLabelService labels, BoxTra
         catch (ActivationError ex) { return StatusCode(ex.Status, new { error = ex.Message }); }
     }
 
+    // Rolls with a recorded carton Roll No: one warranty card each, issued straight from the roll list.
+    [HttpPost("from-rolls"), Authorize(Policy = "AdminPolicy")]
+    public async Task<IActionResult> IssueForRolls(IssueForRollsRequest request)
+    {
+        try { return Ok(new { labels = await labels.IssueForRolls(request.RollIds) }); }
+        catch (ActivationError ex) { return StatusCode(ex.Status, new { error = ex.Message }); }
+    }
+
     [HttpPost("site"), Authorize(Policy = "AdminPolicy")]
     public async Task<IActionResult> Site(SiteUrlRequest request)
     {
@@ -75,4 +83,5 @@ public class BoxLabelsController(AppDbContext db, BoxLabelService labels, BoxTra
 }
 
 public record IssueLabelsRequest(string RollId, int Quantity, string[]? Serials = null);
+public record IssueForRollsRequest(string[]? RollIds);
 public record SiteUrlRequest(string SiteUrl);

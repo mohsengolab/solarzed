@@ -8,7 +8,8 @@ namespace Solarzed.Api.Application;
 public record CreateRollsRequest(
     string ModelCode, string Type, string Batch, string Supplier, string Qc, int Quantity,
     decimal? WidthCm = null, decimal? LengthM = null,
-    decimal? ThicknessMil = null, int? Vlt = null, int? Irr = null, int? Uv = null, int? Tser = null, int? WarrantyYears = null);
+    decimal? ThicknessMil = null, int? Vlt = null, int? Irr = null, int? Uv = null, int? Tser = null, int? WarrantyYears = null,
+    string[]? RollNos = null);
 
 public static class RollService
 {
@@ -46,14 +47,18 @@ public static class RollService
                 .Max() + 1;
         }
 
+        // One roll per scanned carton Roll No when given (already validated by the caller).
+        var rollNos = req.RollNos is { Length: > 0 } ? req.RollNos : null;
+        var count = rollNos?.Length ?? req.Quantity;
         var rolls = new List<Roll>();
-        for (int i = 0; i < req.Quantity; i++)
+        for (int i = 0; i < count; i++)
         {
             var seq = (next + i).ToString("D6");
             rolls.Add(new Roll
             {
                 Id = $"{prefix}{seq}",
                 ModelCode = model,
+                RollNo = rollNos?[i],
                 Type = type,
                 Batch = req.Batch,
                 Supplier = SupplierCode(req.Supplier) ?? req.Supplier,
@@ -70,7 +75,7 @@ public static class RollService
         db.Rolls.AddRange(rolls);
         foreach (var r in rolls)
             AuditLog.Add(db, actor, "roll", r.Id, "received", AuditLog.Diff(
-                ("modelCode", null, r.ModelCode), ("batch", null, r.Batch), ("supplier", null, r.Supplier), ("qc", null, r.Qc),
+                ("modelCode", null, r.ModelCode), ("rollNo", null, r.RollNo), ("batch", null, r.Batch), ("supplier", null, r.Supplier), ("qc", null, r.Qc),
                 ("widthCm", null, r.WidthCm), ("lengthM", null, r.LengthM)));
         await db.SaveChangesAsync();
         return [.. rolls];
