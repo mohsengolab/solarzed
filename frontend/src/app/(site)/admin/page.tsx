@@ -950,9 +950,9 @@ function RollsPanel() {
       </FilterBar>
       {list.error && <p role="alert" className={styles.errorText}>{list.error}</p>}
       <div className={styles.card}>
-        <table className={`${styles.table} ${list.loading ? styles.tableBusy : ""}`}>
+        <table className={`${styles.table} ${styles.tableCompact} ${list.loading ? styles.tableBusy : ""}`}>
           <thead><tr><th>QR</th><SortTh column="id" label="شناسه رول" {...sortProps} /><SortTh column="rollNo" label="Roll No کارتن" {...sortProps} /><SortTh column="modelCode" label="مدل" {...sortProps} /><SortTh column="type" label="نوع" {...sortProps} />
-            <SortTh column="batch" label="بچ" {...sortProps} /><th>ابعاد (cm × m)</th><SortTh column="supplier" label="تأمین‌کننده" {...sortProps} /><SortTh column="qc" label="QC" {...sortProps} />
+            <SortTh column="batch" label="بچ" {...sortProps} /><th>ابعاد (cm × m)</th><SortTh column="qc" label="QC" {...sortProps} />
             <SortTh column="status" label="وضعیت" {...sortProps} /><th>نصب‌ها</th><SortTh column="receivedAt" label="دریافت" {...sortProps} /><th>عملیات</th></tr></thead>
           <tbody>
             {list.items.map(r => (
@@ -963,20 +963,19 @@ function RollsPanel() {
                 </button>}</td>
                 <td><code dir="ltr" style={{ whiteSpace: "nowrap" }}>{r.id}</code></td>
                 <td>{r.rollNo ? <code dir="ltr">{r.rollNo}</code> : "—"}{r.cards > 0 && <small style={{ display: "block", opacity: .7 }}>کارت صادر شده</small>}</td>
-                <td>{r.modelCode}</td>
+                <td style={{ whiteSpace: "nowrap" }}>{r.modelCode}</td>
                 <td>{r.type}</td>
                 <td>{r.batch}</td>
-                <td dir="ltr">{r.widthCm != null && r.lengthM != null ? `${r.widthCm} × ${r.lengthM}` : "—"}</td>
-                <td>{r.supplier}</td>
+                <td dir="ltr" style={{ whiteSpace: "nowrap" }}>{r.widthCm != null && r.lengthM != null ? `${r.widthCm} × ${r.lengthM}` : "—"}</td>
                 <td><Badge value={r.qc} /></td>
-                <td>{fa(r.status)}</td>
+                <td style={{ whiteSpace: "nowrap" }}>{fa(r.status)}</td>
                 <td>{r.installs.toLocaleString("fa-IR")}</td>
                 <td>{new Date(r.receivedAt).toLocaleDateString(FA_DATE)}</td>
-                <td>
+                <td><div className={styles.rowActions}>
                   <button type="button" className={styles.ghost} onClick={() => { setEdit(r); setNote(""); setMsg(""); }}>مدیریت</button>
                   {cardReady(r) && <button type="button" className={styles.ghost} disabled={saving} onClick={() => issueCards([r.id])}>ساخت کارت</button>}
                   <button type="button" className={styles.danger} onClick={() => deleteRoll(r.id)}>حذف</button>
-                </td>
+                </div></td>
               </tr>
             ))}
           </tbody>
