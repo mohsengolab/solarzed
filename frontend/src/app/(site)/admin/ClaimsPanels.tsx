@@ -32,7 +32,7 @@ const FIELDS: Record<string, string> = {
   stage: "مرحله", cause: "علت", decision: "تصمیم", decisionNote: "دلیل تصمیم", remedy: "راهکار", remedyNote: "شرح اجرا",
   requiredDocuments: "مدارک موردنیاز", laborCost: "هزینه نیروی کار", partsCost: "هزینه قطعه/فیلم", otherCost: "سایر هزینه‌ها",
   status: "وضعیت", reviewNote: "یادداشت بررسی", filmEnds: "پایان گارانتی فیلم", installEnds: "پایان گارانتی نصب",
-  claim: "ادعا", warrantyCode: "کد گارانتی", channel: "کانال", description: "شرح", qc: "QC", batch: "بچ", supplier: "تأمین‌کننده",
+  claim: "ادعا", warrantyCode: "کد گارانتی", channel: "کانال", description: "شرح", qc: "QC", batch: "Batch", supplier: "تأمین‌کننده",
   modelCode: "مدل", name: "نام", archived: "بایگانی", role: "نقش", active: "فعال", displayName: "نام نمایشی",
 };
 
@@ -180,7 +180,7 @@ function ClaimDialog({ id, onClose, onSaved }: { id: string; onClose: () => void
         <dl>
           {[["کد گارانتی", w?.code], ["وضعیت گارانتی", w?.status], ["مالک", w?.owner], ["موبایل", w?.phone], ["خودرو", `${w?.make} ${w?.model}`],
             ["VIN", w?.vin], ["پلاک", w?.plate], ["نصاب", w?.installer], ["تاریخ نصب", w?.installed], ["پایان گارانتی فیلم", w?.filmEnds], ["پایان گارانتی نصب", w?.installEnds],
-            ["رول / بچ", detail.roll ? `${detail.roll.id} · ${detail.roll.batch} · ${detail.roll.supplier}` : "—"],
+            ["رول / Batch", detail.roll ? `${detail.roll.id} · ${detail.roll.batch} · ${detail.roll.supplier}` : "—"],
             ["کانال", CHANNELS[c!.channel]], ["ثبت", `${when(c!.createdAt)} · ${c!.createdBy}`]].map(([k, v]) => <div key={k}><dt>{k}</dt><dd>{v || "—"}</dd></div>)}
         </dl>
         <p><b>شرح مشکل:</b> {c!.description}</p>

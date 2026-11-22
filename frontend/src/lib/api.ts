@@ -48,18 +48,18 @@ const FarsiStrings = {
   "Note": "یادداشت", "Save decision": "ذخیره تصمیم", "Saving…": "در حال ذخیره…", "Saved.": "ذخیره شد.",
   "Close": "بستن", "Select": "انتخاب",
   // Rolls
-  "ROLL REGISTRY": "ثبت رول‌ها", "Rolls & batches": "رول‌ها و بچ‌ها", "Receive rolls": "دریافت رول",
+  "ROLL REGISTRY": "ثبت رول‌ها", "Rolls & batches": "رول‌ها و Batchها", "Receive rolls": "دریافت رول",
   "Defined product": "محصول تعریف‌شده", "Select a product or enter an existing model below":
     "یک محصول انتخاب کنید یا مدل موجود را پایین وارد کنید",
-  "Model code": "کد مدل", "e.g. PIR or CP-01": "مثلاً PIR یا CP-01", "Batch": "بچ",
+  "Model code": "کد مدل", "e.g. PIR or CP-01": "مثلاً PIR یا CP-01", "Batch": "Batch",
   "e.g. LOT-2608-B17": "مثلاً LOT-2608-B17", "Supplier code": "کد تأمین‌کننده", "e.g. SUP-02": "مثلاً SUP-02",
   "Paint protection film": "فیلم محافظ رنگ", "QC": "کنترل کیفیت", "Approved": "تأیید شده",
   "Quantity": "تعداد", "Create roll IDs ↗": "ساخت شناسه رول ↗", "Creating…": "در حال ساخت…",
   "Inventory": "موجودی", "Search inventory": "جستجوی موجودی", "Roll ID, model, batch or supplier":
-    "شناسه رول، مدل، بچ یا تأمین‌کننده", "Product": "محصول", "All products": "همه محصولات",
+    "شناسه رول، مدل، Batch یا تأمین‌کننده", "Product": "محصول", "All products": "همه محصولات",
   "QC filter": "فیلتر QC", "Any QC": "هر QC", "Stock status filter": "فیلتر وضعیت انبار",
   "Any status": "هر وضعیت", "In stock": "موجود در انبار", "Shipped": "ارسال شده",
-  "Consumed": "مصرف شده", "Void": "باطل", "Batch contains": "بچ شامل", "Supplier contains": "تأمین‌کننده شامل",
+  "Consumed": "مصرف شده", "Void": "باطل", "Batch contains": "Batch شامل", "Supplier contains": "تأمین‌کننده شامل",
   "Received from": "دریافت از", "Received to": "دریافت تا",
   "Installations": "نصب‌ها", "Has installations": "دارای نصب", "No installations": "بدون نصب",
   "Roll ID": "شناسه رول", "Model": "مدل", "Supplier": "تأمین‌کننده", "Received": "تاریخ دریافت",
