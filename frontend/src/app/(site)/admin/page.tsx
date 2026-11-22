@@ -761,9 +761,6 @@ const SPEC_FIELDS: { key: SpecKey; label: string; min: number; max: number; step
   { key: "tser", label: "TSER%", min: 0, max: 100, step: 1, placeholder: "رد کل انرژی خورشیدی" },
   { key: "warrantyYears", label: "گارانتی (سال)", min: 1, max: 30, step: 1, placeholder: "مثلاً 7" },
 ];
-const SPEC_EMPTY: Record<SpecKey, string> = { thicknessMil: "", vlt: "", irr: "", uv: "", tser: "", warrantyYears: "" };
-const specsOf = (p: Partial<Record<SpecKey, number | null>>): Record<SpecKey, string> =>
-  Object.fromEntries(SPEC_FIELDS.map(s => [s.key, p[s.key] != null ? String(p[s.key]) : ""])) as Record<SpecKey, string>;
 const R_EMPTY = { q: "", model: "", type: "", qc: "", status: "", supplier: "", batch: "", receivedFrom: "", receivedTo: "", hasInstalls: "" };
 
 function RollsPanel() {
@@ -771,11 +768,13 @@ function RollsPanel() {
   // Carton Roll Nos scanned at receipt, one per line: each becomes one roll.
   const [rollNoText, setRollNoText] = useState("");
   const rollNos = [...new Set(rollNoText.split(/[\s,]+/).map(x => x.trim().toUpperCase()).filter(Boolean))];
-  const [specs, setSpecs] = useState<Record<SpecKey, string>>(SPEC_EMPTY);
   const [msg, setMsg] = useState("");
   const [saving, setSaving] = useState(false);
   const [products, setProducts] = useState<({ code: string; name: string; type: string; archived: boolean } & Partial<Record<SpecKey, number | null>>)[]>([]);
-  const selectedProduct = products.find(p => p.code === form.modelCode.toUpperCase());
+  // Product group (window film / PPF) first, then the film model printed on the carton (e.g. PC15).
+  // A group with a single model selects it automatically.
+  const models = products.filter(p => !p.archived && p.type === form.type);
+  const selectedProduct = models.find(p => p.code === form.modelCode) ?? (models.length === 1 ? models[0] : undefined);
   const [f, setF] = useState(R_EMPTY);
   const [edit, setEdit] = useState<RollRow | null>(null);
   const [note, setNote] = useState("");
@@ -828,11 +827,9 @@ function RollsPanel() {
     setSaving(true); setMsg("");
     try {
       const num = (v: string) => (v.trim() === "" ? null : Number(v));
-      const specValues = Object.fromEntries(SPEC_FIELDS.map(s => [s.key, num(specs[s.key])]));
-      await adminCreateRolls({ ...form, quantity: rollNos.length || Number(form.quantity), rollNos, widthCm: num(form.widthCm), lengthM: num(form.lengthM), ...specValues });
+      if (!selectedProduct) { setMsg("مدل فیلم را انتخاب کنید."); return; }
+      await adminCreateRolls({ ...form, modelCode: selectedProduct.code, quantity: rollNos.length || Number(form.quantity), rollNos, widthCm: num(form.widthCm), lengthM: num(form.lengthM) });
       setRollNoText("");
-      if (selectedProduct) setProducts(ps => ps.map(p => p.code === selectedProduct.code
-        ? { ...p, ...Object.fromEntries(Object.entries(specValues).filter(([, v]) => v != null)) } : p));
       setMsg(rollNos.length ? `${rollNos.length.toLocaleString("fa-IR")} رول با Roll No کارتن ساخته شد.` : "رول‌ها ساخته شدند.");
       list.reload();
     } catch (ex: unknown) {
@@ -870,15 +867,25 @@ function RollsPanel() {
       <div className={styles.card}>
         <h2>دریافت رول</h2>
         <form onSubmit={onSubmit} className={styles.adminForm}>
-          <label>محصول تعریف‌شده
-            <select value={products.some(p => p.code === form.modelCode) ? form.modelCode : ""} onChange={e => { const p = products.find(p => p.code === e.target.value); if (p) { setForm(f => ({ ...f, modelCode: p.code, type: p.type })); setSpecs(specsOf(p)); } }}>
-              <option value="">یک محصول انتخاب کنید یا مدل موجود را پایین وارد کنید</option>
-              {products.filter(p => !p.archived).map(p => <option key={p.code} value={p.code}>{p.code} · {p.name}</option>)}
-            </select>
-          </label>
+          <div className={styles.row2}>
+            <label>گروه محصول
+              <select value={form.type} onChange={e => setForm(p => ({ ...p, type: e.target.value, modelCode: "" }))}>
+                <option value="tint">فیلم شیشه (Window Film)</option>
+                <option value="ppf">فیلم محافظ رنگ (PPF)</option>
+              </select>
+            </label>
+            <label>مدل فیلم (روی کارتن)
+              <select required value={selectedProduct?.code ?? ""} onChange={e => setForm(p => ({ ...p, modelCode: e.target.value }))}>
+                <option value="">{models.length ? "مدل را انتخاب کنید" : "مدلی برای این گروه تعریف نشده"}</option>
+                {models.map(p => <option key={p.code} value={p.code}>{p.code} · {p.name}</option>)}
+              </select>
+            </label>
+          </div>
+          {selectedProduct
+            ? <p style={{ margin: 0, fontSize: 13, opacity: .8 }} dir="auto">مشخصات {selectedProduct.code}: {SPEC_FIELDS.filter(s => selectedProduct[s.key] != null).map(s => `${s.label} ${selectedProduct[s.key]}`).join(" · ") || "ثبت نشده"} — برای تغییر، در «محصولات» ویرایش کنید.</p>
+            : !models.length && products.length > 0 && <p style={{ margin: 0, fontSize: 13 }}>ابتدا در «محصولات» مدل این گروه را با کد روی کارتن (مثلاً PC15) تعریف کنید.</p>}
           <div className={styles.row2}>
             {[
-              { label: "کد مدل", name: "modelCode", placeholder: "مثلاً PIR یا CP-01", max: 24 },
               { label: "بچ", name: "batch", placeholder: "مثلاً LOT-2608-B17", max: 32 },
               { label: "کد تأمین‌کننده / کارخانه (۳ حرف انگلیسی)", name: "supplier", placeholder: "مثلاً ABC", max: 3 },
             ].map(x => (
@@ -887,12 +894,6 @@ function RollsPanel() {
                   onChange={e => setForm(p => ({ ...p, [x.name]: x.name === "supplier" ? e.target.value.toUpperCase() : e.target.value }))} />
               </label>
             ))}
-            <label>نوع
-              <select value={form.type} onChange={e => setForm(p => ({ ...p, type: e.target.value }))}>
-                <option value="tint">فیلم شیشه</option>
-                <option value="ppf">فیلم محافظ رنگ</option>
-              </select>
-            </label>
             <label>کنترل کیفیت
               <select value={form.qc} onChange={e => setForm(p => ({ ...p, qc: e.target.value }))}>
                 <option value="pending">در انتظار</option>
@@ -917,20 +918,6 @@ function RollsPanel() {
             <textarea dir="ltr" rows={4} value={rollNoText} onChange={e => setRollNoText(e.target.value)} placeholder={"CPT30614374\nCPT30614375"} />
             <small style={{ opacity: .75 }}>هر کارتن یک رول است: برای هر Roll No یک رول ساخته می‌شود و «تعداد» از روی آن‌ها پر می‌شود. اگر خالی بماند، Roll No را بعداً در «مدیریت» همان رول وارد کنید.</small>
           </label>
-          <fieldset className={styles.row2} style={{ border: "1px solid rgba(127,127,127,.25)", borderRadius: 12, padding: 12 }}>
-            <legend style={{ padding: "0 6px", fontWeight: 600 }}>
-              مشخصات فنی محصول {selectedProduct ? `(${selectedProduct.code})` : ""}
-            </legend>
-            {SPEC_FIELDS.map(sf => (
-              <label key={sf.key}>{sf.label}
-                <input type="number" required={!!selectedProduct} min={sf.min} max={sf.max} step={sf.step} placeholder={sf.placeholder}
-                  value={specs[sf.key]} dir="ltr" onChange={e => setSpecs(s => ({ ...s, [sf.key]: e.target.value }))} />
-              </label>
-            ))}
-            <p style={{ gridColumn: "1 / -1", margin: 0, fontSize: 13, opacity: .75 }}>
-              {selectedProduct ? "این مقادیر روی خود محصول ذخیره می‌شوند و برای همه رول‌های این مدل یکسان است." : "برای ثبت مشخصات فنی، ابتدا محصول تعریف‌شده را از لیست بالا انتخاب کنید."}
-            </p>
-          </fieldset>
           <button type="submit" className={styles.btnPrimary} disabled={saving}>
             {saving ? "در حال ساخت…" : "ساخت شناسه رول ↗"}
           </button>

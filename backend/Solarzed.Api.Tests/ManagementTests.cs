@@ -183,6 +183,9 @@ public class ManagementTests
     public async Task ReceivingRollNosCreatesOneRollPerCartonAndKeepsThemUnique()
     {
         using var db = Database(); var admin = new AdminController(db, new ConfigurationBuilder().Build());
+        Assert.IsType<BadRequestObjectResult>(await admin.ReceiveRolls(new("TEST", "tint", "B", "ABC", "approved", 1)));   // model not defined yet
+        db.Products.Add(new Product { Code = "TEST", Name = "Film", Type = WarrantyType.Tint }); await db.SaveChangesAsync();
+        Assert.IsType<BadRequestObjectResult>(await admin.ReceiveRolls(new("TEST", "ppf", "B", "ABC", "approved", 1)));    // wrong group
         Assert.IsType<OkObjectResult>(await admin.ReceiveRolls(new("TEST", "tint", "B", "ABC", "approved", 1, RollNos: ["cpt1001", " CPT1002 "])));
         var rolls = await db.Rolls.OrderBy(r => r.Id).ToListAsync();
         Assert.Equal(["CPT1001", "CPT1002"], rolls.Select(r => r.RollNo));

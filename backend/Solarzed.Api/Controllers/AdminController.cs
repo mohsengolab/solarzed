@@ -311,28 +311,14 @@ public class AdminController(AppDbContext db, IConfiguration cfg) : ControllerBa
         if (!Enum.TryParse<WarrantyType>(req.Type, true, out var type) || !Enum.IsDefined(type) ||
             !Enum.TryParse<RollQc>(req.Qc, true, out var quality) || !Enum.IsDefined(quality))
             return BadRequest(new { error = "Invalid product type or QC." });
+        // Rolls are received for a film model already defined in Products (e.g. PC15).
         var product = await db.Products.FindAsync(req.ModelCode.ToUpperInvariant());
-        if (product != null && (product.Archived || product.Type != type))
+        if (product == null) return BadRequest(new { error = "Define this film model in Products first." });
+        if (product.Archived || product.Type != type)
             return BadRequest(new { error = "Product is archived or its type does not match." });
         if (req.WidthCm is { } w && (w <= 0 || w > 1000)) return BadRequest(new { error = "Width must be between 0 and 1000 cm." });
         if (req.LengthM is { } l && (l <= 0 || l > 10000)) return BadRequest(new { error = "Length must be between 0 and 10000 m." });
-        if (req.ThicknessMil is { } th && (th <= 0 || th > 20)) return BadRequest(new { error = "Thickness must be between 0 and 20 mil." });
-        if (req.Vlt is < 0 or > 100 || req.Irr is < 0 or > 100 || req.Uv is < 0 or > 100 || req.Tser is < 0 or > 100)
-            return BadRequest(new { error = "VLT, IRR, UV and TSER must be 0–100%." });
-        if (req.WarrantyYears is < 1 or > 30) return BadRequest(new { error = "Warranty years must be 1–30." });
-
-        // Technical specs belong to the product (model); store any values entered at receipt on it.
-        if (product != null)
-        {
-            var changed = false;
-            if (req.ThicknessMil is { } t && product.ThicknessMil != t) { product.ThicknessMil = t; changed = true; }
-            if (req.Vlt is { } vlt && product.Vlt != vlt) { product.Vlt = vlt; changed = true; }
-            if (req.Irr is { } irr && product.Irr != irr) { product.Irr = irr; changed = true; }
-            if (req.Uv is { } uv && product.Uv != uv) { product.Uv = uv; changed = true; }
-            if (req.Tser is { } tser && product.Tser != tser) { product.Tser = tser; changed = true; }
-            if (req.WarrantyYears is { } wy && product.WarrantyYears != wy) { product.WarrantyYears = wy; changed = true; }
-            if (changed) product.UpdatedAt = DateTime.UtcNow;
-        }
+        // Technical specs belong to the product and are fixed there; a receipt never changes them.
 
         Roll[] rolls;
         try { rolls = await RollService.CreateRolls(req with { Supplier = supplier, RollNos = rollNos }, db, Actor); }

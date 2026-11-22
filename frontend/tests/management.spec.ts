@@ -24,15 +24,14 @@ test("product lifecycle and inventory QC through the real admin interface", asyn
 
   // ── Receive a roll for it, inspect and release it ──
   await page.getByRole("button", { name: "رول‌ها", exact: true }).click();
-  await page.getByRole("combobox", { name: "محصول تعریف‌شده", exact: true }).selectOption(code);
-  await expect(page.getByLabel("کد مدل", { exact: true })).toHaveValue(code);
+  // Product group first, then the film model printed on the carton.
+  await page.getByLabel("گروه محصول").selectOption("tint");
+  await page.getByLabel("مدل فیلم (روی کارتن)").selectOption(code);
   const batch = `B-${Date.now()}`;
   await page.getByLabel("بچ", { exact: true }).fill(batch);
   await page.getByLabel("کد تأمین‌کننده / کارخانه (۳ حرف انگلیسی)", { exact: true }).fill("TST");
   await page.getByLabel("عرض رول (سانتی‌متر)", { exact: true }).fill("152");
   await page.getByLabel("طول رول (متر)", { exact: true }).fill("30");
-  for (const [label, value] of [["ضخامت (Mil)", "2"], ["VLT%", "70"], ["IRR% (950nm)", "90"], ["UV%", "99"], ["TSER%", "60"], ["گارانتی (سال)", "7"]] as const)
-    await page.getByLabel(label, { exact: true }).fill(value);
   await page.getByRole("button", { name: "ساخت شناسه رول ↗", exact: true }).click();
   await expect(page.getByText("رول‌ها ساخته شدند.", { exact: true })).toBeVisible();
   const row = page.getByRole("row").filter({ hasText: batch });
