@@ -23,7 +23,8 @@ public class SmsSettingsController(IConfiguration config, IWebHostEnvironment en
     string? StoredKey()
     {
         var encrypted = config["Faraz:ProtectedToken"];
-        if (string.IsNullOrEmpty(encrypted)) return null;
+        // A token written by hand into .local-sms.json counts as stored too, as the sender already uses it.
+        if (string.IsNullOrEmpty(encrypted)) return string.IsNullOrWhiteSpace(config["Faraz:Token"]) ? null : config["Faraz:Token"];
         try { return protection.CreateProtector(Protector).Unprotect(encrypted); }
         catch (CryptographicException) { return null; }
     }
