@@ -6,16 +6,16 @@ import { inspectBox, completeActivation, installerActivation, portalMe, Activati
 import PhotoPicker, { photosComplete } from "@/components/PhotoPicker";
 import PortalSignIn from "@/components/PortalSignIn";
 import ScanButton, { serialFromScan } from "@/components/ScanButton";
+import CarWindows from "./CarWindows";
 import styles from "./activate.module.css";
 
-const windows = ["left-front", "right-front", "left-rear", "right-rear", "rear"];
 const panels = ["hood", "front-bumper", "roof", "trunk", "rear-bumper", "left-front-fender", "right-front-fender", "left-doors", "right-doors", "left-rear-quarter", "right-rear-quarter", "mirrors"];
 const fields = [
   ["owner", "Full name", 200], ["make", "Vehicle make", 100], ["model", "Vehicle model", 100],
   ["vin", "VIN (17 characters)", 20], ["plate", "Licence plate", 20], ["installed", "Installation date", 10],
-  ["invoiceNumber", "Invoice number", 60], ["installer", "Installer / shop", 200], ["sellerName", "Seller name", 200], ["sellerPhone", "Seller mobile", 30],
+  ["invoiceNumber", "Invoice number", 60], ["installer", "Installer / shop", 200],
 ] as const;
-const initial = { owner: "", make: "", model: "", vin: "", plate: "", installed: "", invoiceNumber: "", installer: "", sellerName: "", sellerPhone: "" };
+const initial = { owner: "", make: "", model: "", vin: "", plate: "", installed: "", invoiceNumber: "", installer: "" };
 // Warranty card code: carton roll number + 7-digit warranty number + factory code (e.g. CPT30614374-4827153-ABC).
 // Older cards: without the factory (CPT30614374-4827153), Factory-Serial-Warranty (SA-SZB-…-SZ-…) or a 64-hex label token.
 const CARD = /^[A-Za-z0-9][A-Za-z0-9-]{2,30}[A-Za-z0-9]-[1-9][0-9]{6}(-[A-Za-z]{3})?$/;
@@ -127,9 +127,9 @@ export default function ActivationPage() {
             <label>Country of installation<input maxLength={100} placeholder={user.country ?? "Iran"} value={country} onChange={event => setCountry(event.target.value)} /></label>
           </div>}
           {installer && <p />}
-          <div className={styles.grid}>{fields.filter(([key]) => !(installer && key === "installer")).map(([key, label, max]) => <label key={key}>{installer && key === "owner" ? "Customer full name" : label}<input required maxLength={max} value={form[key]} type={key === "installed" ? "date" : key === "sellerPhone" ? "tel" : "text"} autoComplete={key === "owner" ? "name" : "off"} onChange={event => setForm(value => ({ ...value, [key]: event.target.value }))} /></label>)}</div>
-          {info.remainingLengthM != null && <label>Film used on this vehicle (meters)<input required type="number" inputMode="decimal" min="0.01" step="0.01" max={info.remainingLengthM} value={usedLength} onChange={event => setUsedLength(event.target.value)} /></label>}
-          <fieldset><legend>{info.type === "tint" ? "Installed windows" : "Protected panels"}</legend><div className={styles.areas}>{(info.type === "tint" ? windows : panels).map(area => <label key={area}><input type="checkbox" checked={areas.includes(area)} onChange={event => setAreas(current => event.target.checked ? [...current, area] : current.filter(item => item !== area))} />{area.replaceAll("-", " ")}</label>)}</div></fieldset>
+          <div className={styles.grid}>{fields.filter(([key]) => !(installer && key === "installer")).map(([key, label, max]) => <label key={key}>{installer && key === "owner" ? "Customer full name" : label}<input required maxLength={max} value={form[key]} type={key === "installed" ? "date" : "text"} autoComplete={key === "owner" ? "name" : "off"} onChange={event => setForm(value => ({ ...value, [key]: event.target.value }))} /></label>)}</div>
+          {info.remainingLengthM != null && <label className={styles.meters}>Film used (m)<input required type="number" inputMode="decimal" min="0.01" step="0.01" max={info.remainingLengthM} value={usedLength} onChange={event => setUsedLength(event.target.value)} /></label>}
+          <fieldset><legend>{info.type === "tint" ? "Installed windows" : "Protected panels"}</legend>{info.type === "tint" ? <CarWindows value={areas} onChange={setAreas} /> : <div className={styles.areas}>{panels.map(area => <label key={area}><input type="checkbox" checked={areas.includes(area)} onChange={event => setAreas(current => event.target.checked ? [...current, area] : current.filter(item => item !== area))} />{area.replaceAll("-", " ")}</label>)}</div>}</fieldset>
           {installer && <PhotoPicker value={photos} onChange={setPhotos} disabled={busy} />}
           <button className={styles.button} type="submit" disabled={busy || !info.released}>{busy ? (installer ? "Uploading…" : "Checking…") : installer ? "Send for review" : "Check & register warranty"}</button>
         </form>}

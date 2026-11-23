@@ -349,6 +349,9 @@ public class BoxLabelService(AppDbContext db, IDataProtectionProvider protection
         var request = req.Registration with { Type = label.Type.ToString().ToLowerInvariant(), FilmSerial = label.Id, Phone = ownerPhone };
         // A partner's registrations always carry the partner's own shop name, never free text.
         if (partner != null) request = request with { Installer = partner.ShopName ?? partner.Name ?? phone };
+        // The activation form no longer asks for a seller: the installer who registers it is the seller.
+        if (string.IsNullOrWhiteSpace(request.SellerName)) request = request with { SellerName = string.IsNullOrWhiteSpace(request.Installer) ? phone : request.Installer };
+        if (string.IsNullOrWhiteSpace(request.SellerPhone)) request = request with { SellerPhone = phone };
         var coverage = await db.CoverageSettings.AsNoTracking().FirstOrDefaultAsync();
         var (error, entity) = WarrantyService.Validate(request, coverage?.WarrantyCodeLength ?? 16);
         if (error != null) throw new ActivationError(400, error);
