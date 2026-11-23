@@ -2,6 +2,18 @@ using System.Collections.Concurrent;
 
 namespace Solarzed.Api.Application;
 
+/// <summary>The one settings file the admin panel writes and configuration reads (SMS, email, Faraz token).</summary>
+public static class SmsSettingsFile
+{
+    public static string For(Microsoft.Extensions.Hosting.IHostEnvironment env) => Path.Combine(env.ContentRootPath, ".local-sms.json");
+
+    /// <summary>Adds the file to configuration. The default file provider silently skips dot-prefixed names,
+    /// so ".local-sms.json" needs one with no exclusion filters or it is never read.</summary>
+    public static IConfigurationBuilder AddSmsSettings(this IConfigurationBuilder builder, Microsoft.Extensions.Hosting.IHostEnvironment env) =>
+        builder.AddJsonFile(new Microsoft.Extensions.FileProviders.PhysicalFileProvider(env.ContentRootPath,
+            Microsoft.Extensions.FileProviders.Physical.ExclusionFilters.None), Path.GetFileName(For(env)), optional: true, reloadOnChange: true);
+}
+
 // Operational SMS rules editable from the admin SMS panel (stored in .local-sms.json, section "Sms").
 public record SmsPolicy(bool Enabled, int OtpMinutes, int ResendSeconds, int DailyLimit)
 {
