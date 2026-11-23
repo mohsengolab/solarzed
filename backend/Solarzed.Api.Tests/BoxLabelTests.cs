@@ -454,6 +454,11 @@ public class BoxLabelTests
         Assert.Equal(label.Id, info.Id);
         Assert.Null(info.WarrantyCode);                                  // the warranty number is not revealed by the serial
         await Error(404, () => f.Service.Info("CPT00000000", Installer, installer: true));
+        // The roll ID from the inventory QR stands for the carton's Serial Number, with the same restrictions.
+        var byRoll = await f.Service.Info(" sz-test-26-000001 ", Installer, installer: true);
+        Assert.Equal(label.Id, byRoll.Id);
+        Assert.Null(byRoll.WarrantyCode);
+        await Error(403, () => f.Service.Info("SZ-TEST-26-000001", Customer));
         var request = new ActivateBoxRequest(label.Id, Registration(), 20m, Customer, "Iran");
         await Error(403, () => f.Service.Activate(request with { CustomerPhone = null }, Customer));   // customers cannot self-register by serial
 
