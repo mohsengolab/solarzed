@@ -50,6 +50,17 @@ public class ReviewController(AppDbContext db, IDataProtectionProvider? protecti
         });
     }
 
+    /// <summary>The installation photos of one registration (by its opaque reference), for the warranty decision dialog.</summary>
+    [HttpGet("photos")]
+    public async Task<IActionResult> PhotosOf([FromQuery(Name = "ref")] string? reference, CancellationToken ct)
+    {
+        var code = Confidential.Resolve(reference ?? "", User, protection);
+        if (code == null) return NotFound();
+        var items = await db.WarrantyPhotos.AsNoTracking().Where(p => p.WarrantyCode == code).OrderBy(p => p.Id)
+            .Select(p => new { p.Id, p.Kind, p.CreatedAt }).ToListAsync(ct);
+        return Ok(new { items });
+    }
+
     [HttpGet("photos/{id:long}")]
     public async Task<IActionResult> Photo(long id, CancellationToken ct)
     {

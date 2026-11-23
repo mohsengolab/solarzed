@@ -15,7 +15,7 @@ import { printQrLabels, printQrImage } from "./qrPrint";
 import { ProductsPanel, CustomersPanel, AccountPanel, UsersPanel } from "./ManagementPanels";
 import { WarehousesPanel, WarehouseIcon, PersonIcon } from "./WarehousesPanel";
 import TicketsPanel from "./TicketsPanel";
-import { PartnersPanel, ReviewPanel } from "./PartnersPanels";
+import { PartnersPanel, ReviewPanel, WarrantyPhotos } from "./PartnersPanels";
 import SerialInput from "@/components/SerialInput";
 import SmsSettingsPanel from "./SmsSettingsPanel";
 import { ClaimsPanel, HistoryPanel, WarrantyActivity } from "./ClaimsPanels";
@@ -611,10 +611,12 @@ function WarrantiesPanel({ role }: { role: Role }) {
     setSaving(true);
     setMsg("");
     try {
-      await adminDecision(String(selected.ref ?? selected.code), decStatus, decNote);
+      const r = await adminDecision(String(selected.ref ?? selected.code), decStatus, decNote);
+      list.reload();
+      // Activation also texts the owner the gold card; if that failed, stay open so the reason is seen.
+      if (r?.smsError) { setMsg(`ذخیره شد، ولی پیامک کارت طلایی ارسال نشد: ${fa(r.smsError)}`); return; }
       setMsg("ذخیره شد.");
       setSelected(null);
-      list.reload();
     } catch (e: unknown) {
       setMsg(fa(errorText(e, fa("Error"))));
     } finally {
@@ -742,22 +744,60 @@ function WarrantiesPanel({ role }: { role: Role }) {
         <div className={styles.dialog} role="dialog" aria-modal="true" aria-label="تصمیم گارانتی" onKeyDown={e => { if (e.key === "Escape") setSelected(null); }}>
           <div className={styles.dialogInner}>
             <button type="button" onClick={() => setSelected(null)} className={styles.dialogClose} aria-label="بستن">×</button>
-            <h2>تصمیم — <span dir="ltr">{selected.code}</span></h2>
-            <dl>{["owner", "phone", "make", "model", "vin", "plate", "filmSerial", "invoiceNumber", "installed", "sellerName", "sellerPhone", "installer", ...(seesCodes ? ["rollId"] : []), "flagsJson", "reviewNote"].map(k => <div key={k}><dt>{fa(k)}</dt><dd>{String(selected[k] ?? "—")}</dd></div>)}</dl>
-            <label>وضعیت
-              <select value={decStatus} onChange={e => setDecStatus(e.target.value)}>
-                <option value="active">فعال‌سازی</option>
-                <option value="rejected">رد</option>
-                <option value="pending">در انتظار بمان</option>
-              </select>
-            </label>
-            <label>یادداشت {decStatus === "rejected" && <span style={{ color: "var(--sz-red)" }}>(الزامی)</span>}
-              <textarea value={decNote} maxLength={500} onChange={e => setDecNote(e.target.value)} rows={3} />
-            </label>
-            <button type="button" className={styles.btnPrimary} onClick={decide} disabled={saving}>
-              {saving ? "در حال ذخیره…" : "ذخیره تصمیم"}
-            </button>
-            {msg && <p>{msg}</p>}
+            <header className={styles.wHead}>
+              <span className={styles.eyebrow}>تصمیم گارانتی</span>
+              <h2><code dir="ltr">{selected.code}</code></h2>
+              <div className={styles.wMeta}>
+                <span className={styles.badge} data-tone={selected.status}>{fa(selected.status)}</span>
+                <span className={styles.wChip}>{selected.type === "ppf" ? "PPF" : "فیلم شیشه"}</span>
+                {selected.filmEnds && <span className={styles.wChip}>گارانتی تا {selected.filmEnds}</span>}
+              </div>
+            </header>
+            {(() => {
+              const flags = JSON.parse(String(selected.flagsJson || "[]")) as string[];
+              const groups: [string, [string, string, boolean?][]][] = [
+                ["مالک", [["owner", "نام"], ["phone", "موبایل", true]]],
+                ["خودرو", [["make", "برند"], ["model", "مدل"], ["plate", "پلاک", true], ["vin", "VIN", true]]],
+                ["نصب", [["installer", "نصّاب"], ["installed", "تاریخ نصب", true], ["sellerName", "فروشنده"], ["sellerPhone", "موبایل فروشنده", true]]],
+                ["فیلم و فاکتور", [["filmSerial", "سریال فیلم", true], ["invoiceNumber", "شماره فاکتور", true], ...(seesCodes ? [["rollId", "شناسه رول", true] as [string, string, boolean]] : [])]],
+              ];
+              return <>
+                {flags.length > 0 && <div className={styles.wFlags} role="note">
+                  <b>پرچم‌ها</b>{flags.map(x => <span key={x} className={styles.wFlag}>{fa(x)}</span>)}
+                </div>}
+                <div className={styles.wGroups}>
+                  {groups.map(([title, rows]) => {
+                    const shown = rows.filter(([k]) => selected[k] != null && selected[k] !== "");
+                    if (!shown.length) return null;
+                    return <section key={title} className={styles.wGroup}>
+                      <h3>{title}</h3>
+                      <dl>{shown.map(([k, label, ltr]) => <div key={k}><dt>{label}</dt><dd dir={ltr ? "ltr" : undefined}>{String(selected[k])}</dd></div>)}</dl>
+                    </section>;
+                  })}
+                </div>
+                <section className={styles.wGroup}>
+                  <h3>عکس‌های نصب</h3>
+                  <WarrantyPhotos refId={String(selected.ref ?? selected.code)} />
+                </section>
+                {selected.reviewNote ? <p className={styles.wNote}><b>یادداشت بررسی</b>{fa(String(selected.reviewNote))}</p> : null}
+              </>;
+            })()}
+            <div className={`${styles.wDecide} ${styles.adminForm}`}>
+              <h3>تصمیم</h3>
+              <div className={styles.wSeg} role="radiogroup" aria-label="وضعیت">
+                {([["active", "فعال‌سازی"], ["rejected", "رد"], ["pending", "در انتظار بماند"]] as const).map(([v, l]) => (
+                  <button key={v} type="button" role="radio" aria-checked={decStatus === v} data-tone={v}
+                    className={decStatus === v ? styles.wSegOn : undefined} onClick={() => setDecStatus(v)}>{l}</button>
+                ))}
+              </div>
+              <label>یادداشت {decStatus === "rejected" && <span style={{ color: "var(--sz-red)" }}>(الزامی)</span>}
+                <textarea value={decNote} maxLength={500} onChange={e => setDecNote(e.target.value)} rows={3} placeholder="اختیاری — برای رد، دلیل را بنویسید" />
+              </label>
+              <button type="button" className={styles.btnPrimary} onClick={decide} disabled={saving}>
+                {saving ? "در حال ذخیره…" : "ذخیره تصمیم"}
+              </button>
+              {msg && <p>{msg}</p>}
+            </div>
             <WarrantyActivity key={String(selected.ref ?? selected.code)} code={String(selected.ref ?? selected.code)} />
           </div>
         </div>

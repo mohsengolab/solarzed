@@ -16,7 +16,7 @@ namespace Solarzed.Api.Controllers;
 [ApiController]
 [Route("api/admin")]
 [Authorize(Policy = "StaffPolicy")]
-public class AdminController(AppDbContext db, IConfiguration cfg, Microsoft.AspNetCore.DataProtection.IDataProtectionProvider? protection = null) : ControllerBase
+public class AdminController(AppDbContext db, IConfiguration cfg, Microsoft.AspNetCore.DataProtection.IDataProtectionProvider? protection = null, WarrantyCards? cards = null) : ControllerBase
 {
     string JwtKey => cfg["Jwt:Key"] ?? throw new InvalidOperationException("Jwt:Key missing");
     string Actor => AuditLog.Actor(HttpContext?.User);
@@ -237,7 +237,10 @@ public class AdminController(AppDbContext db, IConfiguration cfg, Microsoft.AspN
             ("status", before.Status, w.Status), ("reviewNote", before.ReviewNote, w.ReviewNote),
             ("filmEnds", before.FilmEnds, w.FilmEnds), ("installEnds", before.InstallEnds, w.InstallEnds)), req.Note);
         await db.SaveChangesAsync();
-        return Ok(new { ok = true });
+        // Activating sends the owner the gold card SMS, as the counter's photo approval does (once per warranty).
+        string? smsError = null;
+        if (st == WarrantyStatus.Active && cards != null) smsError = await cards.Notify(w);
+        return Ok(new { ok = true, smsError });
     }
 
     // ── Rolls ────────────────────────────────────────────────────────────────
