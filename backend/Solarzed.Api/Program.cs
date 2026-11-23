@@ -16,7 +16,8 @@ using System.Threading.RateLimiting;
 using Microsoft.AspNetCore.RateLimiting;
 
 var builder = WebApplication.CreateBuilder(args);
-builder.Configuration.AddJsonFile(".local-sms.json", optional: true, reloadOnChange: true);
+// Admin-panel settings (Faraz SMS, email, rules); see SmsSettingsFile for why it needs its own file provider.
+builder.Configuration.AddSmsSettings(builder.Environment);
 builder.WebHost.ConfigureKestrel(k =>
 {
     k.AddServerHeader = false;

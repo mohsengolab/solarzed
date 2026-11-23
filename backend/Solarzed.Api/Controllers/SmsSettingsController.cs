@@ -225,7 +225,7 @@ public class SmsSettingsController(IConfiguration config, IWebHostEnvironment en
     {
         await Gate.WaitAsync(ct);
         try {
-            var file = Path.Combine(env.ContentRootPath, ".local-sms.json");
+            var file = SmsSettingsFile.For(env);
             var root = System.IO.File.Exists(file) ? JsonNode.Parse(await System.IO.File.ReadAllTextAsync(file, ct))?.AsObject() ?? new JsonObject() : new JsonObject();
             change(root);
             await System.IO.File.WriteAllTextAsync(file + ".tmp", root.ToJsonString(), ct);
