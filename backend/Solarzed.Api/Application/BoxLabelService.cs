@@ -224,6 +224,21 @@ public class BoxLabelService(AppDbContext db, IDataProtectionProvider protection
     }
 
     /// <summary>
+    /// The inventory QR holds the roll ID (SZ-{RollNo}-{yyMM}-{7 digits}-{factory}), which looks like a card code.
+    /// When it names a roll with exactly one carton, it stands for that carton's Serial Number (installer only).
+    /// </summary>
+    async Task<string> FromRollId(string? token)
+    {
+        var value = Regex.Replace(token ?? "", @"\s+", "").ToUpperInvariant();
+        if (!value.StartsWith("SZ-", StringComparison.Ordinal) || !await db.Rolls.AnyAsync(r => r.Id == value)) return token ?? "";
+        var ids = await db.BoxLabels.Where(x => x.RollId == value).Select(x => x.Id).Take(2).ToListAsync();
+        if (ids.Count == 1) return ids[0];
+        throw new ActivationError(404, ids.Count == 0
+            ? "This is a roll ID and its warranty card has not been issued yet."
+            : "This roll has several cartons. Scan the Serial Number on the warranty card.");
+    }
+
+    /// <summary>
     /// Accepts the card code (RollNo-1234567-ABC or RollNo-1234567, scanned or typed), a legacy Factory-Serial-Warranty card code,
     /// or a legacy 64-hex label token.
     /// </summary>
@@ -277,6 +292,7 @@ public class BoxLabelService(AppDbContext db, IDataProtectionProvider protection
 
     public async Task<ActivationInfo> Info(string token, string? phone = null, bool installer = false)
     {
+        token = await FromRollId(token);
         var label = await Find(token, installer);
         // The warranty number is shown only to someone holding the full card code.
         var bySerial = installer && label.Id == Regex.Replace(token ?? "", @"\s+", "").ToUpperInvariant();
@@ -316,7 +332,7 @@ public class BoxLabelService(AppDbContext db, IDataProtectionProvider protection
             if (ownerPhone == phone) throw new ActivationError(400, "Enter the customer's own mobile number, not yours.");
             if (photos.Length == 0) throw new ActivationError(400, "Add the installation photos.");
         }
-        var label = await Find(req.Token, partner != null);
+        var label = await Find(await FromRollId(req.Token), partner != null);
         var first = !label.ActivatedAt.HasValue;
         if (!first && (label.RemainingLengthM == null || label.HolderPhone != phone))
             throw new ActivationError(409, "This card has already been activated. Sign in with the mobile used for the first activation.");
