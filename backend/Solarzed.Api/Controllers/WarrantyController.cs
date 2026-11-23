@@ -11,7 +11,7 @@ namespace Solarzed.Api.Controllers;
 
 [ApiController]
 [Route("api/warranty")]
-public class WarrantyController(AppDbContext db) : ControllerBase
+public class WarrantyController(AppDbContext db, WarrantyCards? warrantyCards = null) : ControllerBase
 {
     static readonly Regex CardToken = new(@"\A[A-Za-z0-9]{1,40}-(\d{7})(?:-[A-Za-z]{3})?\z", RegexOptions.Compiled);
     static readonly Regex SevenDigits = new(@"\A\d{7}\z", RegexOptions.Compiled);
@@ -50,5 +50,43 @@ public class WarrantyController(AppDbContext db) : ControllerBase
             return Ok(new { records = list.Select(WarrantyService.ToCheck) });
         }
         return BadRequest(new { error = "Search by warranty number or VIN. To see every warranty on your mobile number, sign in to your account." });
+    }
+
+    WarrantyCards cards => warrantyCards ??= new WarrantyCards(db);
+
+    static readonly Regex VinPattern = new(@"\A[A-HJ-NPR-Z0-9]{17}\z", RegexOptions.Compiled);
+
+    /// <summary>
+    /// Owner inquiry: the VIN and the mobile the installer registered the warranty to. Both must match, so the full
+    /// gold card (owner name, plate, installer, coverage and its card link) is shown only to the owner.
+    /// </summary>
+    [HttpGet("owner"), EnableRateLimiting("warranty-lookup")]
+    public async Task<IActionResult> Owner([FromQuery] string? vin, [FromQuery] string? phone)
+    {
+        Response.Headers.CacheControl = "no-store";
+        var v = WarrantyService.NormalizePhone(vin ?? "").Trim().ToUpperInvariant().Replace(" ", "");
+        if (!VinPattern.IsMatch(v)) return BadRequest(new { error = "Enter the 17-character VIN." });
+        string mobile;
+        try { mobile = PortalService.CanonicalPhone(phone); }
+        catch (ActivationError ex) { return BadRequest(new { error = ex.Message }); }
+        var variants = PortalService.PhoneVariants(mobile);
+        var rows = await db.WarrantyRegistrations.Where(w => w.Vin == v && variants.Contains(w.Phone))
+            .OrderByDescending(w => w.Installed).Take(20).ToListAsync();
+        var list = new List<WarrantyCardView>();
+        foreach (var w in rows) list.Add(await cards.View(w));
+        if (db.ChangeTracker.HasChanges()) await db.SaveChangesAsync();
+        return Ok(new { cards = list });
+    }
+
+    /// <summary>The gold card behind the SMS link: {site}/card#{code}.{key}.</summary>
+    [HttpGet("card"), EnableRateLimiting("warranty-lookup")]
+    public async Task<IActionResult> Card([FromQuery] string? code, [FromQuery] string? key)
+    {
+        Response.Headers.CacheControl = "no-store";
+        if (string.IsNullOrWhiteSpace(code) || code.Length > 32 || string.IsNullOrWhiteSpace(key) || key.Length > 16)
+            return NotFound(new { error = "This warranty card link is not valid." });
+        var w = await db.WarrantyRegistrations.AsNoTracking().FirstOrDefaultAsync(x => x.Code == code.Trim());
+        if (w == null || !WarrantyCards.KeyMatches(w, key)) return NotFound(new { error = "This warranty card link is not valid." });
+        return Ok(await cards.View(w));
     }
 }

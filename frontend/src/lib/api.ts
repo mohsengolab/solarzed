@@ -315,6 +315,35 @@ export function lookupWarranty(q: string): Promise<LookupResult> {
   return apiFetch(`/api/warranty?q=${encodeURIComponent(q)}`);
 }
 
+/** The gold warranty card: what the owner sees from the SMS link or the VIN + mobile inquiry. */
+export interface WarrantyCard {
+  code: string;
+  owner: string;
+  type: "tint" | "ppf";
+  product?: string | null;
+  make: string;
+  model: string;
+  plate: string;
+  vinMasked: string;
+  installed: string;
+  installer: string;
+  country?: string | null;
+  areas: string[];
+  status: "pending" | "active" | "rejected";
+  statusLabel: string;
+  coverage?: { filmEnds?: string | null; installEnds?: string | null } | null;
+  link: string;
+}
+
+/** Owner inquiry: both the VIN and the mobile the warranty was registered to must match. */
+export function lookupByVinAndMobile(vin: string, phone: string) {
+  return apiFetch<{ cards: WarrantyCard[] }>(`/api/warranty/owner?vin=${encodeURIComponent(vin)}&phone=${encodeURIComponent(phone)}`);
+}
+
+export function warrantyCard(code: string, key: string) {
+  return apiFetch<WarrantyCard>(`/api/warranty/card?code=${encodeURIComponent(code)}&key=${encodeURIComponent(key)}`);
+}
+
 // ── Admin ────────────────────────────────────────────────────────────────────
 
 // The session lives in an HttpOnly cookie set by the API, so scripts never see the token.
@@ -335,7 +364,7 @@ export function adminLogin(username: string, password: string) {
 
 // ── Users (super administrator only) ─────────────────────────────────────────
 
-export type AdminRole = "superadmin" | "admin" | "carton";
+export type AdminRole = "superadmin" | "admin" | "counter";
 export interface AdminUserRow { id: number; username: string; role: AdminRole; displayName: string | null; active: boolean }
 export function adminUsers() { return apiFetch<{ users: AdminUserRow[] }>("/api/admin/users"); }
 export function adminCreateUser(data: { username: string; password: string; role: AdminRole; displayName?: string; active: boolean }) {
@@ -471,6 +500,8 @@ export function completeActivation(token: string, registration: Record<string, u
 export interface PortalUser {
   phone: string | null; email: string | null; name: string | null;
   firstName: string | null; lastName: string | null; country: string | null; city: string | null; job: string | null;
+  /** Installer partner (همکار) status; only "approved" partners register warranties for customers. */
+  partner?: "none" | "pending" | "approved" | "suspended"; shopName?: string | null;
 }
 export function portalMe() { return apiFetch<{ user: PortalUser | null }>("/api/portal/me"); }
 export type PortalChannel = "sms" | "email";
@@ -517,3 +548,97 @@ export function portalTransfer(data: { serials: string[]; toPhone: string; toNam
   return apiFetch<TransferResult>("/api/portal/boxes/transfer", { method: "POST", body: JSON.stringify(data) });
 }
 export function portalWarranties() { return apiFetch<{ warranties: WarrantyPublic[] }>("/api/portal/warranties"); }
+
+// ── Installer partners (همکاران) ──────────────────────────────────────────────
+
+/** Sends a multipart form (photos) with the same cookie and CSRF header as apiFetch, letting the browser set the boundary. */
+async function apiUpload<T>(path: string, form: FormData): Promise<T> {
+  const res = await fetch(`${BASE}${path}`, { method: "POST", body: form, credentials: "include", cache: "no-store", headers: { "X-Requested-With": "fetch" } });
+  if (!res.ok) {
+    const body = await res.json().catch(() => ({}));
+    throw new Error(body.error ?? (res.status === 413 ? "The photos are too large." : `HTTP ${res.status}`));
+  }
+  return res.json();
+}
+
+export type PhotoKind = "vehicle" | "film" | "vin" | "invoice" | "other";
+// label = Persian (admin/counter), labelEn = the public site, which is in English.
+export const PHOTO_KINDS: { kind: PhotoKind; label: string; labelEn: string; required: boolean }[] = [
+  { kind: "vehicle", label: "خودرو با پلاک", labelEn: "Vehicle with plate", required: true },
+  { kind: "film", label: "فیلم نصب‌شده", labelEn: "Installed film", required: true },
+  { kind: "vin", label: "شماره شاسی (VIN)", labelEn: "VIN", required: false },
+  { kind: "invoice", label: "فاکتور", labelEn: "Invoice", required: false },
+  { kind: "other", label: "عکس دیگر", labelEn: "Other", required: false },
+];
+export type PhotoSet = Partial<Record<PhotoKind, Blob>>;
+function photoForm(photos: PhotoSet) {
+  const form = new FormData();
+  for (const [kind, blob] of Object.entries(photos)) if (blob) form.append(kind, blob, `${kind}.jpg`);
+  return form;
+}
+
+/** An approved installer registers the installation for the customer's mobile, with photos; it waits for the counter. */
+export function installerActivation(token: string, registration: Record<string, unknown>, usedLengthM: number | null,
+  customerPhone: string, country: string, photos: PhotoSet) {
+  const form = photoForm(photos);
+  form.append("data", JSON.stringify({ token, registration, usedLengthM, customerPhone, country }));
+  return apiUpload<ActivationResult>("/api/activation/installer", form);
+}
+export function installerResendPhotos(code: string, photos: PhotoSet) {
+  return apiUpload<{ status: string }>(`/api/activation/installer/${encodeURIComponent(code)}/photos`, photoForm(photos));
+}
+export function portalApplyPartner(data: { shopName: string; country?: string; city?: string }) {
+  return apiFetch<PortalUser>("/api/portal/partner/apply", { method: "POST", body: JSON.stringify(data) });
+}
+export interface InstallerWarranty { warranty: WarrantyPublic; ownerPhoneMasked: string; country: string | null; photos: number; createdAt: string }
+export function portalInstallerWarranties() { return apiFetch<{ warranties: InstallerWarranty[] }>("/api/portal/partner/warranties"); }
+
+/** Shrinks a camera photo to at most 1600 px and re-encodes it as JPEG, so uploads stay small on mobile data. */
+export async function compressPhoto(file: File, maxSide = 1600, quality = 0.82): Promise<Blob> {
+  const bitmap = await createImageBitmap(file).catch(() => null);
+  if (!bitmap) throw new Error("This file is not an image the browser can read.");
+  const scale = Math.min(1, maxSide / Math.max(bitmap.width, bitmap.height));
+  const canvas = document.createElement("canvas");
+  canvas.width = Math.round(bitmap.width * scale); canvas.height = Math.round(bitmap.height * scale);
+  canvas.getContext("2d")!.drawImage(bitmap, 0, 0, canvas.width, canvas.height);
+  bitmap.close();
+  return await new Promise<Blob>((resolve, reject) => canvas.toBlob(b => b ? resolve(b) : reject(new Error("Could not process the photo.")), "image/jpeg", quality));
+}
+
+export interface PartnerRow {
+  id: number; phone: string; shopName: string | null; firstName: string | null; lastName: string | null;
+  country: string | null; city: string | null; status: "pending" | "approved" | "suspended"; active: boolean;
+  appliedAt: string | null; reviewedAt: string | null; warranties: number; pendingReview: number; rejected: number;
+  lastInstall: string | null; cartons: number;
+}
+export function adminPartners(query: string) {
+  return apiFetch<{ partners: PartnerRow[]; counts: Record<string, number> }>(`/api/admin/partners${query}`);
+}
+export function adminAddPartner(data: { phone: string; shopName: string; firstName?: string; lastName?: string; country?: string; city?: string }) {
+  return apiFetch<{ id: number }>("/api/admin/partners", { method: "POST", body: JSON.stringify(data) });
+}
+export function adminPartnerStatus(id: number, status: "approved" | "suspended" | "none", reason?: string) {
+  return apiFetch<{ status: string }>(`/api/admin/partners/${id}/status`, { method: "POST", body: JSON.stringify({ status, reason }) });
+}
+
+// ── Counter review of installation photos ──
+export interface ReviewItem {
+  ref: string; code: string; type: "tint" | "ppf"; status: "pending" | "active" | "rejected";
+  make: string; model: string; plate: string; vin: string; installed: string; owner: string; ownerPhone: string;
+  installer: string; installerPhone: string; country: string | null; usedLengthM: number | null; invoiceNumber: string;
+  carton: string; product: string | null; areas: string[]; flags: string[]; reviewNote: string | null;
+  createdAt: string; reviewedAt: string | null; photos: { id: number; kind: PhotoKind; createdAt: string }[];
+}
+export function adminReviewList(status: "pending" | "active" | "rejected") {
+  return apiFetch<{ pending: number; items: ReviewItem[] }>(`/api/admin/review?status=${status}`);
+}
+export function adminReviewDecide(ref: string, approve: boolean, note?: string) {
+  return apiFetch<{ status: string }>("/api/admin/review/decision", { method: "POST", body: JSON.stringify({ ref, approve, note }) });
+}
+/** Photos are fetched with the admin cookie and shown through object URLs. */
+export async function adminReviewPhoto(id: number) {
+  const res = await fetch(`${BASE}/api/admin/review/photos/${id}`, { credentials: "include" });
+  if (!res.ok) throw new Error(`HTTP ${res.status}`);
+  return URL.createObjectURL(await res.blob());
+}
+

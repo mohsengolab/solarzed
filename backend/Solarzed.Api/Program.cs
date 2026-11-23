@@ -28,6 +28,7 @@ builder.Services.AddSingleton<SmsLog>();
 builder.Services.AddScoped<BoxLabelService>();
 builder.Services.AddScoped<BoxTransferService>();
 builder.Services.AddScoped<PortalService>();
+builder.Services.AddScoped<WarrantyCards>();
 builder.Services.AddHttpClient<IActivationSmsSender, ActivationSmsSender>(client => client.Timeout = TimeSpan.FromSeconds(15));
 // Verification codes by email, alongside SMS. Configured in .local-sms.json under "Email".
 if (builder.Environment.IsDevelopment() && builder.Configuration.GetValue<bool>("Email:DevConsole"))
@@ -171,8 +172,8 @@ builder.Services.AddAuthorization(opt =>
     // "admin" covers full management; "superadmin" (مدیر کل) is admin plus the confidential customer list and user management.
     opt.AddPolicy("AdminPolicy", p => p.RequireRole("admin", "superadmin"));
     opt.AddPolicy("SuperAdminPolicy", p => p.RequireRole("superadmin"));
-    opt.AddPolicy("CartonPolicy", p => p.RequireRole("carton"));
-    opt.AddPolicy("StaffPolicy", p => p.RequireRole("admin", "superadmin", "carton"));
+    opt.AddPolicy("CounterPolicy", p => p.RequireRole("counter"));
+    opt.AddPolicy("StaffPolicy", p => p.RequireRole("admin", "superadmin", "counter"));
 });
 
 // ── Controllers & CORS ───────────────────────────────────────────────────────

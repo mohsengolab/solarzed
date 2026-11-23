@@ -136,7 +136,7 @@ export function CustomersPanel() {
   </section>;
 }
 
-export function AccountPanel(_props: { role?: "superadmin" | "admin" | "carton" }) {
+export function AccountPanel(_props: { role?: "superadmin" | "admin" | "counter" }) {
   const [form, setForm] = useState({ username: "admin", currentPassword: "", newPassword: "", confirm: "" });
   const [msg, setMsg] = useState(""); const [busy, setBusy] = useState(false);
   useEffect(() => { adminSession().then(r => setForm(f => ({ ...f, username: r.username }))).catch(() => {}); }, []);
@@ -163,7 +163,7 @@ export function AccountPanel(_props: { role?: "superadmin" | "admin" | "carton" 
 
 // ── Users (super administrator only) ─────────────────────────────────────────
 
-const U_EMPTY = { username: "", displayName: "", password: "", role: "carton" as AdminRole, active: true };
+const U_EMPTY = { username: "", displayName: "", password: "", role: "counter" as AdminRole, active: true };
 
 export function UsersPanel() {
   const [rows, setRows] = useState<AdminUserRow[]>([]);
@@ -196,7 +196,7 @@ export function UsersPanel() {
     catch (ex) { setMsg(message(ex)); }
   }
 
-  const roleName = (r: string) => (r === "superadmin" ? "مدیر کل" : r === "admin" ? "مدیر" : "کارتن");
+  const roleName = (r: string) => (r === "superadmin" ? "مدیر کل" : r === "admin" ? "مدیر" : "کانتر");
   return <section>
     <header className={s.panelHead}><div><span className={s.eyebrow}>کاربران</span><h1>مدیریت کاربران</h1></div></header>
     <form className={`${s.card} ${s.adminForm}`} onSubmit={create}>
@@ -209,7 +209,7 @@ export function UsersPanel() {
         <label>نقش<select value={form.role} onChange={e => setForm({ ...form, role: e.target.value as AdminRole })}>
           <option value="superadmin">مدیر کل — همه چیز + لیست مشتریان</option>
           <option value="admin">مدیر — بدون شناسه رول و کد گارانتی؛ رول‌ها: فقط لوکیشن و وضعیت</option>
-          <option value="carton">کارتن — فقط سریال روی جعبه</option>
+          <option value="counter">کانتر — بررسی عکس‌های نصب و سریال روی جعبه</option>
         </select></label>
         <label>وضعیت<select value={String(form.active)} onChange={e => setForm({ ...form, active: e.target.value === "true" })}><option value="true">فعال</option><option value="false">غیرفعال</option></select></label>
       </div>
@@ -224,7 +224,7 @@ export function UsersPanel() {
           <td><select value={u.role} onChange={e => update(u, { role: e.target.value as AdminRole })}>
             <option value="superadmin">{roleName("superadmin")}</option>
             <option value="admin">{roleName("admin")}</option>
-            <option value="carton">{roleName("carton")}</option>
+            <option value="counter">{roleName("counter")}</option>
           </select></td>
           <td><span className={s.badge} data-tone={u.active ? "active" : "muted"}>{u.active ? "فعال" : "غیرفعال"}</span></td>
           <td>

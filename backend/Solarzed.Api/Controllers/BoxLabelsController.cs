@@ -36,11 +36,11 @@ public class BoxLabelsController(AppDbContext db, BoxLabelService labels, BoxTra
         var site = await labels.Site();
         var rows = await db.BoxLabels.AsNoTracking().OrderByDescending(x => x.CreatedAt).Take(500).ToListAsync();
         if (!IsAdmin)
-            return Ok(new { labels = rows.Select(BoxLabelService.Restricted), siteUrl = site, smsConfigured = sms.Configured, role = "carton" });
+            return Ok(new { labels = rows.Select(BoxLabelService.Restricted), siteUrl = site, smsConfigured = sms.Configured, role = "counter" });
         return Ok(new { labels = rows.Select(x => labels.View(x, site)), siteUrl = site, smsConfigured = sms.Configured, role = "admin" });
     }
 
-    // Issuing labels is a manager action; the carton role can only read serials.
+    // Issuing labels is a manager action; the counter role can only read serials.
     [HttpPost, Authorize(Policy = "AdminPolicy")]
     public async Task<IActionResult> Issue(IssueLabelsRequest request)
     {

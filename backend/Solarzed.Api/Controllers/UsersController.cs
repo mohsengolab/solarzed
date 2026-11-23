@@ -8,11 +8,11 @@ using Solarzed.Api.Infrastructure;
 
 namespace Solarzed.Api.Controllers;
 
-// User management is super-administrator only. Admins and carton operators can never reach these routes.
+// User management is super-administrator only. Admins and counter staff can never reach these routes.
 [ApiController, Route("api/admin/users"), Authorize(Policy = "SuperAdminPolicy")]
 public class UsersController(AppDbContext db) : ControllerBase
 {
-    static readonly string[] Roles = ["superadmin", "admin", "carton"];
+    static readonly string[] Roles = ["superadmin", "admin", "counter"];
     static readonly Regex UsernameRx = new("^[A-Za-z0-9._-]{3,50}$", RegexOptions.Compiled);
     const string PasswordRule = "Password must have at least 12 characters and at most 72 UTF-8 bytes.";
 
@@ -39,7 +39,7 @@ public class UsersController(AppDbContext db) : ControllerBase
         var username = (req.Username ?? "").Trim();
         if (!UsernameRx.IsMatch(username)) return BadRequest(new { error = "Username must be 3–50 letters, numbers, dot, dash or underscore." });
         if (!ValidPassword(req.Password)) return BadRequest(new { error = PasswordRule });
-        if (!Roles.Contains(req.Role)) return BadRequest(new { error = "Choose the super administrator, manager or carton role." });
+        if (!Roles.Contains(req.Role)) return BadRequest(new { error = "Choose the super administrator, manager or counter role." });
         if (await db.AdminUsers.AnyAsync(u => u.Username == username)) return Conflict(new { error = "This username already exists." });
 
         var user = new AdminUser

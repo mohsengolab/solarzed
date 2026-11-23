@@ -415,6 +415,9 @@
   box-shadow: 0 32px 80px rgba(0,0,0,0.6);
 }
 .dialogInner h2 { font-size: 20px; font-weight: 800; color: var(--sz-fg); }
+/* The QR window sizes its picture to the screen height, so it never needs a scrollbar. */
+.qrDialog { padding: 28px; gap: 10px; overflow: hidden; }
+.qrDialog h2 { font-size: 17px; overflow-wrap: anywhere; padding-inline: 36px; }
 .dialogClose {
   position: absolute;
   top: 18px;

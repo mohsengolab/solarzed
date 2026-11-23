@@ -29,6 +29,10 @@ public class BoxLabelTests
         public string LastCode { get; private set; } = "";
         public Task Send(string phone, string code, string reference, CancellationToken cancellationToken)
         { if (Fails) throw new HttpRequestException(); LastCode = code; return Task.CompletedTask; }
+        public bool WarrantyConfigured { get; set; } = true;
+        public List<(string Phone, string Code, string Link)> Warranties { get; } = [];
+        public Task SendWarranty(string phone, string warrantyCode, string link, CancellationToken cancellationToken)
+        { if (Fails) throw new HttpRequestException(); Warranties.Add((phone, warrantyCode, link)); return Task.CompletedTask; }
     }
     sealed class Fixture : IDisposable
     {
@@ -95,7 +99,7 @@ public class BoxLabelTests
         await Error(404, () => f.Service.Info($"{label.Id}-{label.CardCode}-XYZ"));   // wrong factory
         await Error(404, () => f.Service.Info($"{label.Id}-{(label.CardCode == "1234567" ? "7654321" : "1234567")}-ABC"));
         await Error(404, () => f.Service.Info($"SA-{label.Id}-SZ-AAAAAAAAAAAAAAAA"));
-        await Error(404, () => f.Service.Info(label.Id));
+        await Error(403, () => f.Service.Info(label.Id));   // a bare Serial Number opens only for an approved installer
 
         // Labels issued before warranty cards keep their random 64-hex token.
         var legacy = await f.Db.BoxLabels.SingleAsync();
@@ -379,5 +383,158 @@ public class BoxLabelTests
         await Error(400, () => f.Service.Issue("SZ-TEST-26-000002", 1));            // no generated SZB serial either
         await Error(409, () => f.Service.Issue("SZ-TEST-26-000001", ["CPT30614374"])); // another roll owns this carton
         Assert.Equal("CPT30614374", Assert.Single(await f.Service.Issue("SZ-TEST-26-000002", ["cpt30614374"])).Id);
+    }
+
+    // ── Installer partners and counter review ───────────────────────────────
+
+    const string Installer = "09125555555";
+    static byte[] Jpeg() => [0xFF, 0xD8, 0xFF, 0xE0, 1, 2, 3, 4, 5, 6, 7, 8];
+    static PhotoUpload[] Photos() => PhotoRules.Validate([("vehicle", Jpeg()), ("film", Jpeg())]);
+
+    static async Task<PortalUser> Partner(Fixture f, PartnerStatus status = PartnerStatus.Approved)
+    {
+        var partner = new PortalUser { Phone = Installer, ShopName = "Tehran Tint", Country = "Iran", Partner = status };
+        f.Db.PortalUsers.Add(partner);
+        await f.Db.SaveChangesAsync();
+        return partner;
+    }
+
+    [Fact]
+    public async Task InstallerRegistersForTheCustomerWithPhotosAndTheCounterApproves()
+    {
+        using var f = new Fixture();
+        var (label, code) = await f.Issue();
+        var partner = await Partner(f);
+        var request = new ActivateBoxRequest(code, Registration() with { Installer = "typed by hand" }, 20m, "0912 111 1111", null);
+
+        await Error(400, () => f.Service.Activate(request with { CustomerPhone = Installer }, Installer, partner, Photos()));   // not the installer's own mobile
+        await Error(400, () => f.Service.Activate(request, Installer, partner, []));                                          // photos are required
+        partner.Partner = PartnerStatus.Pending;
+        await Error(403, () => f.Service.Activate(request, Installer, partner, Photos()));                                    // only approved partners
+        partner.Partner = PartnerStatus.Approved;
+
+        var result = await f.Service.Activate(request, Installer, partner, Photos());
+        var w = await f.Db.WarrantyRegistrations.SingleAsync();
+        Assert.Equal(WarrantyStatus.Pending, w.Status);          // waits for the counter
+        Assert.Equal(Customer, w.Phone);                          // warranty belongs to the customer
+        Assert.Equal(Installer, w.InstallerPhone);
+        Assert.Equal("Tehran Tint", w.Installer);                 // never free text
+        Assert.Equal("Iran", w.Country);
+        Assert.Equal(2, await f.Db.WarrantyPhotos.CountAsync(p => p.WarrantyCode == w.Code));
+        Assert.Equal("pending", result.Warranty.Status);
+
+        // The roll stays with the installer for the next vehicle; the customer cannot use it.
+        var stored = await f.Db.BoxLabels.SingleAsync();
+        Assert.Equal(Installer, stored.HolderPhone);
+        Assert.Equal(130m, stored.RemainingLengthM);
+        var next = request with { Registration = Registration("09126666666") with { Vin = "JTDBE32K123456788" }, CustomerPhone = "09126666666" };
+        await Error(409, () => f.Service.Activate(next with { CustomerPhone = null }, Customer));
+        await f.Service.Activate(next, Installer, partner, Photos());
+        Assert.Equal(2, await f.Db.WarrantyRegistrations.CountAsync(x => x.InstallerPhone == Installer));
+
+        var review = new Solarzed.Api.Controllers.ReviewController(f.Db);
+        var reference = Confidential.Ref(w.Code, null);
+        Assert.IsType<Microsoft.AspNetCore.Mvc.BadRequestObjectResult>(await review.Decide(new(reference, false, " "), default));   // a rejection needs a reason
+        Assert.IsType<Microsoft.AspNetCore.Mvc.OkObjectResult>(await review.Decide(new(reference, true, null), default));
+        Assert.Equal(WarrantyStatus.Active, (await f.Db.WarrantyRegistrations.SingleAsync(x => x.Code == w.Code)).Status);
+        Assert.IsType<Microsoft.AspNetCore.Mvc.ConflictObjectResult>(await review.Decide(new(reference, false, "late"), default));
+    }
+
+    [Fact]
+    public async Task InstallerRegistersBySerialNumberAndTheOwnerGetsTheGoldCard()
+    {
+        using var f = new Fixture();
+        var (label, _) = await f.Issue();
+        var partner = await Partner(f);
+
+        // The new card QR holds only the Serial Number: only an approved installer can open the carton with it.
+        await Error(403, () => f.Service.Info(label.Id));
+        await Error(403, () => f.Service.Info(label.Id, Customer));
+        var info = await f.Service.Info($" {label.Id.ToLowerInvariant()} ", Installer, installer: true);
+        Assert.Equal(label.Id, info.Id);
+        Assert.Null(info.WarrantyCode);                                  // the warranty number is not revealed by the serial
+        await Error(404, () => f.Service.Info("CPT00000000", Installer, installer: true));
+        var request = new ActivateBoxRequest(label.Id, Registration(), 20m, Customer, "Iran");
+        await Error(403, () => f.Service.Activate(request with { CustomerPhone = null }, Customer));   // customers cannot self-register by serial
+
+        await f.Service.Activate(request, Installer, partner, Photos());
+        var w = await f.Db.WarrantyRegistrations.SingleAsync();
+        Assert.Equal(label.CardCode, w.Code);                            // the card's warranty number becomes the warranty code
+        Assert.NotNull(w.CardKey);
+
+        // Counter approval makes it active and sends one SMS with the gold card link.
+        var cards = new WarrantyCards(f.Db, f.Sms);
+        var review = new Solarzed.Api.Controllers.ReviewController(f.Db, null, cards);
+        Assert.IsType<Microsoft.AspNetCore.Mvc.OkObjectResult>(await review.Decide(new(Confidential.Ref(w.Code, null), true, null), default));
+        var sent = Assert.Single(f.Sms.Warranties);
+        Assert.Equal((Customer, w.Code, $"https://solarzed.com/card#{w.Code}.{w.CardKey}"), sent);
+        Assert.NotNull((await f.Db.WarrantyRegistrations.SingleAsync()).CardSentAt);
+        await cards.Notify(w);
+        Assert.Single(f.Sms.Warranties);                                 // never twice
+
+        // The owner finds the card with VIN + mobile; both must match. The SMS link opens it without signing in.
+        var api = new Solarzed.Api.Controllers.WarrantyController(f.Db, cards) { ControllerContext = new() { HttpContext = new Microsoft.AspNetCore.Http.DefaultHttpContext() } };
+        var found = Assert.IsType<Microsoft.AspNetCore.Mvc.OkObjectResult>(await api.Owner("jtdbe32k123456789", "+98 912 111 1111"));
+        Assert.Contains(w.Code, System.Text.Json.JsonSerializer.Serialize(found.Value));
+        var other = Assert.IsType<Microsoft.AspNetCore.Mvc.OkObjectResult>(await api.Owner("JTDBE32K123456789", "09129999999"));
+        Assert.DoesNotContain(w.Code, System.Text.Json.JsonSerializer.Serialize(other.Value));
+        Assert.IsType<Microsoft.AspNetCore.Mvc.BadRequestObjectResult>(await api.Owner("SHORT", Customer));
+        var card = Assert.IsType<WarrantyCardView>(Assert.IsType<Microsoft.AspNetCore.Mvc.OkObjectResult>(await api.Card(w.Code, w.CardKey)).Value);
+        Assert.Equal("Test Customer", card.Owner);
+        Assert.Equal("active", card.Status);
+        Assert.IsType<Microsoft.AspNetCore.Mvc.NotFoundObjectResult>(await api.Card(w.Code, "wrongkey12"));
+    }
+
+    [Fact]
+    public async Task WarrantyCardSmsFailureNeverUndoesTheApproval()
+    {
+        using var f = new Fixture();
+        var (label, _) = await f.Issue();
+        var partner = await Partner(f);
+        await f.Service.Activate(new ActivateBoxRequest(label.Id, Registration(), 20m, Customer, null), Installer, partner, Photos());
+        var w = await f.Db.WarrantyRegistrations.SingleAsync();
+        f.Sms.Fails = true;
+        var review = new Solarzed.Api.Controllers.ReviewController(f.Db, null, new WarrantyCards(f.Db, f.Sms));
+        Assert.IsType<Microsoft.AspNetCore.Mvc.OkObjectResult>(await review.Decide(new(Confidential.Ref(w.Code, null), true, null), default));
+        var stored = await f.Db.WarrantyRegistrations.SingleAsync();
+        Assert.Equal(WarrantyStatus.Active, stored.Status);
+        Assert.Null(stored.CardSentAt);
+    }
+
+    [Fact]
+    public void PhotosMustBeRealImagesOfKnownKinds()
+    {
+        Assert.Equal(400, Assert.Throws<ActivationError>(() => PhotoRules.Validate([("vehicle", "%PDF-1.4 fake"u8.ToArray()), ("film", Jpeg())])).Status);
+        Assert.Equal(400, Assert.Throws<ActivationError>(() => PhotoRules.Validate([("vehicle", Jpeg())])).Status);            // film photo missing
+        Assert.Equal(400, Assert.Throws<ActivationError>(() => PhotoRules.Validate([("selfie", Jpeg()), ("vehicle", Jpeg()), ("film", Jpeg())])).Status);
+        Assert.Equal(400, Assert.Throws<ActivationError>(() => PhotoRules.Validate(Enumerable.Repeat(("other", Jpeg()), 5).Concat([("vehicle", Jpeg()), ("film", Jpeg())]).ToList())).Status);
+        var png = new byte[] { 0x89, 0x50, 0x4E, 0x47, 0x0D, 0x0A, 0x1A, 0x0A, 0, 0 };
+        Assert.Equal("image/png", PhotoRules.Validate([("vehicle", png), ("film", Jpeg())])[0].ContentType);
+    }
+
+    [Fact]
+    public async Task PartnersApplyAndManagersApproveOrSuspend()
+    {
+        using var f = new Fixture();
+        var user = new PortalUser { Phone = Installer };
+        f.Db.PortalUsers.Add(user);
+        await f.Db.SaveChangesAsync();
+        Assert.Equal(400, Assert.Throws<ActivationError>(() => PortalService.Apply(user, new(" ", null, null))).Status);
+        PortalService.Apply(user, new("Tehran Tint", "Iran", "Tehran"));
+        Assert.Equal(PartnerStatus.Pending, user.Partner);
+        await f.Db.SaveChangesAsync();
+
+        var api = new Solarzed.Api.Controllers.PartnersController(f.Db);
+        Assert.IsType<Microsoft.AspNetCore.Mvc.OkObjectResult>(await api.SetStatus(user.Id, new("approved", null), default));
+        Assert.Equal(PartnerStatus.Approved, (await f.Db.PortalUsers.SingleAsync()).Partner);
+        Assert.IsType<Microsoft.AspNetCore.Mvc.BadRequestObjectResult>(await api.SetStatus(user.Id, new("pending", null), default));
+
+        // Adding by mobile approves a new partner directly, keyed by the canonical mobile.
+        Assert.IsType<Microsoft.AspNetCore.Mvc.OkObjectResult>(await api.Add(new("+98 912 777 7777", "Karaj PPF", null, null, "Iran", "Karaj"), default));
+        Assert.Equal(PartnerStatus.Approved, (await f.Db.PortalUsers.SingleAsync(u => u.Phone == "09127777777")).Partner);
+        Assert.IsType<Microsoft.AspNetCore.Mvc.OkObjectResult>(await api.List(null, null, default));
+
+        user.Partner = PartnerStatus.Suspended;
+        Assert.Equal(403, Assert.Throws<ActivationError>(() => PortalService.Apply(user, new("Again", null, null))).Status);
     }
 }

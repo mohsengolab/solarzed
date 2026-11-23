@@ -9,6 +9,7 @@ import {
 } from "@/lib/api";
 import PortalSignIn from "@/components/PortalSignIn";
 import SerialInput from "@/components/SerialInput";
+import InstallerSection from "./InstallerSection";
 import styles from "../activate/activate.module.css";
 import own from "./account.module.css";
 
@@ -160,7 +161,7 @@ export default function AccountPage() {
   return <div className={styles.page}>
     <header><Link href="/">SOLAR<span>ZED</span></Link><small>MY ACCOUNT</small></header>
     <main className={`${styles.card} ${own.stack}`}>
-      <span className={styles.eyebrow}>PROFILE · BOXES · TRANSFERS · WARRANTIES · SUPPORT</span>
+      <span className={styles.eyebrow}>PROFILE · INSTALLER · BOXES · WARRANTIES · SUPPORT</span>
       {!checked ? <p>Loading…</p> : !user ? <>
         <h1>Sign in</h1>
         <PortalSignIn onSignedIn={setUser} intro="Representatives and shops: sign in with the mobile number Solarzed sent your cartons to, or with your email address. Customers: sign in to see your warranties." />
@@ -205,6 +206,8 @@ export default function AccountPage() {
             </form>}
           </div>}
         </section>
+
+        <InstallerSection user={user} onUser={setUser} />
 
         <section>
           <h2>Cartons in your account ({boxes.length})</h2>

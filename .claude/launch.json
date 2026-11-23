@@ -83,6 +83,89 @@
         "Sms__DevConsole": "true",
         "Email__DevConsole": "true"
       }
+    },
+    {
+      "name": "api-partners",
+      "runtimeExecutable": "dotnet",
+      "runtimeArgs": [
+        "run",
+        "-c",
+        "Release",
+        "--project",
+        "backend/Solarzed.Api",
+        "--launch-profile",
+        "http",
+        "--urls",
+        "http://localhost:5311"
+      ],
+      "port": 5311,
+      "env": {
+        "ConnectionStrings__Default": "Server=(localdb)\\mssqllocaldb;Database=SolarzedPartnersQA;Trusted_Connection=True;",
+        "FrontendOrigin": "http://localhost:3011",
+        "SOLARZED_REVALIDATE_SECRET": "local-dev-revalidate-secret-only",
+        "Sms__DevConsole": "true",
+        "Email__DevConsole": "true"
+      }
+    },
+    {
+      "name": "web-partners",
+      "runtimeExecutable": "npm",
+      "runtimeArgs": [
+        "--prefix",
+        "frontend",
+        "run",
+        "start",
+        "--",
+        "--port",
+        "3011"
+      ],
+      "port": 3011,
+      "env": {
+        "BACKEND_URL": "http://localhost:5311",
+        "SOLARZED_REVALIDATE_SECRET": "local-dev-revalidate-secret-only"
+      }
+    },
+    {
+      "name": "api-sn",
+      "runtimeExecutable": "dotnet",
+      "runtimeArgs": [
+        "run",
+        "-c",
+        "Ef",
+        "--project",
+        "backend/Solarzed.Api",
+        "--launch-profile",
+        "http",
+        "--urls",
+        "http://localhost:5320"
+      ],
+      "port": 5320,
+      "env": {
+        "ConnectionStrings__Default": "Server=(localdb)\\mssqllocaldb;Database=SolarzedSerialQA;Trusted_Connection=True;",
+        "FrontendOrigin": "http://localhost:3020",
+        "SOLARZED_REVALIDATE_SECRET": "local-dev-revalidate-secret-only",
+        "Sms__DevConsole": "true",
+        "Email__DevConsole": "true"
+      }
+    },
+    {
+      "name": "web-sn",
+      "runtimeExecutable": "npm",
+      "runtimeArgs": [
+        "--prefix",
+        "frontend",
+        "run",
+        "dev",
+        "--",
+        "--port",
+        "3020"
+      ],
+      "port": 3020,
+      "env": {
+        "BACKEND_URL": "http://localhost:5320",
+        "SOLARZED_REVALIDATE_SECRET": "local-dev-revalidate-secret-only",
+        "NEXT_DIST_DIR": ".next-sn"
+      }
     }
   ]
 }

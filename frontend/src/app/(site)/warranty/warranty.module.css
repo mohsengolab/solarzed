@@ -288,3 +288,13 @@
   .form button[type="submit"] { min-height: 54px; }
   .certGrid { grid-template-columns: 1fr 1fr; }
 }
+
+/* Two ways to look up: warranty number / VIN, or VIN + the owner's mobile (shows the gold card). */
+.tabs { display: grid; grid-template-columns: 1fr 1fr; gap: 6px; padding: 5px; margin-bottom: 18px; border-radius: 14px; background: rgb(var(--sz-tint) / 0.06); }
+.tabs button { min-height: 44px; border: 0; border-radius: 10px; background: transparent; color: var(--sz-fg-2); font-family: var(--sz-font); font-size: 14px; font-weight: 700; cursor: pointer; }
+.tabs button[aria-selected="true"] { background: var(--sz-grad); color: #04122a; }
+.cards { display: grid; gap: 22px; }
+.cardLink { justify-self: center; font-size: 13px; font-weight: 700; color: var(--sz-accent-fg); }
+@media print {
+  .header, .footer, .form, .helpText, .tabs, .divider, .terms, .cardLink { display: none !important; }
+}

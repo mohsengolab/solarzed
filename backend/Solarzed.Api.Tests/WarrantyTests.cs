@@ -237,7 +237,7 @@ public class WarrantyTests
         using var db = Database();
         db.AdminUsers.AddRange(
             new AdminUser { Username = "manager", Role = "admin", PasswordHash = BCrypt.Net.BCrypt.HashPassword("manager-password") },
-            new AdminUser { Username = "carton-operator", Role = "carton", PasswordHash = BCrypt.Net.BCrypt.HashPassword("operator-password") });
+            new AdminUser { Username = "counter-operator", Role = "counter", PasswordHash = BCrypt.Net.BCrypt.HashPassword("operator-password") });
         await db.SaveChangesAsync();
         var cfg = new ConfigurationBuilder().AddInMemoryCollection(new Dictionary<string, string?>
             { ["Jwt:Key"] = new string('a', 64) }).Build();
@@ -246,15 +246,15 @@ public class WarrantyTests
         var manager = Assert.IsType<OkObjectResult>(await controller.Login(new("manager-password", "manager")));
         var managerValue = JsonSerializer.SerializeToElement(manager.Value);
         Assert.Equal("admin", managerValue.GetProperty("role").GetString());
-        var operatorLogin = Assert.IsType<OkObjectResult>(await controller.Login(new("operator-password", "carton-operator")));
+        var operatorLogin = Assert.IsType<OkObjectResult>(await controller.Login(new("operator-password", "counter-operator")));
         var operatorValue = JsonSerializer.SerializeToElement(operatorLogin.Value);
-        Assert.Equal("carton", operatorValue.GetProperty("role").GetString());
+        Assert.Equal("counter", operatorValue.GetProperty("role").GetString());
 
         // A locked account cannot sign in even with the right password.
-        var user = await db.AdminUsers.SingleAsync(u => u.Username == "carton-operator");
+        var user = await db.AdminUsers.SingleAsync(u => u.Username == "counter-operator");
         user.Active = false;
         await db.SaveChangesAsync();
-        Assert.IsType<UnauthorizedObjectResult>(await controller.Login(new("operator-password", "carton-operator")));
+        Assert.IsType<UnauthorizedObjectResult>(await controller.Login(new("operator-password", "counter-operator")));
     }
 
     [Theory]

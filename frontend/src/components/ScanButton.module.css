@@ -1,0 +1,11 @@
+.button {
+  display: inline-flex; align-items: center; gap: 6px; min-height: 44px; padding: 0 14px;
+  border: 1px solid currentColor; border-radius: 10px; background: transparent; color: inherit; font: inherit; cursor: pointer;
+}
+.button:disabled { opacity: .5; cursor: default; }
+.overlay { position: fixed; inset: 0; z-index: 1000; background: rgba(0, 0, 0, .85); display: grid; place-items: center; padding: 16px; }
+.sheet { position: relative; width: min(100%, 460px); display: grid; gap: 12px; color: #fff; text-align: center; }
+.video { width: 100%; aspect-ratio: 3 / 4; object-fit: cover; border-radius: 14px; background: #000; }
+.frame { position: absolute; left: 15%; right: 15%; top: 18%; aspect-ratio: 1; border: 3px solid #f5c542; border-radius: 16px; pointer-events: none; }
+.sheet p { margin: 0; }
+.close { min-height: 44px; border: 0; border-radius: 10px; background: #fff; color: #000; font: inherit; font-weight: 600; cursor: pointer; }

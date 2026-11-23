@@ -16,15 +16,48 @@ public record LabelView(string Id, string? RollId, string Product, string Type, 
 public record LabelSerialView(string Id, string? RollId, string Product, string Type, DateTime CreatedAt, DateTime? ActivatedAt, string? Holder, string? HolderPhone, DateTime? HeldSince);
 public record ActivationInfo(string Id, string Product, string Type, bool Activated, int FilmYears, int? InstallYears, bool SmsAvailable, bool Released,
     string? FactoryCode, string? WarrantyCode, bool CanRegister, decimal? RemainingLengthM);
-public record ActivateBoxRequest(string Token, RegisterRequest Registration, decimal? UsedLengthM = null);
+public record ActivateBoxRequest(string Token, RegisterRequest Registration, decimal? UsedLengthM = null,
+    string? CustomerPhone = null, string? Country = null);
+public record PhotoUpload(string Kind, string ContentType, byte[] Data);
+
+/// <summary>Installation photos an approved partner must send with a warranty registration.</summary>
+public static class PhotoRules
+{
+    public static readonly string[] Kinds = ["vehicle", "film", "vin", "invoice", "other"];
+    public static readonly string[] Required = ["vehicle", "film"];
+    public const int MaxPhotos = 6;
+    public const int MaxBytes = 4 * 1024 * 1024;
+
+    /// <summary>The real image type from the file's first bytes; the browser-supplied type is never trusted.</summary>
+    public static string? Sniff(byte[] d) =>
+        d.Length > 3 && d[0] == 0xFF && d[1] == 0xD8 && d[2] == 0xFF ? "image/jpeg"
+        : d.Length > 8 && d[0] == 0x89 && d[1] == 0x50 && d[2] == 0x4E && d[3] == 0x47 ? "image/png"
+        : d.Length > 12 && d[0] == 'R' && d[1] == 'I' && d[2] == 'F' && d[3] == 'F' && d[8] == 'W' && d[9] == 'E' && d[10] == 'B' && d[11] == 'P' ? "image/webp"
+        : null;
+
+    public static PhotoUpload[] Validate(IReadOnlyList<(string Kind, byte[] Data)> files)
+    {
+        if (files.Count > MaxPhotos) throw new ActivationError(400, $"Upload at most {MaxPhotos} photos.");
+        var result = new List<PhotoUpload>();
+        foreach (var (kind, data) in files)
+        {
+            if (!Kinds.Contains(kind)) throw new ActivationError(400, "Unknown photo type.");
+            if (data.Length == 0 || data.Length > MaxBytes) throw new ActivationError(400, "Each photo must be smaller than 4 MB.");
+            var type = Sniff(data) ?? throw new ActivationError(400, "Photos must be JPEG, PNG or WebP images.");
+            result.Add(new(kind, type, data));
+        }
+        var missing = Required.Where(k => result.All(p => p.Kind != k)).ToArray();
+        if (missing.Length > 0) throw new ActivationError(400, "Add a photo of the vehicle (with plate) and of the installed film.");
+        return result.ToArray();
+    }
+}
 public record ActivationResult(WarrantyPublic Warranty, decimal? RemainingLengthM);
 
 /// <summary>
 /// Every carton is identified by the roll number already printed (with its barcode) on the box, e.g. CPT30614374,
-/// which is used to hand the carton from the company to representatives and onward. Inside the box is one warranty
-/// card whose QR holds RollNo-Warranty-Factory, where Warranty is a 7-digit number and Factory the 3-letter
-/// supplier code (e.g. CPT30614374-4827153-ABC). Only the person who opens the box can activate its warranty.
-/// Cards printed earlier as RollNo-Warranty (no factory) still open.
+/// which is used to hand the carton from the company to representatives and onward. The warranty card inside the box
+/// carries a QR holding only that Serial Number; an approved installer scans or types it to register the warranty.
+/// Older cards whose QR holds RollNo-Warranty[-Factory] (7-digit warranty number) still open for anyone.
 /// </summary>
 public class BoxLabelService(AppDbContext db, IDataProtectionProvider protection, IActivationSmsSender sms, IConfiguration? config = null)
 {
@@ -63,7 +96,7 @@ public class BoxLabelService(AppDbContext db, IDataProtectionProvider protection
         return ValidateSite(value ?? "https://solarzed.com");
     }
 
-    // New cards encode the card code itself; labels issued before card codes keep their original random token.
+    // ActivationUrl is kept for previews of older cards; the printed QR now holds only the Serial Number (label Id).
     public LabelView View(BoxLabel label, string site) => new(label.Id, label.RollId, label.Product,
         label.Type.ToString().ToLowerInvariant(), label.FilmYears, label.InstallYears, label.CreatedAt,
         label.ActivatedAt, label.WarrantyCode, FullCode(label) is { } code ? $"{site}/activate#{code}" : LegacyUrl(label, site),
@@ -77,7 +110,7 @@ public class BoxLabelService(AppDbContext db, IDataProtectionProvider protection
         catch (CryptographicException) { return ""; }
     }
 
-    // The carton role may only see the serial printed on the box: no QR, no card code and no warranty code.
+    // The counter role may only see the serial printed on the box: no QR, no card code and no warranty code.
     public static LabelSerialView Restricted(BoxLabel label) => new(label.Id, label.RollId, label.Product,
         label.Type.ToString().ToLowerInvariant(), label.CreatedAt, label.ActivatedAt, label.Holder, label.HolderPhone, label.HeldSince);
 
@@ -194,9 +227,22 @@ public class BoxLabelService(AppDbContext db, IDataProtectionProvider protection
     /// Accepts the card code (RollNo-1234567-ABC or RollNo-1234567, scanned or typed), a legacy Factory-Serial-Warranty card code,
     /// or a legacy 64-hex label token.
     /// </summary>
-    async Task<BoxLabel> Find(string token)
+    async Task<BoxLabel> Find(string token, bool serialAllowed = false)
     {
         var value = Regex.Replace(token ?? "", @"\s+", "");
+        // New cards carry only the Serial Number (the carton Roll No). Only an approved installer, who is signed in
+        // and whose photos the counter reviews, may register a warranty from it.
+        var plain = value.ToUpperInvariant();
+        if (SerialPattern.IsMatch(plain) && !TokenPattern.IsMatch(value) && !CardPattern.IsMatch(plain) && !LegacyCardPattern.IsMatch(plain))
+        {
+            var bySerial = await db.BoxLabels.SingleOrDefaultAsync(x => x.Id == plain);
+            if (bySerial == null || !serialAllowed)
+                throw new ActivationError(serialAllowed ? 404 : 403, serialAllowed
+                    ? "No Solarzed carton has this Serial Number. Check the number on the card."
+                    : "Your installer registers this warranty with the Serial Number. Ask your Solarzed installer to register it for your mobile.");
+            return bySerial;
+        }
+        if (serialAllowed && SerialPattern.IsMatch(plain) && await db.BoxLabels.SingleOrDefaultAsync(x => x.Id == plain) is { } exact) return exact;
         if (TokenPattern.IsMatch(value))
         {
             var hash = Hash(value);
@@ -229,9 +275,11 @@ public class BoxLabelService(AppDbContext db, IDataProtectionProvider protection
     static decimal? Remaining(BoxLabel label, Roll? roll) => label.RemainingLengthM
         ?? (label.ActivatedAt == null && roll?.LengthM is > 0 ? roll.LengthM : null);
 
-    public async Task<ActivationInfo> Info(string token, string? phone = null)
+    public async Task<ActivationInfo> Info(string token, string? phone = null, bool installer = false)
     {
-        var label = await Find(token);
+        var label = await Find(token, installer);
+        // The warranty number is shown only to someone holding the full card code.
+        var bySerial = installer && label.Id == Regex.Replace(token ?? "", @"\s+", "").ToUpperInvariant();
         var roll = label.RollId is { } rollId ? await db.Rolls.FindAsync(rollId) : null;
         // A carton whose roll was deleted after activation was released when it was first used.
         var released = roll == null ? label.ActivatedAt.HasValue
@@ -240,7 +288,7 @@ public class BoxLabelService(AppDbContext db, IDataProtectionProvider protection
         var remaining = Remaining(label, roll);
         var canRegister = remaining is > 0 && (!started || (phone != null && label.HolderPhone == phone));
         return new(label.Id, label.Product, label.Type.ToString().ToLowerInvariant(), started,
-            label.FilmYears, label.InstallYears, sms.Configured, released, null, label.CardCode,
+            label.FilmYears, label.InstallYears, sms.Configured, released, null, bySerial ? null : label.CardCode,
             canRegister, !started || canRegister ? remaining : null);
     }
 
@@ -250,9 +298,25 @@ public class BoxLabelService(AppDbContext db, IDataProtectionProvider protection
     /// Registers the warranty for the signed-in mobile. The mobile was verified by SMS when the customer signed in,
     /// so the registration phone is always the session's, never the form's.
     /// </summary>
-    public async Task<ActivationResult> Activate(ActivateBoxRequest req, string phone)
+    public async Task<ActivationResult> Activate(ActivateBoxRequest req, string phone) => await Activate(req, phone, null, []);
+
+    /// <summary>
+    /// With an approved partner, the partner (signed in as <paramref name="phone"/>) registers the installation for the
+    /// customer's mobile, with photos. The warranty stays pending until the counter reviews the photos, and the roll
+    /// stays with the partner for the next vehicles.
+    /// </summary>
+    public async Task<ActivationResult> Activate(ActivateBoxRequest req, string phone, PortalUser? partner, PhotoUpload[] photos)
     {
-        var label = await Find(req.Token);
+        if (partner != null && partner.Partner != PartnerStatus.Approved)
+            throw new ActivationError(403, "Your installer account is not approved yet.");
+        var ownerPhone = phone;
+        if (partner != null)
+        {
+            ownerPhone = PortalService.CanonicalPhone(req.CustomerPhone);
+            if (ownerPhone == phone) throw new ActivationError(400, "Enter the customer's own mobile number, not yours.");
+            if (photos.Length == 0) throw new ActivationError(400, "Add the installation photos.");
+        }
+        var label = await Find(req.Token, partner != null);
         var first = !label.ActivatedAt.HasValue;
         if (!first && (label.RemainingLengthM == null || label.HolderPhone != phone))
             throw new ActivationError(409, "This card has already been activated. Sign in with the mobile used for the first activation.");
@@ -266,7 +330,9 @@ public class BoxLabelService(AppDbContext db, IDataProtectionProvider protection
         if (req.UsedLengthM.Value > remaining)
             throw new ActivationError(409, "The used length exceeds the remaining roll length.");
         // Product type/serial are always server-bound, never trusted from the form.
-        var request = req.Registration with { Type = label.Type.ToString().ToLowerInvariant(), FilmSerial = label.Id, Phone = phone };
+        var request = req.Registration with { Type = label.Type.ToString().ToLowerInvariant(), FilmSerial = label.Id, Phone = ownerPhone };
+        // A partner's registrations always carry the partner's own shop name, never free text.
+        if (partner != null) request = request with { Installer = partner.ShopName ?? partner.Name ?? phone };
         var coverage = await db.CoverageSettings.AsNoTracking().FirstOrDefaultAsync();
         var (error, entity) = WarrantyService.Validate(request, coverage?.WarrantyCodeLength ?? 16);
         if (error != null) throw new ActivationError(400, error);
@@ -282,33 +348,51 @@ public class BoxLabelService(AppDbContext db, IDataProtectionProvider protection
         if (first && label.CardCode != null && !await db.WarrantyRegistrations.AnyAsync(x => x.Code == label.CardCode))
             registration.Code = label.CardCode;
         registration.RollId = roll?.Id;
+        registration.CardKey = WarrantyCards.NewKey();
         registration.UsedLengthM = req.UsedLengthM;
-        registration.Status = WarrantyStatus.Active;
-        registration.ReviewedAt = DateTime.UtcNow;
-        registration.ReviewNote = "Customer activation by a signed-in, SMS-verified mobile with the warranty card from the box.";
+        if (partner != null)
+        {
+            registration.Status = WarrantyStatus.Pending;
+            registration.InstallerPhone = phone;
+            var country = (req.Country ?? "").Trim();
+            registration.Country = country.Length > 0 ? country[..Math.Min(country.Length, 100)] : partner.Country;
+            registration.ReviewNote = "Registered by an approved installer; awaiting counter review of the installation photos.";
+        }
+        else
+        {
+            registration.Status = WarrantyStatus.Active;
+            registration.ReviewedAt = DateTime.UtcNow;
+            registration.ReviewNote = "Customer activation by a signed-in, SMS-verified mobile with the warranty card from the box.";
+        }
         registration.FilmEnds = WarrantyService.AddYears(registration.Installed, label.FilmYears);
         registration.InstallEnds = label.InstallYears is int years ? WarrantyService.AddYears(registration.Installed, years) : null;
         registration.FlagsJson = JsonSerializer.Serialize(await db.WarrantyRegistrations.AnyAsync(x => x.Vin == registration.Vin && x.Type == registration.Type && x.Status != WarrantyStatus.Rejected) ? new[] { "vin_repeat" } : Array.Empty<string>());
         var now = DateTime.UtcNow;
+        var actor = (partner != null ? "installer:" : "customer:") + phone;
+        var holderName = partner != null ? registration.Installer : registration.Owner;
         if (first)
         {
             // The carton's journey ends with the account that first uses it.
             db.BoxTransfers.Add(new BoxTransfer { LabelId = label.Id, BatchId = "ACT-" + Convert.ToHexString(RandomNumberGenerator.GetBytes(8)),
-                FromHolder = label.Holder, FromPhone = label.HolderPhone, ToHolder = registration.Owner, ToPhone = phone,
-                Note = "Warranty activated", Actor = "customer:" + phone, At = now });
+                FromHolder = label.Holder, FromPhone = label.HolderPhone, ToHolder = holderName, ToPhone = phone,
+                Note = "Warranty activated", Actor = actor, At = now });
             label.WarrantyCode = registration.Code;
             label.ActivatedAt = now;
-            label.Holder = registration.Owner;
+            label.Holder = holderName;
             label.HolderPhone = phone;
             label.HeldSince = now;
         }
         label.RemainingLengthM = remaining - req.UsedLengthM.Value;
         label.Revision++;
         db.WarrantyRegistrations.Add(registration);
-        AuditLog.Add(db, "customer:" + phone, "warranty", registration.Code, "activated", AuditLog.Diff(
+        foreach (var photo in photos)
+            db.WarrantyPhotos.Add(new WarrantyPhoto { WarrantyCode = registration.Code, Kind = photo.Kind, ContentType = photo.ContentType,
+                Data = photo.Data, SizeBytes = photo.Data.Length, UploadedBy = phone, CreatedAt = now });
+        AuditLog.Add(db, actor, "warranty", registration.Code, "activated", AuditLog.Diff(
             ("status", null, registration.Status), ("label", null, label.Id), ("roll", null, roll?.Id),
             ("usedLengthM", null, registration.UsedLengthM), ("remainingLengthM", remaining, label.RemainingLengthM),
-            ("filmEnds", null, registration.FilmEnds), ("installEnds", null, registration.InstallEnds), ("flags", null, registration.FlagsJson)));
+            ("filmEnds", null, registration.FilmEnds), ("installEnds", null, registration.InstallEnds), ("flags", null, registration.FlagsJson),
+            ("customer", null, partner != null ? ownerPhone : null), ("country", null, registration.Country), ("photos", null, photos.Length)));
         try { await db.SaveChangesAsync(); }
         // A concurrent winner trips either the label revision guard or the unique serial/warranty indexes.
         catch (DbUpdateException) { throw new ActivationError(409, "The roll balance or warranty just changed. Refresh and try again."); }

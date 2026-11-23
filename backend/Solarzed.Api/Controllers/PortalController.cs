@@ -220,6 +220,31 @@ public class PortalController(PortalService portal, BoxTransferService transfers
         catch (ActivationError ex) { return StatusCode(ex.Status, new { error = ex.Message }); }
     }
 
+    // ── Installer partners ──────────────────────────────────────────────────
+
+    [HttpPost("partner/apply")]
+    public async Task<IActionResult> ApplyPartner([FromBody] PartnerApplyRequest request)
+    {
+        try
+        {
+            var me = await Me();
+            var before = me.Partner;
+            PortalService.Apply(me, request);
+            if (before != me.Partner) AuditLog.Add(db, "portal:" + me.Phone, "partner", me.Phone!, "applied", AuditLog.Diff(("status", before, me.Partner), ("shop", null, me.ShopName)));
+            await db.SaveChangesAsync();
+            return Ok(PortalService.Shape(me));
+        }
+        catch (ActivationError ex) { return StatusCode(ex.Status, new { error = ex.Message }); }
+    }
+
+    [HttpGet("partner/warranties")]
+    public async Task<IActionResult> InstallerWarranties()
+    {
+        var me = await Me();
+        if (me.Partner != PartnerStatus.Approved || me.Phone is not { } phone) return Ok(new { warranties = Array.Empty<InstallerWarranty>() });
+        return Ok(new { warranties = await portal.Installed(phone) });
+    }
+
     [HttpGet("warranties")]
     public async Task<IActionResult> Warranties()
     {

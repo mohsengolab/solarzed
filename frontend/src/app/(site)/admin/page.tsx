@@ -15,25 +15,27 @@ import { printQrLabels, printQrImage } from "./qrPrint";
 import { ProductsPanel, CustomersPanel, AccountPanel, UsersPanel } from "./ManagementPanels";
 import { WarehousesPanel, WarehouseIcon, PersonIcon } from "./WarehousesPanel";
 import TicketsPanel from "./TicketsPanel";
+import { PartnersPanel, ReviewPanel } from "./PartnersPanels";
 import SerialInput from "@/components/SerialInput";
 import SmsSettingsPanel from "./SmsSettingsPanel";
 import { ClaimsPanel, HistoryPanel, WarrantyActivity } from "./ClaimsPanels";
 import { usePaged, SortTh, Pager, FilterBar, countActive, downloadCsv, errorText } from "./AdminKit";
 
-type Role = "superadmin" | "admin" | "carton";
-const VIEWS = ["overview", "reports", "warranties", "claims", "rolls", "warehouses", "products", "customers", "tickets", "labels", "history", "sms", "settings", "account", "users"] as const;
+type Role = "superadmin" | "admin" | "counter";
+const VIEWS = ["overview", "reports", "warranties", "review", "partners", "claims", "rolls", "warehouses", "products", "customers", "tickets", "labels", "history", "sms", "settings", "account", "users"] as const;
 type View = typeof VIEWS[number];
 const LABELS: Record<View, string> = {
-  overview: "نمای کلی", reports: "گزارش‌ها", warranties: "گارانتی‌ها", claims: "ادعاها", history: "سابقه تغییرات", rolls: "رول‌ها", warehouses: "انبارها", products: "محصولات",
+  overview: "نمای کلی", reports: "گزارش‌ها", warranties: "گارانتی‌ها", review: "بررسی عکس‌ها (کانتر)", partners: "همکاران", claims: "ادعاها", history: "سابقه تغییرات", rolls: "رول‌ها", warehouses: "انبارها", products: "محصولات",
   labels: "برچسب‌ها", customers: "مشتریان", tickets: "تیکت‌ها", sms: "پیامک", settings: "تنظیمات", account: "حساب کاربری", users: "کاربران",
 };
 // The customer list is confidential, and user management belongs to the super administrator alone.
 const VIEWS_BY_ROLE: Record<Role, readonly View[]> = {
   superadmin: VIEWS,
   admin: VIEWS.filter(v => v !== "customers" && v !== "users"),
-  carton: ["labels", "account"],
+  // Counter (کانتر): reviews installers' photos and reads carton serials; never sees warranty codes.
+  counter: ["review", "labels", "account"],
 };
-const roleFromSession = (value: string): Role => value === "superadmin" || value === "carton" ? value : "admin";
+const roleFromSession = (value: string): Role => value === "superadmin" || value === "counter" ? value : "admin";
 
 // ── SVG Nav Icons ─────────────────────────────────────────────────────────────
 const NavIcons: Record<View, JSX.Element> = {
@@ -43,6 +45,8 @@ const NavIcons: Record<View, JSX.Element> = {
   claims:   <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="12" y1="12" x2="12" y2="15"/><line x1="12" y1="18" x2="12.01" y2="18"/></svg>,
   history:  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>,
   warehouses: <WarehouseIcon />,
+  review:   <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><rect x="3" y="5" width="18" height="14" rx="2"/><circle cx="12" cy="12" r="3"/><path d="M8 5l1.5-2h5L16 5"/></svg>,
+  partners: <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>,
   rolls:    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><ellipse cx="12" cy="12" rx="10" ry="4"/><path d="M2 12v6c0 2.2 4.5 4 10 4s10-1.8 10-4v-6"/><path d="M2 6v6c0 2.2 4.5 4 10 4s10-1.8 10-4V6"/></svg>,
   products: <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"/></svg>,
   labels:   <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M20.59 13.41l-7.17 7.17a2 2 0 0 1-2.83 0L2 12V2h10l8.59 8.59a2 2 0 0 1 0 2.82z"/><line x1="7" y1="7" x2="7.01" y2="7"/></svg>,
@@ -140,7 +144,7 @@ function LoginView({ onLogin }: { onLogin: (role: Role) => void }) {
 
 const NAV_GROUPS: { label?: string; views: View[] }[] = [
   { views: ["overview", "reports"] },
-  { label: "مدیریت", views: ["warranties", "claims", "tickets", "rolls", "warehouses", "products", "customers", "labels", "history"] },
+  { label: "مدیریت", views: ["warranties", "review", "partners", "claims", "tickets", "rolls", "warehouses", "products", "customers", "labels", "history"] },
   { label: "پیکربندی", views: ["sms", "settings"] },
   { label: "حساب", views: ["account", "users"] },
 ];
@@ -197,6 +201,8 @@ function AdminApp({ view, role, onNav, onLogout }: { view: View; role: Role; onN
         {view === "account"   && <AccountPanel role={role} />}
         {view === "users"     && <UsersPanel />}
         {view === "warranties"&& <WarrantiesPanel role={role} />}
+        {view === "review"    && <ReviewPanel />}
+        {view === "partners"  && <PartnersPanel onReview={() => onNav("review")} />}
         {view === "claims"    && <ClaimsPanel />}
         {view === "tickets"   && <TicketsPanel />}
         {view === "history"   && <HistoryPanel />}
@@ -1060,11 +1066,11 @@ function RollsPanel({ role }: { role: Role }) {
       </form></div>}
       {qrView && <div className={styles.dialog} role="dialog" aria-modal="true" aria-label={`QR رول ${qrView.roll.id}`} onClick={e => { if (e.target === e.currentTarget) setQrView(null); }}
         onKeyDown={e => { if (e.key === "Escape") setQrView(null); }}>
-        <div className={styles.dialogInner} style={{ textAlign: "center" }}>
+        <div className={`${styles.dialogInner} ${styles.qrDialog}`} style={{ textAlign: "center" }}>
           <h2 dir="ltr">{qrView.roll.id}</h2>
           <button type="button" className={styles.dialogClose} aria-label="بستن QR" onClick={() => setQrView(null)}>×</button>
           <img src={qrView.src} alt={`QR رول ${qrView.roll.id}`}
-            style={{ display: "block", width: "min(360px, 100%)", height: "auto", margin: "12px auto", background: "#fff", borderRadius: 8, imageRendering: "pixelated" }} />
+            style={{ display: "block", width: "max(140px, min(360px, 100%, calc(90vh - 260px)))", height: "auto", margin: "4px auto", background: "#fff", borderRadius: 8, imageRendering: "pixelated" }} />
           <p style={{ margin: "0 0 12px", opacity: .75 }}>{qrView.roll.modelCode} · {qrView.roll.batch}</p>
           {qrViewError && <p role="alert" className={styles.errorText}>{qrViewError}</p>}
           <div className={styles.filters} style={{ justifyContent: "center" }}>

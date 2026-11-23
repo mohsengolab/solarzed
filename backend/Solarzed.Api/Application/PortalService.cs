@@ -36,7 +36,8 @@ public static class PortalAuth
         signingCredentials: new SigningCredentials(new SymmetricSecurityKey(Encoding.UTF8.GetBytes(key)), SecurityAlgorithms.HmacSha256)));
 }
 
-public record PortalMe(string? Phone, string? Email, string? Name, string? FirstName, string? LastName, string? Country, string? City, string? Job);
+public record PortalMe(string? Phone, string? Email, string? Name, string? FirstName, string? LastName, string? Country, string? City, string? Job,
+    string Partner = "none", string? ShopName = null);
 
 public class PortalService(AppDbContext db, IActivationSmsSender sms, IEmailSender? email = null, IConfiguration? config = null, SmsLog? log = null)
 {
@@ -217,7 +218,8 @@ public class PortalService(AppDbContext db, IActivationSmsSender sms, IEmailSend
     }
 
     public static PortalMe Shape(PortalUser user) =>
-        new(user.Phone, user.Email, user.Name, user.FirstName, user.LastName, user.Country, user.City, user.Job);
+        new(user.Phone, user.Email, user.Name, user.FirstName, user.LastName, user.Country, user.City, user.Job,
+            user.Partner.ToString().ToLowerInvariant(), user.ShopName);
 
     /// <summary>Saves the self-service profile; empty strings clear a field.</summary>
     public static void ApplyProfile(PortalUser user, PortalProfileRequest req)
@@ -238,6 +240,31 @@ public class PortalService(AppDbContext db, IActivationSmsSender sms, IEmailSend
         return text.Length > max ? text[..max] : text;
     }
 
+    public async Task<InstallerWarranty[]> Installed(string phone)
+    {
+        var rows = await db.WarrantyRegistrations.AsNoTracking().Where(x => x.InstallerPhone == phone)
+            .OrderByDescending(x => x.CreatedAt).Take(200).ToListAsync();
+        var codes = rows.Select(x => x.Code).ToArray();
+        var photos = await db.WarrantyPhotos.Where(p => codes.Contains(p.WarrantyCode)).GroupBy(p => p.WarrantyCode)
+            .Select(g => new { g.Key, Count = g.Count() }).ToDictionaryAsync(x => x.Key, x => x.Count);
+        return rows.Select(x => new InstallerWarranty(WarrantyService.ToPublic(x), MaskPhone(x.Phone), x.Country,
+            photos.GetValueOrDefault(x.Code), x.CreatedAt)).ToArray();
+    }
+
+    public static string MaskPhone(string phone) => phone.Length > 6 ? phone[..4] + "•••" + phone[^4..] : "•••";
+
+    /// <summary>Asks to become an installer partner; staff approve it in the Partners section.</summary>
+    public static void Apply(PortalUser user, PartnerApplyRequest req)
+    {
+        if (user.Phone == null) throw new ActivationError(400, "Add and verify your mobile number first.");
+        if (user.Partner == PartnerStatus.Suspended) throw new ActivationError(403, "Your installer account is suspended. Please contact Solarzed.");
+        var shop = Clean(req.ShopName, 200) ?? throw new ActivationError(400, "Enter your shop or workshop name.");
+        user.ShopName = shop;
+        if (Clean(req.Country, 100) is { } country) user.Country = country;
+        if (Clean(req.City, 100) is { } city) user.City = city;
+        if (user.Partner == PartnerStatus.None) { user.Partner = PartnerStatus.Pending; user.PartnerAppliedAt = DateTime.UtcNow; }
+    }
+
     public async Task<WarrantyPublic[]> Warranties(string phone)
     {
         var variants = PhoneVariants(phone);
@@ -247,4 +274,8 @@ public class PortalService(AppDbContext db, IActivationSmsSender sms, IEmailSend
     }
 }
 
+/// <summary>A warranty an installer registered, with its review state.</summary>
+public record InstallerWarranty(WarrantyPublic Warranty, string OwnerPhoneMasked, string? Country, int Photos, DateTime CreatedAt);
+
+public record PartnerApplyRequest(string? ShopName, string? Country, string? City);
 public record PortalProfileRequest(string? FirstName, string? LastName, string? Country, string? City, string? Job, string? Name);
