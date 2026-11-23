@@ -1,4 +1,7 @@
 .data/
+.keys/
+.local-sms.json
+.local-sms.json.tmp
 *.zip
 .env
 .env.*
