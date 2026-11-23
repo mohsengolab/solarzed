@@ -107,7 +107,17 @@ $envVars = @{
     ASPNETCORE_URLS                 = 'http://127.0.0.1:5010'  # port IIS ARR proxies to
     BACKEND_URL                     = 'http://127.0.0.1:5010'  # Next.js → .NET API (server-side)
     PORT                            = '4173'   # solarzed-web only; Next.js uses --port 3000 explicitly
+    SOLARZED_KEYS_DIR               = "$AppDir\.keys"          # DataProtection keys; outside .publish so deploys keep them
 }
+# Login tokens: one key kept across restarts. Generated once, then reused from the machine environment.
+$jwtKey = [System.Environment]::GetEnvironmentVariable('Jwt__Key', 'Machine')
+if (-not $jwtKey) {
+    $bytes = New-Object byte[] 32
+    [System.Security.Cryptography.RandomNumberGenerator]::Create().GetBytes($bytes)
+    $jwtKey = -join ($bytes | ForEach-Object { $_.ToString('x2') })
+    Log-Info "Generated a persistent login key (Jwt__Key)"
+}
+$envVars['Jwt__Key'] = $jwtKey
 foreach ($kv in $envVars.GetEnumerator()) {
     [System.Environment]::SetEnvironmentVariable($kv.Key, $kv.Value, 'Machine')
     Set-Item "Env:$($kv.Key)" $kv.Value

@@ -3,6 +3,7 @@ using System.Security.Claims;
 using System.Text;
 using System.IdentityModel.Tokens.Jwt;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
+using Microsoft.AspNetCore.DataProtection;
 using Microsoft.AspNetCore.HttpOverrides;
 using Microsoft.AspNetCore.ResponseCompression;
 using Microsoft.EntityFrameworkCore;
@@ -21,7 +22,14 @@ builder.WebHost.ConfigureKestrel(k =>
     k.AddServerHeader = false;
     k.Limits.MaxRequestBodySize = 1024 * 1024; // 1 MB; endpoints set tighter limits where relevant
 });
-builder.Services.AddDataProtection();
+// Encrypted values (Faraz token, SMTP password, box-label links) must survive restarts and deploys.
+// On the server SOLARZED_KEYS_DIR points at a folder outside the publish output; without it the default key store is used.
+var dataProtection = builder.Services.AddDataProtection();
+if (builder.Configuration["SOLARZED_KEYS_DIR"] is { Length: > 0 } keysDir)
+{
+    dataProtection.SetApplicationName("Solarzed").PersistKeysToFileSystem(Directory.CreateDirectory(keysDir));
+    if (OperatingSystem.IsWindows()) dataProtection.ProtectKeysWithDpapi(protectToLocalMachine: true);
+}
 builder.Services.AddSingleton(TimeProvider.System);
 builder.Services.AddSingleton<LoginThrottle>();
 builder.Services.AddSingleton<SmsLog>();
@@ -90,9 +98,14 @@ builder.Services.AddDbContext<AppDbContext>(opt =>
        .ConfigureWarnings(w => w.Ignore(Microsoft.EntityFrameworkCore.Diagnostics.RelationalEventId.PendingModelChangesWarning)));
 
 // ── JWT Auth ─────────────────────────────────────────────────────────────────
-var jwtKey = builder.Configuration["Jwt:Key"]
-    ?? Convert.ToHexString(System.Security.Cryptography.RandomNumberGenerator.GetBytes(32));
-builder.Configuration["Jwt:Key"] = jwtKey;
+var jwtKey = builder.Configuration["Jwt:Key"];
+if (string.IsNullOrEmpty(jwtKey))
+{
+    // No configured key: a per-process key (everyone signs in again after a restart). Kept in its own
+    // in-memory source so a configuration reload (the SMS settings save) cannot drop it.
+    jwtKey = Convert.ToHexString(System.Security.Cryptography.RandomNumberGenerator.GetBytes(32));
+    builder.Configuration.AddInMemoryCollection(new Dictionary<string, string?> { ["Jwt:Key"] = jwtKey });
+}
 
 var authentication = builder.Services.AddAuthentication(JwtBearerDefaults.AuthenticationScheme);
 authentication.AddJwtBearer(o =>
