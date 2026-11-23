@@ -47,6 +47,8 @@ public class SmsSettingsController(IConfiguration config, IWebHostEnvironment en
             mode = config["Faraz:Mode"] ?? "unconfigured",
             pattern = config["Faraz:OtpPattern"] ?? "2675", codeVariable = config["Faraz:CodeVariable"] ?? "code1",
             line = config["Faraz:Sender"] ?? "",
+            warranty = new { pattern = config["Faraz:WarrantyPattern"] ?? "", codeVariable = config["Faraz:WarrantyCodeVariable"] ?? "code",
+                linkVariable = config["Faraz:WarrantyLinkVariable"] ?? "link", configured = sender.WarrantyConfigured },
             endpoint = config["Faraz:Mode"] == "soap" ? config["Faraz:Endpoint"] : null, updatedAt = config["Faraz:UpdatedAt"],
             policy = new { policy.Enabled, policy.OtpMinutes, policy.ResendSeconds, policy.DailyLimit },
             email = new
@@ -82,7 +84,7 @@ public class SmsSettingsController(IConfiguration config, IWebHostEnvironment en
             await Update(root => root["Faraz"] = new JsonObject { ["Mode"] = "soap", ["Endpoint"] = endpoint,
                 ["ProtectedToken"] = protection.CreateProtector(Protector).Protect(key),
                 ["OtpPattern"] = req.Pattern, ["Sender"] = req.Line, ["CodeVariable"] = req.CodeVariable,
-                ["UpdatedAt"] = DateTime.UtcNow.ToString("O") }, ct);
+                ["UpdatedAt"] = DateTime.UtcNow.ToString("O") }.Keep(root, "WarrantyPattern", "WarrantyCodeVariable", "WarrantyLinkVariable"), ct);
             return Ok(new { ok = true, message = "SOAP settings saved. Send a test message to confirm the token and pattern." });
         }
         // Read-only provider checks: do not send messages, display balances or expose provider bodies.
@@ -101,8 +103,29 @@ public class SmsSettingsController(IConfiguration config, IWebHostEnvironment en
         await Update(root => root["Faraz"] = new JsonObject { ["Mode"] = "rest", ["Endpoint"] = ProviderBase + "sms/pattern",
             ["ProtectedToken"] = protection.CreateProtector(Protector).Protect(key),
             ["OtpPattern"] = req.Pattern, ["Sender"] = req.Line, ["CodeVariable"] = req.CodeVariable,
-            ["UpdatedAt"] = DateTime.UtcNow.ToString("O") }, ct);
+            ["UpdatedAt"] = DateTime.UtcNow.ToString("O") }.Keep(root, "WarrantyPattern", "WarrantyCodeVariable", "WarrantyLinkVariable"), ct);
         return Ok(new { ok = true, message = "Faraz account and pattern verified. Settings saved. No SMS was sent." });
+    }
+
+    // The "warranty active" pattern: the owner's SMS with the warranty number and the gold card link.
+    [HttpPost("warranty")]
+    [RequestSizeLimit(2048)]
+    public async Task<IActionResult> SaveWarranty(SmsWarrantyRequest req, CancellationToken ct)
+    {
+        var pattern = (req.Pattern ?? "").Trim();
+        if (pattern.Length > 0 && !Regex.IsMatch(pattern, "^[a-zA-Z0-9_-]{1,100}$") ||
+            !Regex.IsMatch(req.CodeVariable ?? "", "^[a-zA-Z][a-zA-Z0-9_]{0,49}$") ||
+            !Regex.IsMatch(req.LinkVariable ?? "", "^[a-zA-Z][a-zA-Z0-9_]{0,49}$") || req.CodeVariable == req.LinkVariable)
+            return BadRequest(new { error = "Enter the pattern ID and two different variable names (English letters, digits, _)." });
+        await Update(root =>
+        {
+            var faraz = root["Faraz"] as JsonObject ?? new JsonObject();
+            if (pattern.Length > 0) faraz["WarrantyPattern"] = pattern; else faraz.Remove("WarrantyPattern");
+            faraz["WarrantyCodeVariable"] = req.CodeVariable;
+            faraz["WarrantyLinkVariable"] = req.LinkVariable;
+            root["Faraz"] = faraz;
+        }, ct);
+        return Ok(new { ok = true, message = pattern.Length > 0 ? "Warranty SMS pattern saved." : "Warranty SMS pattern removed; owners will not get the card SMS." });
     }
 
     [HttpPost("policy")]
@@ -211,6 +234,17 @@ public class SmsSettingsController(IConfiguration config, IWebHostEnvironment en
     }
 }
 public record SmsRequest(string? Token, string Pattern, string Line, string CodeVariable, string? Mode = null, string? Endpoint = null);
+static class FarazSection
+{
+    /// <summary>Carries the warranty-pattern keys over when the connection settings are replaced.</summary>
+    public static JsonObject Keep(this JsonObject next, JsonObject root, params string[] keys)
+    {
+        if (root["Faraz"] is JsonObject old)
+            foreach (var key in keys) if (old[key] is { } value) next[key] = value.DeepClone();
+        return next;
+    }
+}
+public record SmsWarrantyRequest(string? Pattern, string? CodeVariable, string? LinkVariable);
 public record SmsPolicyRequest(bool Enabled, int OtpMinutes, int ResendSeconds, int DailyLimit);
 public record SmsTestRequest(string Phone);
 public record EmailRequest(string? Host, int? Port, string? From, string? Name, string? User, string? Password, bool EnableSsl = true);

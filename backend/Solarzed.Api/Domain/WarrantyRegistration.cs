@@ -52,6 +52,14 @@ public class WarrantyRegistration
     [MaxLength(200)]
     public string Installer { get; set; } = default!;
 
+    // Mobile of the approved partner account that registered this installation (null = customer self-registration).
+    [MaxLength(30)]
+    public string? InstallerPhone { get; set; }
+
+    // Country where the vehicle was fitted.
+    [MaxLength(100)]
+    public string? Country { get; set; }
+
     // JSON columns – stored as text
     [Column(TypeName = "nvarchar(max)")]
     public string AreasJson { get; set; } = "[]";    // string[] of window or panel keys
@@ -69,6 +77,13 @@ public class WarrantyRegistration
 
     [MaxLength(60)]
     public string? RollId { get; set; }
+
+    // Random key in the gold-card link sent to the owner by SMS ({site}/card#{Code}.{CardKey}).
+    [MaxLength(16)]
+    public string? CardKey { get; set; }
+
+    // When the "warranty active" SMS with the gold card link went out (null = not sent yet).
+    public DateTime? CardSentAt { get; set; }
 
     public DateTime CreatedAt { get; set; } = DateTime.UtcNow;
     public DateTime? ReviewedAt { get; set; }

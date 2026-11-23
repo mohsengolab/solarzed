@@ -79,7 +79,15 @@ public class PortalUser
     public bool Active { get; set; } = true;
     public DateTime CreatedAt { get; set; } = DateTime.UtcNow;
     public DateTime? LastLoginAt { get; set; }
+
+    // Installer / partner (همکار). Only an approved partner registers warranties for customers, with photos.
+    public PartnerStatus Partner { get; set; } = PartnerStatus.None;
+    [MaxLength(200)] public string? ShopName { get; set; }
+    public DateTime? PartnerAppliedAt { get; set; }
+    public DateTime? PartnerReviewedAt { get; set; }
 }
+
+public enum PartnerStatus { None, Pending, Approved, Suspended }
 
 public class LoginChallenge
 {

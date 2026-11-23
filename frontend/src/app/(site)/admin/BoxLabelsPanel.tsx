@@ -10,13 +10,13 @@ import { printQrLabels } from "./qrPrint";
 import { printBarcodeLabels } from "./barcode";
 import SerialInput from "@/components/SerialInput";
 
-type Role = "superadmin" | "admin" | "carton";
+type Role = "superadmin" | "admin" | "counter";
 type Roll = { id: string; rollNo?: string | null; modelCode: string; type: "tint" | "ppf"; qc: string; status: string; supplier: string; lengthM: number | null };
 type CoverageSettings = { durations: Record<"tint" | "ppf", { film: number | null; install: number | null }> };
 const message = (error: unknown) => error instanceof Error ? fa(error.message) : fa("The request failed.");
 
 export default function BoxLabelsPanel({ onSettings, role }: { onSettings: () => void; role: Role }) {
-  const canManage = role !== "carton";
+  const canManage = role !== "counter";
   const [labels, setLabels] = useState<BoxLabel[]>([]);
   const [rolls, setRolls] = useState<Roll[]>([]);
   const [rollId, setRollId] = useState("");
@@ -49,8 +49,9 @@ export default function BoxLabelsPanel({ onSettings, role }: { onSettings: () =>
   useEffect(() => {
     if (!canManage) return;
     let cancelled = false;
-    Promise.all(labels.filter(label => selected.includes(label.id) && label.activationUrl).map(async label =>
-      [label.id, await QRCode.toDataURL(label.activationUrl!, { errorCorrectionLevel: "M", margin: 4, scale: 8 })] as const
+    // The card QR holds only the Serial Number; the installer scans or types it in their account.
+    Promise.all(labels.filter(label => selected.includes(label.id)).map(async label =>
+      [label.id, await QRCode.toDataURL(label.id, { errorCorrectionLevel: "M", margin: 4, scale: 8 })] as const
     )).then(entries => { if (!cancelled) setPreviews(Object.fromEntries(entries)); }).catch(ex => { if (!cancelled) setError(message(ex)); });
     return () => { cancelled = true; };
   }, [labels, selected, canManage]);
@@ -80,17 +81,16 @@ export default function BoxLabelsPanel({ onSettings, role }: { onSettings: () =>
     await printBarcodeLabels(width, height, validSelection.map(label => ({ serial: label.id, lines: [`${label.product} · ${label.type.toUpperCase()}`] })));
   }
 
-  // Inside the carton: warranty card with the QR (carton roll number + 7-digit warranty code + factory code). Only the box opener sees it.
+  // Inside the carton: warranty card whose QR holds only the Serial Number, for the installer to register the warranty.
   async function printCards() {
     setError("");
     if (!sizeOk()) return;
-    const chosen = validSelection.filter(label => label.activationUrl);
+    const chosen = validSelection;
     if (!chosen.length || chosen.some(label => !previews[label.id])) { setError(fa("Select unused labels and wait for their QR previews.")); return; }
     await printQrLabels("Solarzed warranty cards", width, height, chosen.map(label => ({
-      qr: previews[label.id], alt: `Warranty card ${label.id}`, title: "Scan to activate your warranty",
-      lines: [`${label.product} · ${label.type.toUpperCase()}`, `Roll No ${label.id}`,
-        ...(label.cardCode ? [`Warranty code ${label.cardCode}`] : [label.fullCode ?? label.id])],
-      footer: `${new URL(label.activationUrl!).host}/activate`,
+      qr: previews[label.id], alt: `Serial Number ${label.id}`, title: "Serial Number",
+      lines: [label.id, `${label.product} · ${label.type.toUpperCase()}`],
+      footer: "Your installer registers this warranty",
     })));
   }
 
@@ -169,7 +169,7 @@ export default function BoxLabelsPanel({ onSettings, role }: { onSettings: () =>
       <div className={labelsStyle.previews}>{validSelection.map(label => <article key={label.id} className={labelsStyle.preview}>
         {/* eslint-disable-next-line @next/next/no-img-element */}
         {previews[label.id] && <img src={previews[label.id]} alt={`QR ${label.id}`} width={150} height={150} />}
-        <div><b>SOLARZED · کارت گارانتی</b><p>{label.product} · {label.type.toUpperCase()}</p><code dir="ltr">{label.fullCode ?? label.id}</code><p>اسکن ← ورود با موبایل ← ثبت گارانتی</p>{label.activationUrl && <a href={`/activate#${new URL(label.activationUrl).hash.slice(1)}`} target="_blank" rel="noreferrer">پیش‌نمایش محلی فعال‌سازی ↗</a>}</div>
+        <div><b>SOLARZED · کارت گارانتی</b><p>{label.product} · {label.type.toUpperCase()}</p><p>Serial Number</p><code dir="ltr">{label.id}</code><p>نصاب سریال را اسکن یا تایپ می‌کند ← ثبت گارانتی برای موبایل مشتری</p></div>
       </article>)}</div>
     </section>
   );

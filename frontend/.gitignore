@@ -44,4 +44,5 @@ yarn-error.log*
 next-env.d.ts
 /.next-a/
 /.next-b/
+/.next-sn/
 /.next-slot

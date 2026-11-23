@@ -430,15 +430,30 @@ namespace Solarzed.Api.Migrations
                         .HasMaxLength(200)
                         .HasColumnType("nvarchar(200)");
 
+                    b.Property<int>("Partner")
+                        .HasColumnType("int");
+
+                    b.Property<DateTime?>("PartnerAppliedAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<DateTime?>("PartnerReviewedAt")
+                        .HasColumnType("datetime2");
+
                     b.Property<string>("Phone")
                         .HasMaxLength(30)
                         .HasColumnType("nvarchar(30)");
+
+                    b.Property<string>("ShopName")
+                        .HasMaxLength(200)
+                        .HasColumnType("nvarchar(200)");
 
                     b.HasKey("Id");
 
                     b.HasIndex("Email")
                         .IsUnique()
                         .HasFilter("[Email] IS NOT NULL");
+
+                    b.HasIndex("Partner");
 
                     b.HasIndex("Phone")
                         .IsUnique()
@@ -801,6 +816,51 @@ namespace Solarzed.Api.Migrations
                     b.ToTable("WarrantyClaims");
                 });
 
+            modelBuilder.Entity("Solarzed.Api.Domain.WarrantyPhoto", b =>
+                {
+                    b.Property<long>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("bigint");
+
+                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<long>("Id"));
+
+                    b.Property<string>("ContentType")
+                        .IsRequired()
+                        .HasMaxLength(40)
+                        .HasColumnType("nvarchar(40)");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<byte[]>("Data")
+                        .IsRequired()
+                        .HasColumnType("varbinary(max)");
+
+                    b.Property<string>("Kind")
+                        .IsRequired()
+                        .HasMaxLength(20)
+                        .HasColumnType("nvarchar(20)");
+
+                    b.Property<int>("SizeBytes")
+                        .HasColumnType("int");
+
+                    b.Property<string>("UploadedBy")
+                        .IsRequired()
+                        .HasMaxLength(30)
+                        .HasColumnType("nvarchar(30)");
+
+                    b.Property<string>("WarrantyCode")
+                        .IsRequired()
+                        .HasMaxLength(32)
+                        .HasColumnType("nvarchar(32)");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("WarrantyCode");
+
+                    b.ToTable("WarrantyPhotos");
+                });
+
             modelBuilder.Entity("Solarzed.Api.Domain.WarrantyRegistration", b =>
                 {
                     b.Property<string>("Code")
@@ -810,6 +870,17 @@ namespace Solarzed.Api.Migrations
                     b.Property<string>("AreasJson")
                         .IsRequired()
                         .HasColumnType("nvarchar(max)");
+
+                    b.Property<string>("CardKey")
+                        .HasMaxLength(16)
+                        .HasColumnType("nvarchar(16)");
+
+                    b.Property<DateTime?>("CardSentAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<string>("Country")
+                        .HasMaxLength(100)
+                        .HasColumnType("nvarchar(100)");
 
                     b.Property<DateTime>("CreatedAt")
                         .HasColumnType("datetime2");
@@ -836,6 +907,10 @@ namespace Solarzed.Api.Migrations
                         .IsRequired()
                         .HasMaxLength(200)
                         .HasColumnType("nvarchar(200)");
+
+                    b.Property<string>("InstallerPhone")
+                        .HasMaxLength(30)
+                        .HasColumnType("nvarchar(30)");
 
                     b.Property<string>("InvoiceNumber")
                         .IsRequired()
@@ -904,6 +979,8 @@ namespace Solarzed.Api.Migrations
 
                     b.HasKey("Code");
 
+                    b.HasIndex("InstallerPhone");
+
                     b.HasIndex("Phone");
 
                     b.HasIndex("Vin");
@@ -915,6 +992,8 @@ namespace Solarzed.Api.Migrations
                     b.HasIndex("FilmSerial", "Vin")
                         .IsUnique()
                         .HasFilter("[UsedLengthM] IS NOT NULL");
+
+                    b.HasIndex("Status", "CreatedAt");
 
                     b.ToTable("WarrantyRegistrations");
                 });
@@ -980,6 +1059,15 @@ namespace Solarzed.Api.Migrations
                         .WithMany()
                         .HasForeignKey("WarrantyCode")
                         .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+                });
+
+            modelBuilder.Entity("Solarzed.Api.Domain.WarrantyPhoto", b =>
+                {
+                    b.HasOne("Solarzed.Api.Domain.WarrantyRegistration", null)
+                        .WithMany()
+                        .HasForeignKey("WarrantyCode")
+                        .OnDelete(DeleteBehavior.Cascade)
                         .IsRequired();
                 });
 

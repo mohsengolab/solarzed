@@ -20,6 +20,7 @@ public class AppDbContext(DbContextOptions<AppDbContext> options) : DbContext(op
     public DbSet<LoginChallenge> LoginChallenges => Set<LoginChallenge>();
     public DbSet<Ticket> Tickets => Set<Ticket>();
     public DbSet<TicketReply> TicketReplies => Set<TicketReply>();
+    public DbSet<WarrantyPhoto> WarrantyPhotos => Set<WarrantyPhoto>();
 
     // Every timestamp is written as DateTime.UtcNow, but SQL Server's datetime2 has no time zone, so values come back
     // as Kind=Unspecified and serialize without "Z". Browsers then read them as local time (3.5 h off in Tehran).
@@ -51,6 +52,11 @@ public class AppDbContext(DbContextOptions<AppDbContext> options) : DbContext(op
         mb.Entity<BoxLabel>().HasIndex(x => x.CardCode).IsUnique().HasFilter("[CardCode] IS NOT NULL");
         mb.Entity<BoxTransfer>().HasIndex(x => new { x.FromPhone, x.At });
         mb.Entity<PortalUser>().HasIndex(x => x.Phone).IsUnique();
+        mb.Entity<PortalUser>().HasIndex(x => x.Partner);
+        mb.Entity<WarrantyPhoto>().HasOne<WarrantyRegistration>().WithMany().HasForeignKey(x => x.WarrantyCode).OnDelete(DeleteBehavior.Cascade);
+        mb.Entity<WarrantyPhoto>().HasIndex(x => x.WarrantyCode);
+        mb.Entity<WarrantyRegistration>().HasIndex(w => w.InstallerPhone);
+        mb.Entity<WarrantyRegistration>().HasIndex(w => new { w.Status, w.CreatedAt });
         mb.Entity<PortalUser>().HasIndex(x => x.Email).IsUnique().HasFilter("[Email] IS NOT NULL");
         mb.Entity<LoginChallenge>().HasIndex(x => new { x.Phone, x.CreatedAt });
         mb.Entity<LoginChallenge>().HasIndex(x => new { x.Email, x.CreatedAt });

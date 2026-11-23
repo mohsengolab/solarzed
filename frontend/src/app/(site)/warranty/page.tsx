@@ -2,7 +2,8 @@
 
 import { useState, useEffect, FormEvent } from "react";
 import Link from "next/link";
-import { lookupWarranty, WarrantyCheck } from "@/lib/api";
+import { lookupWarranty, lookupByVinAndMobile, WarrantyCheck, WarrantyCard } from "@/lib/api";
+import GoldCard from "@/components/GoldCard";
 import styles from "./warranty.module.css";
 
 function CertificateCard({ w }: { w: WarrantyCheck }) {
@@ -49,16 +50,30 @@ export default function WarrantyPage() {
   const [records, setRecords] = useState<WarrantyCheck[] | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  // "owner": VIN + the mobile the installer registered the warranty to → the full gold card.
+  const [mode, setMode] = useState<"code" | "owner">("owner");
+  const [vin, setVin] = useState("");
+  const [mobile, setMobile] = useState("");
+  const [cards, setCards] = useState<WarrantyCard[] | null>(null);
+
+  async function ownerLookup(e: FormEvent) {
+    e.preventDefault();
+    setLoading(true); setError(null); setCards(null);
+    try { setCards((await lookupByVinAndMobile(vin.trim(), mobile.trim())).cards); }
+    catch (ex: unknown) { setError(ex instanceof Error ? ex.message : "Lookup failed"); }
+    finally { setLoading(false); }
+  }
 
   // Deep-link support: ?q=... or ?code=... or ?vin=...
   useEffect(() => {
     if (typeof window === "undefined") return;
     const params = new URLSearchParams(window.location.search);
     const val = params.get("q") ?? params.get("code") ?? params.get("vin");
-    if (val) {
+    if (val) Promise.resolve().then(() => {
+      setMode("code");
       setQ(val);
       doLookup(val);
-    }
+    });
   }, []);
 
   async function doLookup(value: string) {
@@ -114,7 +129,29 @@ export default function WarrantyPage() {
           <h1>WARRANTY INQUIRY</h1>
           <p className={styles.sub}>Window film and paint protection film</p>
 
-          <form onSubmit={onSubmit} className={styles.form}>
+          <div className={styles.tabs} role="tablist">
+            <button type="button" role="tab" aria-selected={mode === "owner"} onClick={() => { setMode("owner"); setError(null); }}>VIN + mobile</button>
+            <button type="button" role="tab" aria-selected={mode === "code"} onClick={() => { setMode("code"); setError(null); }}>Warranty number</button>
+          </div>
+
+          {mode === "owner" && <form onSubmit={ownerLookup} className={styles.form}>
+            <label htmlFor="inquiry-vin" className="visually-hidden">VIN</label>
+            <input id="inquiry-vin" value={vin} onChange={e => setVin(e.target.value.toUpperCase())} required minLength={17} maxLength={20}
+              autoComplete="off" spellCheck={false} autoCapitalize="characters" dir="ltr" placeholder="VIN (17 characters)" />
+            <label htmlFor="inquiry-mobile" className="visually-hidden">Mobile number</label>
+            <input id="inquiry-mobile" value={mobile} onChange={e => setMobile(e.target.value)} required maxLength={20}
+              type="tel" inputMode="tel" autoComplete="tel" dir="ltr" placeholder="Mobile number (09…)" />
+            <button type="submit" disabled={loading}>{loading ? "Searching…" : "Show my warranty card"}</button>
+            <p className={styles.helpText}>Enter your vehicle&apos;s VIN and the mobile number your installer registered the warranty to.</p>
+          </form>}
+
+          {mode === "owner" && cards !== null && <div className={`${styles.results} ${styles.cards}`} aria-live="polite">
+            {cards.length === 0
+              ? <p className={styles.noResult}>No warranty found for this VIN and mobile number.</p>
+              : cards.map(c => <GoldCard key={c.code} card={c} />)}
+          </div>}
+
+          {mode === "code" && <form onSubmit={onSubmit} className={styles.form}>
             <label htmlFor="inquiry-q" className="visually-hidden">
               Warranty number or VIN
             </label>
@@ -139,11 +176,11 @@ export default function WarrantyPage() {
             <button type="button" className={styles.sampleBtn} onClick={showSample}>
               See a sample certificate
             </button>
-          </form>
+          </form>}
 
           {error && <p className={styles.errorMsg}>{error}</p>}
 
-          {records !== null && (
+          {mode === "code" && records !== null && (
             <div className={styles.results} aria-live="polite">
               {records.length === 0 ? (
                 <p className={styles.noResult}>No warranty found for that input.</p>

@@ -13,4 +13,12 @@ public class DevConsoleSms(ILogger<DevConsoleSms> logger) : IActivationSmsSender
         logger.LogWarning("DEV SMS to {Phone}: code {Code}", phone, code);
         return Task.CompletedTask;
     }
+
+    public bool WarrantyConfigured => true;
+
+    public Task SendWarranty(string phone, string warrantyCode, string link, CancellationToken cancellationToken)
+    {
+        logger.LogWarning("DEV SMS to {Phone}: warranty {Code} is active, card {Link}", phone, warrantyCode, link);
+        return Task.CompletedTask;
+    }
 }

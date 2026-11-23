@@ -46,7 +46,7 @@ public class AdminController(AppDbContext db, IConfiguration cfg, Microsoft.AspN
         var admin = await db.AdminUsers.FirstOrDefaultAsync(x => x.Username == username);
         // Always run one bcrypt verification so timing does not reveal unknown usernames.
         var ok = BCrypt.Net.BCrypt.Verify(password, admin?.PasswordHash ?? AdminAuth.DummyHash) &&
-                 admin != null && admin.Active && (admin.Role == "admin" || admin.Role == "carton" || admin.Role == "superadmin");
+                 admin != null && admin.Active && (admin.Role == "admin" || admin.Role == "counter" || admin.Role == "superadmin");
         if (!ok)
         {
             throttle?.Fail(username);

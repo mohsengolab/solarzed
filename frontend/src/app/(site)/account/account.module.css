@@ -13,3 +13,4 @@
 .table td{padding:10px;border-bottom:1px solid rgb(var(--sz-tint) / 0.063);color:var(--sz-fg-1)}
 .table code{color:var(--sz-accent-fg);font-size:12px}
 .table a{color:var(--sz-accent-fg)}
+.badge{display:inline-block;margin-inline-start:8px;font-size:12px;font-weight:600;padding:3px 10px;border-radius:999px;background:#1fc3cf14;border:1px solid #1fc3cf55;color:var(--sz-accent-fg);vertical-align:middle}
