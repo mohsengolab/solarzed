@@ -627,13 +627,16 @@ export interface ReviewItem {
   make: string; model: string; plate: string; vin: string; installed: string; owner: string; ownerPhone: string;
   installer: string; installerPhone: string; country: string | null; usedLengthM: number | null; invoiceNumber: string;
   carton: string; product: string | null; areas: string[]; flags: string[]; reviewNote: string | null;
-  createdAt: string; reviewedAt: string | null; photos: { id: number; kind: PhotoKind; createdAt: string }[];
+  createdAt: string; reviewedAt: string | null; cardSentAt: string | null; photos: { id: number; kind: PhotoKind; createdAt: string }[];
 }
 export function adminReviewList(status: "pending" | "active" | "rejected") {
   return apiFetch<{ pending: number; items: ReviewItem[] }>(`/api/admin/review?status=${status}`);
 }
 export function adminReviewDecide(ref: string, approve: boolean, note?: string) {
   return apiFetch<{ status: string }>("/api/admin/review/decision", { method: "POST", body: JSON.stringify({ ref, approve, note }) });
+}
+export function adminReviewResendCard(ref: string) {
+  return apiFetch<{ cardSentAt: string }>("/api/admin/review/card-sms", { method: "POST", body: JSON.stringify({ ref }) });
 }
 /** Photos are fetched with the admin cookie and shown through object URLs. */
 export async function adminReviewPhoto(id: number) {

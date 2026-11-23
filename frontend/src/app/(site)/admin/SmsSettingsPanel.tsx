@@ -57,6 +57,10 @@ export default function SmsSettingsPanel() {
   }
   function savePolicy(e: FormEvent) { e.preventDefault(); run("policy", () => managementFetch<{ message: string }>("sms/policy", policy)); }
   function saveWarranty(e: FormEvent) { e.preventDefault(); run("warranty", () => managementFetch<{ message: string }>("sms/warranty", { ...warranty, pattern: warranty.pattern.trim() })); }
+  function sendUnsentCards() {
+    if (!window.confirm("پیامک کارت طلایی برای همه گارانتی‌های فعالی که تاکنون پیامک نگرفته‌اند (حداکثر ۲۰۰ مورد) ارسال شود؟")) return;
+    run("warrantyUnsent", () => managementFetch<{ message: string }>("sms/warranty/send-unsent", {}));
+  }
   function sendTest(e: FormEvent) { e.preventDefault(); run("test", () => managementFetch<{ message: string }>("sms/test", { phone: phone.trim() })); }
   function saveEmail(e: FormEvent) {
     e.preventDefault();
@@ -125,6 +129,8 @@ export default function SmsSettingsPanel() {
           <label>متغیر لینک کارت<input required maxLength={50} pattern="[A-Za-z][A-Za-z0-9_]*" value={warranty.linkVariable} onChange={e => setWarranty({ ...warranty, linkVariable: e.target.value })} dir="ltr" /></label>
           <button disabled={!!busy} className={s.btnPrimary}>{busy === "warranty" ? "در حال ذخیره…" : "ذخیره الگوی گارانتی"}</button>
           <Msg note={notes.warranty ?? null} />
+          <button type="button" disabled={!!busy || !status?.warranty?.configured} className={s.ghost} onClick={sendUnsentCards}>{busy === "warrantyUnsent" ? "در حال ارسال…" : "ارسال برای گارانتی‌های فعالِ بدون پیامک"}</button>
+          <Msg note={notes.warrantyUnsent ?? null} />
         </form>
 
         <form onSubmit={sendTest} className={`${s.card} ${s.adminForm}`}>

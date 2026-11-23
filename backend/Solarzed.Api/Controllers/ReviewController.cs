@@ -44,7 +44,7 @@ public class ReviewController(AppDbContext db, IDataProtectionProvider? protecti
                 product = w.RollId != null ? products.GetValueOrDefault(w.RollId) : null,
                 areas = JsonSerializer.Deserialize<string[]>(w.AreasJson) ?? [],
                 flags = JsonSerializer.Deserialize<string[]>(w.FlagsJson) ?? [],
-                w.ReviewNote, w.CreatedAt, w.ReviewedAt,
+                w.ReviewNote, w.CreatedAt, w.ReviewedAt, w.CardSentAt,
                 photos = photos.GetValueOrDefault(w.Code)?.Select(p => new { p.Id, p.Kind, p.CreatedAt }) ?? [],
             }),
         });
@@ -82,6 +82,24 @@ public class ReviewController(AppDbContext db, IDataProtectionProvider? protecti
         if (req.Approve && cards != null) await cards.Notify(w, ct);
         return Ok(new { status = w.Status.ToString().ToLowerInvariant() });
     }
+
+    /// <summary>Sends the gold card SMS to the owner of an approved warranty again (or for the first time).</summary>
+    [HttpPost("card-sms")]
+    public async Task<IActionResult> ResendCard([FromBody] ReviewCardRequest req, CancellationToken ct)
+    {
+        var code = Confidential.Resolve(req.Ref ?? "", User, protection);
+        var w = code == null ? null : await db.WarrantyRegistrations.FirstOrDefaultAsync(x => x.Code == code, ct);
+        if (w == null) return NotFound(new { error = "Registration not found." });
+        if (w.Status != WarrantyStatus.Active) return Conflict(new { error = "Only an approved warranty has a gold card." });
+        if (cards == null) return StatusCode(503, new { error = "SMS is not available." });
+        var error = await cards.Notify(w, ct, force: true);
+        if (error != null) return StatusCode(503, new { error });
+        AuditLog.Add(db, AuditLog.Actor(User), "warranty", w.Code, "cardSmsSent", AuditLog.Diff(("cardSentAt", null, w.CardSentAt)));
+        await db.SaveChangesAsync(ct);
+        return Ok(new { cardSentAt = w.CardSentAt });
+    }
 }
+
+public record ReviewCardRequest(string? Ref);
 
 public record ReviewDecisionRequest(string? Ref, bool Approve, string? Note);

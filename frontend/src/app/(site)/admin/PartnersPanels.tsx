@@ -2,7 +2,7 @@
 
 import { FormEvent, useCallback, useEffect, useState } from "react";
 import {
-  adminPartners, adminAddPartner, adminPartnerStatus, adminReviewList, adminReviewDecide, adminReviewPhoto,
+  adminPartners, adminAddPartner, adminPartnerStatus, adminReviewList, adminReviewDecide, adminReviewResendCard, adminReviewPhoto,
   fa, FA_DATE, PHOTO_KINDS, type PartnerRow, type ReviewItem,
 } from "@/lib/api";
 import s from "./admin.module.css";
@@ -152,6 +152,12 @@ export function ReviewPanel() {
     catch (e) { setMsg(message(e)); } finally { setBusy(null); }
   }
 
+  async function resendCard(item: ReviewItem) {
+    setBusy(item.ref); setMsg("");
+    try { await adminReviewResendCard(item.ref); setMsg(`پیامک کارت طلایی برای ${item.ownerPhone} ارسال شد.`); await load(); }
+    catch (e) { setMsg(message(e)); } finally { setBusy(null); }
+  }
+
   return <section>
     <header className={s.panelHead}><div><span className={s.eyebrow}>کانتر</span><h1>بررسی عکس‌های نصب</h1></div></header>
     <p className={s.empty}>عکس‌ها را با مشخصات خودرو مقایسه کنید: پلاک در عکس خودرو، فیلم نصب‌شده و در صورت وجود شماره شاسی. پس از تأیید، گارانتی برای موبایل مشتری فعال می‌شود. اگر عکس‌ها کافی نیست، با نوشتن دلیل برگردانید تا نصاب عکس جدید بفرستد.</p>
@@ -189,7 +195,13 @@ export function ReviewPanel() {
             <button type="button" className={s.btnPrimary} disabled={busy === item.ref || item.photos.length === 0} onClick={() => decide(item, true)}>تأیید و فعال‌سازی گارانتی</button>
             <button type="button" className={s.danger} disabled={busy === item.ref} onClick={() => decide(item, false)}>برگرداندن به نصاب</button>
           </div>
-        </div> : item.reviewNote && <p className={own.sub}>یادداشت: {item.reviewNote}{item.reviewedAt && ` · ${date(item.reviewedAt)}`}</p>}
+        </div> : <>
+          {item.reviewNote && <p className={own.sub}>یادداشت: {item.reviewNote}{item.reviewedAt && ` · ${date(item.reviewedAt)}`}</p>}
+          {item.status === "active" && <div className={s.filters}>
+            <span className={own.sub}>{item.cardSentAt ? `پیامک کارت طلایی: ارسال شد · ${date(item.cardSentAt)}` : "پیامک کارت طلایی: ارسال نشده"}</span>
+            <button type="button" className={s.btnPrimary} disabled={busy === item.ref} onClick={() => resendCard(item)}>{busy === item.ref ? "در حال ارسال…" : item.cardSentAt ? "ارسال دوباره پیامک کارت" : "ارسال پیامک کارت"}</button>
+          </div>}
+        </>}
       </article>)}</div>}
     {zoom && <div className={own.lightbox} role="dialog" aria-label="نمایش عکس" onClick={() => setZoom(null)}>
       {/* eslint-disable-next-line @next/next/no-img-element */}
