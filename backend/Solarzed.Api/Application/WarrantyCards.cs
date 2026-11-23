@@ -47,29 +47,52 @@ public class WarrantyCards(AppDbContext db, IActivationSmsSender? sms = null, Sm
     }
 
     /// <summary>
-    /// Sends the "warranty active" SMS with the gold card link, once per warranty. Best effort: a provider failure is
-    /// logged and never undoes the activation or the review.
+    /// Sends the "warranty active" SMS with the gold card link, once per warranty (<paramref name="force"/> sends it
+    /// again). Best effort: a provider failure is logged and never undoes the activation or the review.
+    /// Returns null when the SMS went out (or had already gone out), otherwise why it did not.
     /// </summary>
-    public async Task Notify(WarrantyRegistration w, CancellationToken ct = default)
+    public async Task<string?> Notify(WarrantyRegistration w, CancellationToken ct = default, bool force = false)
     {
-        if (sms == null || w.Status != WarrantyStatus.Active || w.CardSentAt != null) return;
+        if (sms == null) return "SMS is not available.";
+        if (w.Status != WarrantyStatus.Active) return "The warranty is not active yet.";
+        if (w.CardSentAt != null && !force) return null;
         EnsureKey(w);
         var link = $"{await Site()}/card#{w.Code}.{w.CardKey}";
         var phone = w.Phone;
         try { phone = PortalService.CanonicalPhone(w.Phone); } catch (ActivationError) { }
+        string? error = null;
         try
         {
-            if (!sms.WarrantyConfigured) { log?.Add(phone, "warranty-card", false, "Warranty SMS pattern is not set"); await db.SaveChangesAsync(ct); return; }
-            await sms.SendWarranty(phone, w.Code, link, ct);
-            w.CardSentAt = DateTime.UtcNow;
-            log?.Add(phone, "warranty-card", true);
+            if (!sms.WarrantyConfigured) error = "The warranty SMS pattern is not set.";
+            else
+            {
+                await sms.SendWarranty(phone, w.Code, link, ct);
+                w.CardSentAt = DateTime.UtcNow;
+            }
         }
-        catch (ActivationError ex) { log?.Add(phone, "warranty-card", false, ex.Message); }
+        catch (ActivationError ex) { error = ex.Message; }
         catch (Exception ex) when (ex is HttpRequestException or TaskCanceledException)
         {
-            log?.Add(phone, "warranty-card", false, "Provider unreachable");
+            error = "The SMS provider could not be reached.";
             logger?.LogWarning("Warranty card SMS for {Code} could not reach the provider", w.Code);
         }
+        log?.Add(phone, "warranty-card", error == null, error);
         await db.SaveChangesAsync(CancellationToken.None);
+        return error;
+    }
+
+    /// <summary>Sends the card SMS to active warranties that never got it (e.g. approved before the pattern was set).</summary>
+    public async Task<(int Sent, int Failed, string? Error)> NotifyUnsent(int limit, CancellationToken ct = default)
+    {
+        if (sms is not { WarrantyConfigured: true }) return (0, 0, "The warranty SMS pattern is not set.");
+        var rows = await db.WarrantyRegistrations.Where(w => w.Status == WarrantyStatus.Active && w.CardSentAt == null)
+            .OrderBy(w => w.ReviewedAt).Take(limit).ToListAsync(ct);
+        int sent = 0, failed = 0; string? last = null;
+        foreach (var w in rows)
+        {
+            if (ct.IsCancellationRequested) break;
+            if (await Notify(w, ct) is { } error) { failed++; last = error; } else sent++;
+        }
+        return (sent, failed, last);
     }
 }

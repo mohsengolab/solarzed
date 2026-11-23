@@ -507,6 +507,32 @@ public class BoxLabelTests
     }
 
     [Fact]
+    public async Task CardSmsCanBeSentLaterWhenThePatternWasMissing()
+    {
+        using var f = new Fixture();
+        var (label, _) = await f.Issue();
+        var partner = await Partner(f);
+        await f.Service.Activate(new ActivateBoxRequest(label.Id, Registration(), 20m, Customer, null), Installer, partner, Photos());
+        var w = await f.Db.WarrantyRegistrations.SingleAsync();
+        var cards = new WarrantyCards(f.Db, f.Sms);
+        var review = new Solarzed.Api.Controllers.ReviewController(f.Db, null, cards);
+        Assert.Equal("The warranty is not active yet.", await cards.Notify(w));
+        f.Sms.WarrantyConfigured = false;                                // approved before the pattern existed
+        Assert.IsType<Microsoft.AspNetCore.Mvc.OkObjectResult>(await review.Decide(new(Confidential.Ref(w.Code, null), true, null), default));
+        Assert.Empty(f.Sms.Warranties);
+        Assert.Equal(503, Assert.IsType<Microsoft.AspNetCore.Mvc.ObjectResult>(await review.ResendCard(new(Confidential.Ref(w.Code, null)), default)).StatusCode);
+        Assert.Equal((0, 0, "The warranty SMS pattern is not set."), await cards.NotifyUnsent(10));
+
+        f.Sms.WarrantyConfigured = true;                                 // pattern saved: the backlog goes out once
+        Assert.Equal((1, 0, (string?)null), await cards.NotifyUnsent(10));
+        Assert.Equal((0, 0, (string?)null), await cards.NotifyUnsent(10));
+        Assert.Single(f.Sms.Warranties);
+        // The counter can send it again on request.
+        Assert.IsType<Microsoft.AspNetCore.Mvc.OkObjectResult>(await review.ResendCard(new(Confidential.Ref(w.Code, null)), default));
+        Assert.Equal(2, f.Sms.Warranties.Count);
+    }
+
+    [Fact]
     public void PhotosMustBeRealImagesOfKnownKinds()
     {
         Assert.Equal(400, Assert.Throws<ActivationError>(() => PhotoRules.Validate([("vehicle", "%PDF-1.4 fake"u8.ToArray()), ("film", Jpeg())])).Status);

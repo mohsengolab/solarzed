@@ -129,6 +129,15 @@ public class SmsSettingsController(IConfiguration config, IWebHostEnvironment en
         return Ok(new { ok = true, message = pattern.Length > 0 ? "Warranty SMS pattern saved." : "Warranty SMS pattern removed; owners will not get the card SMS." });
     }
 
+    /// <summary>Sends the gold card SMS to active warranties that never got it, for example those approved before the pattern was set.</summary>
+    [HttpPost("warranty/send-unsent"), RequestSizeLimit(256)]
+    public async Task<IActionResult> SendUnsentCards([FromServices] WarrantyCards cards, CancellationToken ct)
+    {
+        var (sent, failed, error) = await cards.NotifyUnsent(200, ct);
+        if (sent == 0 && error != null) return StatusCode(503, new { error });
+        return Ok(new { sent, failed, error, message = $"{sent} card SMS sent" + (failed > 0 ? $", {failed} failed ({error})." : ".") });
+    }
+
     [HttpPost("policy")]
     [RequestSizeLimit(4096)]
     public async Task<IActionResult> SavePolicy(SmsPolicyRequest req, CancellationToken ct)
