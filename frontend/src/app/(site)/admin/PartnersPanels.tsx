@@ -2,7 +2,7 @@
 
 import { FormEvent, useCallback, useEffect, useState } from "react";
 import {
-  adminPartners, adminAddPartner, adminPartnerStatus, adminReviewList, adminReviewDecide, adminReviewResendCard, adminReviewPhoto,
+  adminPartners, adminAddPartner, adminPartnerStatus, adminReviewList, adminReviewDecide, adminReviewResendCard, adminReviewPhoto, adminWarrantyPhotos,
   fa, FA_DATE, PHOTO_KINDS, type PartnerRow, type ReviewItem,
 } from "@/lib/api";
 import s from "./admin.module.css";
@@ -125,6 +125,29 @@ function Photo({ id, alt, onOpen }: { id: number; alt: string; onOpen: (url: str
     {url ? <img src={url} alt={alt} /> : <span>{failed ? "خطا" : "…"}</span>}
     <small>{alt}</small>
   </button>;
+}
+
+/** Installation photos of one warranty, with a click-to-zoom view; used inside the warranty decision dialog. */
+export function WarrantyPhotos({ refId }: { refId: string }) {
+  const [items, setItems] = useState<{ id: number; kind: string }[] | null>(null);
+  const [error, setError] = useState("");
+  const [zoom, setZoom] = useState<string | null>(null);
+  useEffect(() => {
+    let alive = true;
+    adminWarrantyPhotos(refId).then(r => alive && setItems(r.items)).catch(e => alive && setError(message(e)));
+    return () => { alive = false; };
+  }, [refId]);
+  if (error) return <p role="alert" className={s.errorText}>{error}</p>;
+  if (!items) return <p className={s.loading}>در حال بارگذاری عکس‌ها…</p>;
+  return <>
+    {items.length === 0 ? <p className={s.empty}>عکسی برای این گارانتی ارسال نشده است.</p> :
+      <div className={own.photos}>{items.map(p => <Photo key={p.id} id={p.id} alt={KIND_FA[p.kind] ?? p.kind} onOpen={setZoom} />)}</div>}
+    {zoom && <div className={own.lightbox} style={{ zIndex: 110 }} role="dialog" aria-label="نمایش عکس" onClick={() => setZoom(null)}>
+      <button type="button" aria-label="بستن">×</button>
+      {/* eslint-disable-next-line @next/next/no-img-element */}
+      <img src={zoom} alt="" />
+    </div>}
+  </>;
 }
 
 export function ReviewPanel() {

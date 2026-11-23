@@ -386,7 +386,7 @@ export function adminWarranties<T>(query: string) {
 }
 
 export function adminDecision(code: string, status: string, note?: string) {
-  return apiFetch(`/api/admin/warranties/${encodeURIComponent(code)}/decision`, {
+  return apiFetch<{ ok: boolean; smsError?: string | null }>(`/api/admin/warranties/${encodeURIComponent(code)}/decision`, {
     method: "POST",
     body: JSON.stringify({ status, note }),
   });
@@ -637,6 +637,10 @@ export function adminReviewDecide(ref: string, approve: boolean, note?: string) 
 }
 export function adminReviewResendCard(ref: string) {
   return apiFetch<{ cardSentAt: string }>("/api/admin/review/card-sms", { method: "POST", body: JSON.stringify({ ref }) });
+}
+/** The installation photos of one registration, by its opaque reference. */
+export function adminWarrantyPhotos(ref: string) {
+  return apiFetch<{ items: { id: number; kind: PhotoKind; createdAt: string }[] }>(`/api/admin/review/photos?ref=${encodeURIComponent(ref)}`);
 }
 /** Photos are fetched with the admin cookie and shown through object URLs. */
 export async function adminReviewPhoto(id: number) {
