@@ -7,7 +7,7 @@ import {
   portalProfile, portalBind, portalBindVerify, portalTickets, portalCreateTicket, portalTicketDetail, portalTicketReply,
   BoxTransfer, HeldBox, PortalUser, PortalChannel, PortalTicket, WarrantyPublic, type AdminTicketReply,
 } from "@/lib/api";
-import PortalSignIn from "@/components/PortalSignIn";
+import PortalSignIn, { EMAIL_VERIFICATION } from "@/components/PortalSignIn";
 import SerialInput from "@/components/SerialInput";
 import InstallerSection from "./InstallerSection";
 import styles from "../activate/activate.module.css";
@@ -164,7 +164,7 @@ export default function AccountPage() {
       <span className={styles.eyebrow}>PROFILE · INSTALLER · BOXES · WARRANTIES · SUPPORT</span>
       {!checked ? <p>Loading…</p> : !user ? <>
         <h1>Sign in</h1>
-        <PortalSignIn onSignedIn={setUser} intro="Representatives and shops: sign in with the mobile number Solarzed sent your cartons to, or with your email address. Customers: sign in to see your warranties." />
+        <PortalSignIn onSignedIn={setUser} intro={`Representatives and shops: sign in with the mobile number Solarzed sent your cartons to${EMAIL_VERIFICATION ? ", or with your email address" : ""}. Customers: sign in to see your warranties.`} />
       </> : <>
         <div className={own.head}><h1>Signed in as <span dir="ltr">{display(user)}</span></h1><button type="button" className={own.ghost} onClick={logout}>Sign out</button></div>
         {error && <p role="alert" className={styles.error}>{error}</p>}
@@ -187,17 +187,17 @@ export default function AccountPage() {
           <p className={own.notice}>
             Mobile: <b dir="ltr">{user.phone ?? "not set"}</b> · Email: <b dir="ltr">{user.email ?? "not set"}</b>
           </p>
-          {(!user.phone || !user.email) && <div className={own.form}>
+          {(!user.phone || (EMAIL_VERIFICATION && !user.email)) && <div className={own.form}>
             {user.phone
               ? <p>Add your email to sign in without SMS.</p>
               : <p>Add your verified mobile to receive cartons and activate warranty cards: carton hand-over and card activation work with mobile numbers.</p>}
             {!bindChallenge && <>
               <div className={styles.grid}>
                 {!user.phone && <label>Mobile number<input type="tel" dir="ltr" maxLength={20} placeholder="09…" value={bindChannel === "sms" ? bindIdentifier : ""} onChange={e => { setBindChannel("sms"); setBindIdentifier(e.target.value); }} /></label>}
-                {!user.email && <label>Email address<input type="email" dir="ltr" maxLength={254} placeholder="you@example.com" value={bindChannel === "email" ? bindIdentifier : ""} onChange={e => { setBindChannel("email"); setBindIdentifier(e.target.value); }} /></label>}
+                {EMAIL_VERIFICATION && !user.email && <label>Email address<input type="email" dir="ltr" maxLength={254} placeholder="you@example.com" value={bindChannel === "email" ? bindIdentifier : ""} onChange={e => { setBindChannel("email"); setBindIdentifier(e.target.value); }} /></label>}
               </div>
               {!user.phone && <button type="button" className={styles.button} disabled={bindBusy || !bindIdentifier.trim() || bindChannel !== "sms"} onClick={() => startBind("sms")}>Verify mobile</button>}
-              {!user.email && <button type="button" className={own.ghost} disabled={bindBusy || !bindIdentifier.trim() || bindChannel !== "email"} onClick={() => startBind("email")}>Verify email</button>}
+              {EMAIL_VERIFICATION && !user.email && <button type="button" className={own.ghost} disabled={bindBusy || !bindIdentifier.trim() || bindChannel !== "email"} onClick={() => startBind("email")}>Verify email</button>}
             </>}
             {bindMsg && <p role={bindChallenge ? "status" : "alert"} className={own.notice}>{bindMsg}</p>}
             {bindChallenge && <form onSubmit={verifyBind} className={own.form}>

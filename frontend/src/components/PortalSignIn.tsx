@@ -4,8 +4,11 @@ import { useEffect, useState, FormEvent } from "react";
 import { portalLogin, portalSendCode, PortalChannel, PortalUser } from "@/lib/api";
 import styles from "@/app/(site)/activate/activate.module.css";
 
+/** Email codes (sign-in and adding an email) are switched off for now; the server refuses them too (Portal:EmailVerification). */
+export const EMAIL_VERIFICATION = false;
+
 /** Sign-in with mobile + SMS code or email + email code. Both use a one-time 6-digit code. */
-export default function PortalSignIn({ onSignedIn, intro, smsAvailable = true, emailAvailable = true }: {
+export default function PortalSignIn({ onSignedIn, intro, smsAvailable = true, emailAvailable = EMAIL_VERIFICATION }: {
   onSignedIn: (user: PortalUser) => void; intro?: string; smsAvailable?: boolean; emailAvailable?: boolean;
 }) {
   const [channel, setChannel] = useState<PortalChannel>("sms");
@@ -46,7 +49,7 @@ export default function PortalSignIn({ onSignedIn, intro, smsAvailable = true, e
 
   return <div>
     {intro && <p>{intro}</p>}
-    {(smsAvailable || emailAvailable) && <div className={styles.channels} role="tablist" aria-label="Sign-in channel">
+    {emailAvailable && <div className={styles.channels} role="tablist" aria-label="Sign-in channel">
       <button type="button" role="tab" aria-selected={channel === "sms"} className={channel === "sms" ? styles.channelActive : styles.channel}
         onClick={() => { setChannel("sms"); setChallenge(""); setCode(""); setError(""); }}>SMS · Mobile</button>
       {emailAvailable && <button type="button" role="tab" aria-selected={channel === "email"} className={channel === "email" ? styles.channelActive : styles.channel}
