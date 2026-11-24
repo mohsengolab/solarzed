@@ -5,7 +5,7 @@ import Link from "next/link";
 import QRCode from "qrcode";
 import {
   adminLogin, adminLogout, adminSession, adminOverview, adminWarranties, adminDecision,
-  adminRollsSearch, adminCreateRolls, adminUpdateRoll, adminDeleteRoll, adminGetSettings, adminSaveSettings,
+  adminRollsSearch, adminCreateRolls, adminUpdateRoll, adminDeleteRoll, adminRollHistory, type RollHistoryEvent, adminGetSettings, adminSaveSettings,
   adminBoxLabels, managementFetch, ADMIN_UNAUTHORIZED, fa, qs, FA_DATE,
 } from "@/lib/api";
 import styles from "./admin.module.css";
@@ -30,8 +30,9 @@ const LABELS: Record<View, string> = {
 };
 // The customer list is confidential, and user management belongs to the super administrator alone.
 const VIEWS_BY_ROLE: Record<Role, readonly View[]> = {
-  superadmin: VIEWS,
-  admin: VIEWS.filter(v => v !== "customers" && v !== "users"),
+  // Managers decide warranties (with their photos) from «گارانتی‌ها»; the photo review page is the counter's alone.
+  superadmin: VIEWS.filter(v => v !== "review"),
+  admin: VIEWS.filter(v => v !== "customers" && v !== "users" && v !== "review"),
   // Counter (کانتر): reviews installers' photos and reads carton serials; never sees warranty codes.
   counter: ["review", "labels", "account"],
 };
@@ -202,7 +203,7 @@ function AdminApp({ view, role, onNav, onLogout }: { view: View; role: Role; onN
         {view === "users"     && <UsersPanel />}
         {view === "warranties"&& <WarrantiesPanel role={role} />}
         {view === "review"    && <ReviewPanel />}
-        {view === "partners"  && <PartnersPanel onReview={() => onNav("review")} />}
+        {view === "partners"  && <PartnersPanel onReview={() => onNav("warranties")} />}
         {view === "claims"    && <ClaimsPanel />}
         {view === "tickets"   && <TicketsPanel />}
         {view === "history"   && <HistoryPanel />}
@@ -809,7 +810,24 @@ function WarrantiesPanel({ role }: { role: Role }) {
 // ── Rolls ─────────────────────────────────────────────────────────────────────
 
 type RollLocation = { kind: "warehouse" | "user" | "person"; id: number; name: string; phone?: string | null };
-type RollRow = { id: string; number: number; warehouseId?: number | null; holderUserId?: number | null; location?: RollLocation | null; rollNo?: string | null; cards: number; modelCode: string; type: string; batch: string; supplier: string; qc: string; status: string; installs: number; historyJson: string; receivedAt: string; widthCm?: number | null; lengthM?: number | null };
+type RollTransferBrief = { from: string; to: string; info?: string | null; deliveredAt?: string | null; at: string };
+/** Warranty meters left on a roll, with a bar against its full length. */
+function RemainingMeters({ r }: { r: { remainingM?: number | null; usedM?: number; lengthM?: number | null } }) {
+  if (r.remainingM == null) return <>—</>;
+  const pct = r.lengthM ? Math.max(0, Math.min(100, (r.remainingM / r.lengthM) * 100)) : null;
+  const low = pct != null && pct < 15;
+  return (
+    <span title={r.usedM ? `مصرف‌شده: ${r.usedM.toLocaleString("fa-IR")} متر` : "هنوز مصرف نشده"}>
+      <b style={low ? { color: "var(--sz-red)" } : undefined}>{r.remainingM.toLocaleString("fa-IR")}</b>
+      {r.lengthM != null && <small style={{ opacity: .7 }}> / {r.lengthM.toLocaleString("fa-IR")} متر</small>}
+      {pct != null && <span aria-hidden="true" style={{ display: "block", height: 4, marginTop: 3, borderRadius: 2, background: "rgb(128 128 128 / .2)" }}>
+        <span style={{ display: "block", height: "100%", width: `${pct}%`, borderRadius: 2, background: low ? "var(--sz-red)" : "var(--sz-accent-fg)" }} />
+      </span>}
+    </span>
+  );
+}
+
+type RollRow = { id: string; number: number; lastTransfer?: RollTransferBrief | null; warehouseId?: number | null; holderUserId?: number | null; location?: RollLocation | null; rollNo?: string | null; cards: number; modelCode: string; type: string; batch: string; supplier: string; qc: string; status: string; installs: number; historyJson: string; receivedAt: string; widthCm?: number | null; lengthM?: number | null; remainingM?: number | null; usedM?: number };
 type SpecKey = "thicknessMil" | "vlt" | "irr" | "uv" | "tser" | "warrantyYears";
 const SPEC_FIELDS: { key: SpecKey; label: string; min: number; max: number; step: number; placeholder: string }[] = [
   { key: "thicknessMil", label: "ضخامت (Mil)", min: 0.1, max: 20, step: 0.1, placeholder: "مثلاً 2" },
@@ -844,6 +862,27 @@ function QcMark({ qc }: { qc: string }) {
       </svg>{label}
     </span>
   );
+}
+
+const ROLL_EVENT: Record<RollHistoryEvent["kind"], string> = {
+  received: "دریافت در انبار", moved: "جابه‌جایی", card: "صدور کارت گارانتی", handover: "تحویل کارتن", install: "نصب روی خودرو", note: "یادداشت",
+};
+const faDateTime = (v: string) => new Date(v).toLocaleString(FA_DATE, { dateStyle: "medium", timeStyle: "short" });
+
+/** One step of a roll's journey: what happened, from where to where, and when. */
+function RollHistoryItem({ h }: { h: RollHistoryEvent }) {
+  const place = (v?: string | null) => h.kind === "handover" ? (v || "انبار") : (v || "نامشخص");
+  const route = h.kind === "moved" || h.kind === "handover" ? `${place(h.from)} ← ${place(h.to)}`
+    : h.kind === "install" ? [h.to && `نصاب: ${h.to}`, h.from && `فروشنده: ${h.from}`].filter(Boolean).join(" · ")
+    : h.kind === "received" && h.to ? `در ${h.to}` : "";
+  return <li className={styles.timelineItem} data-kind={h.kind}>
+    <div className={styles.timelineHead}><b>{ROLL_EVENT[h.kind] ?? h.kind}</b><time dateTime={h.at}>{faDateTime(h.at)}</time></div>
+    {route && <p>{route}</p>}
+    {h.detail && <p className={styles.timelineDetail}>{h.kind === "received" && "بچ: "}<bdi>{h.detail}</bdi></p>}
+    {h.installed && <p className={styles.timelineDetail}>تاریخ نصب: {new Date(h.installed).toLocaleDateString(FA_DATE)}{h.status && <> · {fa(h.status)}</>}</p>}
+    {h.deliveredAt && <p className={styles.timelineDetail}>زمان تحویل: {faDateTime(h.deliveredAt)}</p>}
+    {h.by && <p className={styles.timelineDetail}>ثبت توسط <bdi>{h.by}</bdi></p>}
+  </li>;
 }
 
 function RollsPanel({ role }: { role: Role }) {
@@ -897,12 +936,30 @@ function RollsPanel({ role }: { role: Role }) {
     managementFetch<{ items: typeof products }>("products?pageSize=200").then(r => setProducts(r.items)).catch(e => setMsg(fa(errorText(e, "بارگذاری محصولات ناموفق بود."))));
   }, []);
 
+  // A location change is a transfer: how it travelled (carrier, driver, waybill…) and when it was delivered.
+  const currentLocation = (r: RollRow) => r.holderUserId ? `user:${r.holderUserId}` : r.warehouseId ? `warehouse:${r.warehouseId}` : "";
+  const [transferInfo, setTransferInfo] = useState("");
+  const [deliveredAt, setDeliveredAt] = useState("");
+  const [historyOf, setHistoryOf] = useState<RollRow | null>(null);
+  const [historyItems, setHistoryItems] = useState<RollHistoryEvent[] | null>(null);
+  const [historyError, setHistoryError] = useState("");
+  function openHistory(r: RollRow) {
+    setHistoryOf(r); setHistoryItems(null); setHistoryError("");
+    adminRollHistory(r.id || String(r.number)).then(x => setHistoryItems(x.items))
+      .catch(ex => { setHistoryItems([]); setHistoryError(fa(errorText(ex, "تاریخچه بارگذاری نشد."))); });
+  }
+  const moving = !!edit && editLocation !== currentLocation(edit);
+  function openEdit(r: RollRow) {
+    setEdit(r); setEditLocation(currentLocation(r)); setNote(""); setMsg(""); setTransferInfo(""); setDeliveredAt("");
+  }
+
   async function updateRoll(e: FormEvent) {
     e.preventDefault(); if (!edit) return; setSaving(true); setMsg("");
     try {
       await adminUpdateRoll(edit.id || String(edit.number), {
         qc: edit.qc, status: edit.status, note,
         batch: edit.batch, supplier: edit.supplier, widthCm: edit.widthCm ?? null, lengthM: edit.lengthM ?? null, rollNo: edit.rollNo ?? "", location: editLocation,
+        ...(moving ? { transferInfo, deliveredAt: deliveredAt ? new Date(deliveredAt).toISOString() : null } : {}),
       });
       list.reload(); setEdit(null); setMsg("موجودی به‌روزرسانی شد.");
     }
@@ -944,7 +1001,7 @@ function RollsPanel({ role }: { role: Role }) {
     try {
       const all = await adminRollsSearch<RollRow>(list.exportQuery);
       downloadCsv("rolls", all.items, [["number", "#"], ["id", "شناسه رول"], ["rollNo", "Roll No کارتن"], ["modelCode", "مدل"], ["type", "نوع"], ["batch", "Batch"], ["supplier", "تأمین‌کننده"],
-        ["widthCm", "عرض (cm)"], ["lengthM", "طول (m)"], ["qc", "QC"], ["status", "وضعیت"], ["installs", "نصب‌ها"], ["receivedAt", "دریافت"]]);
+        ["widthCm", "عرض (cm)"], ["lengthM", "طول (m)"], ["remainingM", "متراژ مانده (m)"], ["usedM", "مصرف‌شده (m)"], ["qc", "QC"], ["status", "وضعیت"], ["installs", "نصب‌ها"], ["receivedAt", "دریافت"]]);
     } catch (e) { setMsg(fa(errorText(e, "خروجی ناموفق بود."))); }
   }
 
@@ -1041,7 +1098,7 @@ function RollsPanel({ role }: { role: Role }) {
       <div className={`${styles.card} ${styles.rollsCard}`}>
         <table className={`${styles.table} ${styles.tableCompact} ${seesCodes ? "" : styles.noCodes} ${list.loading ? styles.tableBusy : ""}`}>
           <thead><tr><SortTh column="number" label="#" {...sortProps} /><th>QR</th><SortTh column="id" label="شناسه رول" {...sortProps} /><SortTh column="rollNo" label="Roll No" {...sortProps} /><SortTh column="modelCode" label="مدل" {...sortProps} /><SortTh column="type" label="نوع" {...sortProps} />
-            <SortTh column="batch" label="Batch" {...sortProps} /><th>ابعاد</th><SortTh column="qc" label="QC" {...sortProps} />
+            <SortTh column="batch" label="Batch" {...sortProps} /><th>ابعاد</th><th>متراژ مانده</th><SortTh column="qc" label="QC" {...sortProps} />
             <th>لوکیشن</th><th>نصب‌ها</th><SortTh column="receivedAt" label="دریافت" {...sortProps} /><th>عملیات</th></tr></thead>
           <tbody>
             {list.items.map(r => (
@@ -1057,12 +1114,17 @@ function RollsPanel({ role }: { role: Role }) {
                 <td>{r.type}</td>
                 <td>{r.batch}</td>
                 <td dir="ltr" style={{ whiteSpace: "nowrap" }}>{r.widthCm != null && r.lengthM != null ? `${r.widthCm}×${r.lengthM}` : "—"}</td>
+                <td style={{ whiteSpace: "nowrap" }}><RemainingMeters r={r} /></td>
                 <td><QcMark qc={r.qc} /></td>
-                <td><LocationCell loc={r.location} />{r.status !== "instock" && <small style={{ display: "block", opacity: .7 }}>{fa(r.status)}</small>}</td>
+                <td><LocationCell loc={r.location} />{r.lastTransfer?.deliveredAt && <small style={{ display: "block", opacity: .7 }} title={`${r.lastTransfer.from || "نامشخص"} ← ${r.lastTransfer.to || "نامشخص"}${r.lastTransfer.info ? ` · ${r.lastTransfer.info}` : ""}`}>
+                  تحویل {new Date(r.lastTransfer.deliveredAt).toLocaleString(FA_DATE, { dateStyle: "short", timeStyle: "short" })}</small>}{r.status !== "instock" && <small style={{ display: "block", opacity: .7 }}>{fa(r.status)}</small>}</td>
                 <td>{r.installs.toLocaleString("fa-IR")}</td>
                 <td>{new Date(r.receivedAt).toLocaleDateString(FA_DATE)}</td>
                 <td><div className={styles.rowActions}>
-                  <button type="button" className={`${styles.ghost} ${styles.iconBtn}`} title="مدیریت" aria-label={`مدیریت رول ${r.number}`} onClick={() => { setEdit(r); setEditLocation(r.holderUserId ? `user:${r.holderUserId}` : r.warehouseId ? `warehouse:${r.warehouseId}` : ""); setNote(""); setMsg(""); }}>
+                  <button type="button" className={`${styles.ghost} ${styles.iconBtn}`} title="تاریخچه" aria-label={`تاریخچه رول ${r.number}`} onClick={() => openHistory(r)}>
+                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><path d="M3 12a9 9 0 1 0 3-6.7L3 8"/><path d="M3 3v5h5"/><path d="M12 7v5l3 2"/></svg>
+                  </button>
+                  <button type="button" className={`${styles.ghost} ${styles.iconBtn}`} title="مدیریت" aria-label={`مدیریت رول ${r.number}`} onClick={() => openEdit(r)}>
                     <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><path d="M12 20h9"/><path d="M16.5 3.5a2.1 2.1 0 0 1 3 3L7 19l-4 1 1-4z"/></svg>
                   </button>
                   {seesCodes && <button type="button" className={`${styles.danger} ${styles.iconBtn}`} title="حذف" aria-label={`حذف رول ${r.id}`} onClick={() => deleteRoll(r.id)}>
@@ -1084,6 +1146,11 @@ function RollsPanel({ role }: { role: Role }) {
           <optgroup label="انبارها">{locations.warehouses.map(w => <option key={w.id} value={`warehouse:${w.id}`}>{w.name}</option>)}</optgroup>
           <optgroup label="دست کاربر">{locations.users.map(u => <option key={u.id} value={`user:${u.id}`}>{u.name}</option>)}</optgroup>
         </select></label>
+        {moving && <fieldset className={styles.row2} style={{ border: "1px dashed var(--sz-teal)", borderRadius: 8, padding: 10, margin: 0, minWidth: 0 }}>
+          <legend style={{ padding: "0 6px", fontSize: 13 }}>اطلاعات جابه‌جایی</legend>
+          <label>نحوه ارسال (باربری، راننده، شماره بارنامه…)<input maxLength={500} value={transferInfo} onChange={e => setTransferInfo(e.target.value)} placeholder="مثلاً باربری البرز، بارنامه ۱۲۳۴" /></label>
+          <label>زمان تحویل<input type="datetime-local" dir="ltr" value={deliveredAt} onChange={e => setDeliveredAt(e.target.value)} /></label>
+        </fieldset>}
         <label>وضعیت انبار<select value={edit.status} onChange={e => setEdit({ ...edit, status: e.target.value })}>{["instock", "shipped", "consumed", "void"].map(v => <option key={v} value={v}>{fa(v)}</option>)}</select></label>
         {!seesCodes && <p style={{ margin: 0, fontSize: 13, opacity: .75 }}>شما فقط لوکیشن و وضعیت را تغییر می‌دهید.</p>}
         <fieldset disabled={!seesCodes} className={styles.row2} style={{ border: 0, padding: 0, margin: 0, minWidth: 0 }}>
@@ -1102,8 +1169,18 @@ function RollsPanel({ role }: { role: Role }) {
           {seesCodes && <button type="button" className={styles.danger} disabled={saving} onClick={() => { deleteRoll(edit.id); setEdit(null); }}>حذف رول</button>}
         </div>
         {msg && <p role="alert">{msg}</p>}
-        <h3>تاریخچه</h3><div className={styles.history}>{(JSON.parse(edit.historyJson || "[]") as { at: string; action: string; note: string }[]).map((h, i) => <p key={i}>{h.at} · {h.action} · {h.note}</p>)}</div>
       </form></div>}
+      {historyOf && <div className={styles.dialog} role="dialog" aria-modal="true" aria-label={`تاریخچه رول ${historyOf.number}`} onClick={e => { if (e.target === e.currentTarget) setHistoryOf(null); }}
+        onKeyDown={e => { if (e.key === "Escape") setHistoryOf(null); }}>
+        <div className={styles.dialogInner}>
+          <h2>تاریخچه رول {historyOf.number.toLocaleString("fa-IR")}</h2>
+          <button type="button" className={styles.dialogClose} aria-label="بستن تاریخچه" onClick={() => setHistoryOf(null)} autoFocus>×</button>
+          <p style={{ margin: "0 0 12px", opacity: .75 }}><span dir="ltr">{historyOf.rollNo || historyOf.modelCode}</span> · {historyOf.batch}</p>
+          {historyError && <p role="alert" className={styles.errorText}>{historyError}</p>}
+          {historyItems === null ? <p className={styles.empty}>در حال بارگذاری…</p> : !historyItems.length ? (!historyError && <p className={styles.empty}>رویدادی ثبت نشده است.</p>) :
+            <ol className={styles.timeline}>{historyItems.map((h, i) => <RollHistoryItem key={i} h={h} />)}</ol>}
+        </div>
+      </div>}
       {qrView && <div className={styles.dialog} role="dialog" aria-modal="true" aria-label={`QR رول ${qrView.roll.id}`} onClick={e => { if (e.target === e.currentTarget) setQrView(null); }}
         onKeyDown={e => { if (e.key === "Escape") setQrView(null); }}>
         <div className={`${styles.dialogInner} ${styles.qrDialog}`} style={{ textAlign: "center" }}>

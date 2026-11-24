@@ -21,6 +21,7 @@ public class AppDbContext(DbContextOptions<AppDbContext> options) : DbContext(op
     public DbSet<Ticket> Tickets => Set<Ticket>();
     public DbSet<TicketReply> TicketReplies => Set<TicketReply>();
     public DbSet<WarrantyPhoto> WarrantyPhotos => Set<WarrantyPhoto>();
+    public DbSet<RollTransfer> RollTransfers => Set<RollTransfer>();
 
     // Every timestamp is written as DateTime.UtcNow, but SQL Server's datetime2 has no time zone, so values come back
     // as Kind=Unspecified and serialize without "Z". Browsers then read them as local time (3.5 h off in Tehran).
@@ -43,6 +44,8 @@ public class AppDbContext(DbContextOptions<AppDbContext> options) : DbContext(op
         mb.Entity<Roll>().HasOne<Warehouse>().WithMany().HasForeignKey(x => x.WarehouseId).OnDelete(DeleteBehavior.Restrict);
         mb.Entity<Roll>().HasOne<AdminUser>().WithMany().HasForeignKey(x => x.HolderUserId).OnDelete(DeleteBehavior.Restrict);
         mb.Entity<Warehouse>().HasIndex(x => x.Name).IsUnique();
+        mb.Entity<RollTransfer>().HasOne<Roll>().WithMany().HasForeignKey(x => x.RollId).OnDelete(DeleteBehavior.Cascade);
+        mb.Entity<RollTransfer>().HasIndex(x => new { x.RollId, x.At });
         mb.Entity<BoxLabel>().HasIndex(x => x.TokenHash).IsUnique();
         mb.Entity<BoxLabel>().HasIndex(x => x.WarrantyCode).IsUnique().HasFilter("[WarrantyCode] IS NOT NULL");
         mb.Entity<BoxLabel>().HasOne<Roll>().WithMany().HasForeignKey(x => x.RollId).OnDelete(DeleteBehavior.Restrict);

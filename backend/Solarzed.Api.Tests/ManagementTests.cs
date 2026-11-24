@@ -250,6 +250,55 @@ public class ManagementTests
     }
 
     [Fact]
+    public async Task MovingARollBetweenWarehousesRecordsTheTransfer()
+    {
+        using var db = Database();
+        db.Warehouses.AddRange(new Warehouse { Id = 1, Name = "Tehran" }, new Warehouse { Id = 2, Name = "Shiraz" });
+        db.Rolls.Add(new Roll { Id = "R", Number = 1, ModelCode = "TEST", Batch = "B", Supplier = "ABC", WarehouseId = 1 });
+        await db.SaveChangesAsync();
+        var admin = new AdminController(db, new ConfigurationBuilder().Build());
+        var delivered = new DateTime(2026, 11, 20, 9, 30, 0, DateTimeKind.Utc);
+
+        Assert.IsType<BadRequestObjectResult>(await admin.UpdateRoll("R", new(null, null, null, Location: "warehouse:2", TransferInfo: new string('x', 501))));
+        Assert.IsType<OkObjectResult>(await admin.UpdateRoll("R", new(null, null, null, Location: "warehouse:2", TransferInfo: " Truck 12, driver Ali ", DeliveredAt: delivered)));
+        var t = await db.RollTransfers.SingleAsync();
+        Assert.Equal(("R", "Tehran", "Shiraz", "Truck 12, driver Ali", delivered), (t.RollId, t.From, t.To, t.Info, t.DeliveredAt!.Value));
+        Assert.Equal(2, (await db.Rolls.SingleAsync()).WarehouseId);
+
+        // Saving without a location change records no transfer.
+        Assert.IsType<OkObjectResult>(await admin.UpdateRoll("R", new(null, null, "note", Location: "warehouse:2", TransferInfo: "ignored")));
+        Assert.Equal(1, await db.RollTransfers.CountAsync());
+        var list = Assert.IsType<OkObjectResult>(await admin.RollHistory("1", default));
+        Assert.Contains("Shiraz", System.Text.Json.JsonSerializer.Serialize(list.Value));
+    }
+
+    [Fact]
+    public async Task RollHistoryTellsTheWholeJourneyNewestFirst()
+    {
+        using var db = Database();
+        db.Warehouses.Add(new Warehouse { Id = 1, Name = "Tehran" });
+        var t0 = new DateTime(2026, 11, 1, 8, 0, 0, DateTimeKind.Utc);
+        db.Rolls.Add(new Roll { Id = "R", Number = 1, ModelCode = "TEST", Batch = "B", Supplier = "ABC", WarehouseId = 1, ReceivedAt = t0,
+            HistoryJson = """[{"at":"2026-11-02T08:00:00Z","action":"updated","note":"status=instock qc=approved"},{"at":"2026-11-03T08:00:00Z","action":"updated","note":"damaged corner"}]""" });
+        db.BoxLabels.Add(new BoxLabel { Id = "CPT1", TokenHash = "h", ProtectedToken = "p", RollId = "R", Product = "TEST", CreatedAt = t0.AddDays(4) });
+        db.BoxTransfers.AddRange(
+            new BoxTransfer { LabelId = "CPT1", BatchId = "B1", ToHolder = "Rep Ali", ToPhone = "09120000000", Actor = "admin", At = t0.AddDays(5) },
+            new BoxTransfer { LabelId = "CPT1", BatchId = "ACT-1", FromHolder = "Rep Ali", ToHolder = "Shop", Actor = "installer", At = t0.AddDays(6) });
+        db.WarrantyRegistrations.Add(new WarrantyRegistration { Code = "W1", Vin = "V", Owner = "O", Phone = "0912", Plate = "P", Make = "Kia", Model = "Rio",
+            FilmSerial = "CPT1", InvoiceNumber = "I", SellerName = "Rep Ali", SellerPhone = "09120000000", Installer = "Shop", InstallerPhone = "09130000000",
+            RollId = "R", Installed = new DateOnly(2026, 11, 7), CreatedAt = t0.AddDays(6) });
+        await db.SaveChangesAsync();
+        var admin = new AdminController(db, new ConfigurationBuilder().Build());
+
+        var ok = Assert.IsType<OkObjectResult>(await admin.RollHistory("R", default));
+        var items = System.Text.Json.JsonSerializer.SerializeToElement(ok.Value).GetProperty("items").EnumerateArray().ToList();
+        Assert.Equal(["install", "handover", "card", "note", "received"], items.Select(i => i.GetProperty("Kind").GetString()));
+        Assert.Equal("Rep Ali (09120000000)", items[1].GetProperty("To").GetString());
+        Assert.Equal("Tehran", items[4].GetProperty("To").GetString());
+        Assert.IsType<NotFoundResult>(await admin.RollHistory("missing", default));
+    }
+
+    [Fact]
     public async Task ReceivingRollNosCreatesOneRollPerCartonAndKeepsThemUnique()
     {
         using var db = Database(); var admin = new AdminController(db, new ConfigurationBuilder().Build());

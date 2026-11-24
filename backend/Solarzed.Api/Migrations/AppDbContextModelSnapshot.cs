@@ -587,6 +587,51 @@ namespace Solarzed.Api.Migrations
                     b.ToTable("Rolls");
                 });
 
+            modelBuilder.Entity("Solarzed.Api.Domain.RollTransfer", b =>
+                {
+                    b.Property<long>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("bigint");
+
+                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<long>("Id"));
+
+                    b.Property<DateTime>("At")
+                        .HasColumnType("datetime2");
+
+                    b.Property<string>("By")
+                        .IsRequired()
+                        .HasMaxLength(100)
+                        .HasColumnType("nvarchar(100)");
+
+                    b.Property<DateTime?>("DeliveredAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<string>("From")
+                        .IsRequired()
+                        .HasMaxLength(150)
+                        .HasColumnType("nvarchar(150)");
+
+                    b.Property<string>("Info")
+                        .HasMaxLength(500)
+                        .HasColumnType("nvarchar(500)");
+
+                    b.Property<string>("RollId")
+                        .IsRequired()
+                        .HasMaxLength(60)
+                        .HasColumnType("nvarchar(60)");
+
+                    b.Property<string>("To")
+                        .IsRequired()
+                        .HasMaxLength(150)
+                        .HasColumnType("nvarchar(150)");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("RollId", "At");
+
+                    b.ToTable("RollTransfers");
+                });
+
             modelBuilder.Entity("Solarzed.Api.Domain.Ticket", b =>
                 {
                     b.Property<long>("Id")
@@ -1040,6 +1085,15 @@ namespace Solarzed.Api.Migrations
                         .WithMany()
                         .HasForeignKey("WarehouseId")
                         .OnDelete(DeleteBehavior.Restrict);
+                });
+
+            modelBuilder.Entity("Solarzed.Api.Domain.RollTransfer", b =>
+                {
+                    b.HasOne("Solarzed.Api.Domain.Roll", null)
+                        .WithMany()
+                        .HasForeignKey("RollId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
                 });
 
             modelBuilder.Entity("Solarzed.Api.Domain.TicketReply", b =>
