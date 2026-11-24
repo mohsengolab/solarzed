@@ -418,10 +418,22 @@
 /* The QR window sizes its picture to the screen height, so it never needs a scrollbar. */
 .qrDialog { padding: 28px; gap: 10px; overflow: hidden; }
 .qrDialog h2 { font-size: 17px; overflow-wrap: anywhere; padding-inline: 36px; }
+.qrDialog .dialogClose { margin-block: -10px -32px; margin-inline-end: -10px; }
+/* Keep the title clear of the close button (on the left in RTL). */
+.dialogInner > h2 { padding-inline-end: 40px; }
+.dialogInner > h2[dir="ltr"] { padding-inline-start: 40px; }
+/* Sticky instead of absolute, so the × stays in the corner while the dialog scrolls.
+   order:-1 puts it first whatever its place in the markup; the negative margins keep it
+   18px from the edge (the dialog has 36px padding) without taking up a row of its own. */
 .dialogClose {
-  position: absolute;
-  top: 18px;
-  inset-inline-end: 18px; /* RTL: will be on the left visual side */
+  position: sticky;
+  top: -18px;
+  order: -1;
+  align-self: flex-end; /* RTL: the left side */
+  flex: none;
+  z-index: 2;
+  margin-block: -18px -30px;
+  margin-inline-end: -18px;
   background: rgb(var(--sz-tint) / 0.08);
   border: none;
   border-radius: 8px;

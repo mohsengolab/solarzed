@@ -3,6 +3,7 @@
 import { FormEvent, useCallback, useEffect, useState } from "react";
 import { managementFetch, FA_DATE, type Paged } from "@/lib/api";
 import s from "./admin.module.css";
+import { backdropProps } from "@/components/backdrop";
 import { usePaged, SortTh, Pager, FilterBar, countActive, errorText } from "./AdminKit";
 
 // ── Labels (policy §4–§6) ─────────────────────────────────────────────────────
@@ -172,7 +173,7 @@ function ClaimDialog({ id, onClose, onSaved }: { id: string; onClose: () => void
   const stageOrder = Object.keys(STAGES);
   const goingBack = c ? stageOrder.indexOf(form.stage) < stageOrder.indexOf(c.stage) : false;
 
-  return <div className={s.dialog} role="dialog" aria-modal="true" aria-label="پرونده ادعا" onKeyDown={e => { if (e.key === "Escape") onClose(); }}>
+  return <div className={s.dialog} role="dialog" aria-modal="true" aria-label="پرونده ادعا" {...backdropProps(onClose)}>
     <div className={s.dialogInner}>
       <button type="button" onClick={onClose} className={s.dialogClose} aria-label="بستن">×</button>
       <h2>پرونده ادعا — <span dir="ltr">{id}</span></h2>

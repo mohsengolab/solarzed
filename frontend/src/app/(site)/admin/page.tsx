@@ -9,6 +9,7 @@ import {
   adminBoxLabels, managementFetch, ADMIN_UNAUTHORIZED, fa, qs, FA_DATE,
 } from "@/lib/api";
 import styles from "./admin.module.css";
+import { backdropProps } from "@/components/backdrop";
 import labelsStyle from "./labels.module.css";
 import BoxLabelsPanel from "./BoxLabelsPanel";
 import { printQrLabels, printQrImage } from "./qrPrint";
@@ -742,7 +743,7 @@ function WarrantiesPanel({ role }: { role: Role }) {
       ))}</div>
 
       {selected && (
-        <div className={styles.dialog} role="dialog" aria-modal="true" aria-label="تصمیم گارانتی" onKeyDown={e => { if (e.key === "Escape") setSelected(null); }}>
+        <div className={styles.dialog} role="dialog" aria-modal="true" aria-label="تصمیم گارانتی" {...backdropProps(() => setSelected(null))}>
           <div className={styles.dialogInner}>
             <button type="button" onClick={() => setSelected(null)} className={styles.dialogClose} aria-label="بستن">×</button>
             <header className={styles.wHead}>
@@ -1138,7 +1139,7 @@ function RollsPanel({ role }: { role: Role }) {
         {!list.loading && !list.items.length && <p className={styles.empty}>رولی با این فیلترها یافت نشد.</p>}
         <Pager page={list.page} pageSize={list.pageSize} total={list.total} loading={list.loading} onPage={list.setPage} />
       </div>
-      {edit && <div className={styles.dialog} role="dialog" aria-modal="true" aria-label="مدیریت موجودی"><form className={`${styles.dialogInner} ${styles.adminForm}`} onSubmit={updateRoll}>
+      {edit && <div className={styles.dialog} role="dialog" aria-modal="true" aria-label="مدیریت موجودی" {...backdropProps(() => setEdit(null))}><form className={`${styles.dialogInner} ${styles.adminForm}`} onSubmit={updateRoll}>
         <h2 dir="ltr">#{edit.number}{seesCodes && ` · ${edit.id}`}</h2><button type="button" className={styles.dialogClose} aria-label="بستن موجودی" onClick={() => setEdit(null)}>×</button>
         <label>کنترل کیفیت<select disabled={!seesCodes} value={edit.qc} onChange={e => setEdit({ ...edit, qc: e.target.value })}>{["pending", "approved", "rejected"].map(v => <option key={v} value={v}>{fa(v)}</option>)}</select></label>
         <label>لوکیشن (کجاست)<select value={editLocation} onChange={e => setEditLocation(e.target.value)}>
@@ -1154,8 +1155,10 @@ function RollsPanel({ role }: { role: Role }) {
         <label>وضعیت انبار<select value={edit.status} onChange={e => setEdit({ ...edit, status: e.target.value })}>{["instock", "shipped", "consumed", "void"].map(v => <option key={v} value={v}>{fa(v)}</option>)}</select></label>
         {!seesCodes && <p style={{ margin: 0, fontSize: 13, opacity: .75 }}>شما فقط لوکیشن و وضعیت را تغییر می‌دهید.</p>}
         <fieldset disabled={!seesCodes} className={styles.row2} style={{ border: 0, padding: 0, margin: 0, minWidth: 0 }}>
-          <label>Roll No کارتن (بارکد کارخانه){edit.cards > 0 && " — کارت صادر شده، قابل تغییر نیست"}<input maxLength={32} value={edit.rollNo ?? ""} dir="ltr" disabled={edit.cards > 0} placeholder="مثلاً CPT30614374"
-            onChange={e => setEdit({ ...edit, rollNo: e.target.value.replace(/\s+/g, "").toUpperCase() })} /></label>
+          <label>Roll No کارتن (بارکد کارخانه)<input maxLength={32} value={edit.rollNo ?? ""} dir="ltr" disabled={edit.cards > 0} placeholder="مثلاً CPT30614374"
+            title={edit.cards > 0 ? "کارت صادر شده، قابل تغییر نیست" : undefined}
+            onChange={e => setEdit({ ...edit, rollNo: e.target.value.replace(/\s+/g, "").toUpperCase() })} />
+            {edit.cards > 0 && <small style={{ fontSize: 12, fontWeight: 400, opacity: .7 }}>کارت صادر شده، قابل تغییر نیست</small>}</label>
           <label>Batch<input maxLength={32} value={edit.batch} dir="ltr" onChange={e => setEdit({ ...edit, batch: e.target.value })} /></label>
           <label>کد تأمین‌کننده<input maxLength={Math.max(3, edit.supplier.length)} value={edit.supplier} dir="ltr" onChange={e => setEdit({ ...edit, supplier: e.target.value.toUpperCase() })} /></label>
           <label>عرض (سانتی‌متر)<input type="number" min={1} max={1000} step="0.1" value={edit.widthCm ?? ""} dir="ltr"
@@ -1170,8 +1173,7 @@ function RollsPanel({ role }: { role: Role }) {
         </div>
         {msg && <p role="alert">{msg}</p>}
       </form></div>}
-      {historyOf && <div className={styles.dialog} role="dialog" aria-modal="true" aria-label={`تاریخچه رول ${historyOf.number}`} onClick={e => { if (e.target === e.currentTarget) setHistoryOf(null); }}
-        onKeyDown={e => { if (e.key === "Escape") setHistoryOf(null); }}>
+      {historyOf && <div className={styles.dialog} role="dialog" aria-modal="true" aria-label={`تاریخچه رول ${historyOf.number}`} {...backdropProps(() => setHistoryOf(null))}>
         <div className={styles.dialogInner}>
           <h2>تاریخچه رول {historyOf.number.toLocaleString("fa-IR")}</h2>
           <button type="button" className={styles.dialogClose} aria-label="بستن تاریخچه" onClick={() => setHistoryOf(null)} autoFocus>×</button>
@@ -1181,8 +1183,7 @@ function RollsPanel({ role }: { role: Role }) {
             <ol className={styles.timeline}>{historyItems.map((h, i) => <RollHistoryItem key={i} h={h} />)}</ol>}
         </div>
       </div>}
-      {qrView && <div className={styles.dialog} role="dialog" aria-modal="true" aria-label={`QR رول ${qrView.roll.id}`} onClick={e => { if (e.target === e.currentTarget) setQrView(null); }}
-        onKeyDown={e => { if (e.key === "Escape") setQrView(null); }}>
+      {qrView && <div className={styles.dialog} role="dialog" aria-modal="true" aria-label={`QR رول ${qrView.roll.id}`} {...backdropProps(() => setQrView(null))}>
         <div className={`${styles.dialogInner} ${styles.qrDialog}`} style={{ textAlign: "center" }}>
           <h2 dir="ltr">{qrView.roll.id}</h2>
           <button type="button" className={styles.dialogClose} aria-label="بستن QR" onClick={() => setQrView(null)}>×</button>
