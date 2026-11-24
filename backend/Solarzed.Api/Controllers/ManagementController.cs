@@ -8,7 +8,7 @@ using Solarzed.Api.Infrastructure;
 
 namespace Solarzed.Api.Controllers;
 
-[ApiController, Route("api/admin"), Authorize(Policy = "AdminPolicy")]
+[ApiController, Route("api/admin"), Authorize(Policy = "StaffPolicy")]
 public class ManagementController(AppDbContext db) : ControllerBase
 {
     static readonly Dictionary<string, System.Linq.Expressions.Expression<Func<Product, object>>> ProductSort = new()
@@ -16,7 +16,7 @@ public class ManagementController(AppDbContext db) : ControllerBase
         ["code"] = p => p.Code, ["name"] = p => p.Name, ["series"] = p => p.Series, ["type"] = p => p.Type, ["updatedAt"] = p => p.UpdatedAt,
     };
 
-    [HttpGet("products")]
+    [HttpGet("products"), Perm("products.view", "rolls.view", "reports.view")]
     public async Task<IActionResult> Products([FromQuery] ProductSearch f, CancellationToken ct)
     {
         var query = db.Products.AsNoTracking();
@@ -56,7 +56,7 @@ public class ManagementController(AppDbContext db) : ControllerBase
         }
     }
 
-    [HttpPost("products")]
+    [HttpPost("products"), Perm("products.edit")]
     public async Task<IActionResult> Create(ProductRequest req)
     {
         // The code is the numeric item code entered by the admin (e.g. 1015); it also goes into every roll ID.
@@ -78,7 +78,7 @@ public class ManagementController(AppDbContext db) : ControllerBase
         return Ok(product);
     }
 
-    [HttpPut("products/{code}")]
+    [HttpPut("products/{code}"), Perm("products.edit")]
     public async Task<IActionResult> Update(string code, ProductRequest req)
     {
         // Rename requests carry only {code, name}: type, series and specs may be absent.
@@ -102,7 +102,7 @@ public class ManagementController(AppDbContext db) : ControllerBase
     }
 
     /// <summary>Deletes a product. Blocked while any roll still references the model code.</summary>
-    [HttpDelete("products/{code}")]
+    [HttpDelete("products/{code}"), Perm("products.edit")]
     public async Task<IActionResult> Delete(string code)
     {
         var product = await db.Products.FindAsync(code);
@@ -150,7 +150,7 @@ public class ManagementController(AppDbContext db) : ControllerBase
     // ── Warehouses ──────────────────────────────────────────────────────────
 
     /// <summary>All warehouses with how many rolls are in each (rolls held by a user are not counted).</summary>
-    [HttpGet("warehouses")]
+    [HttpGet("warehouses"), Perm("warehouses.view", "rolls.view")]
     public async Task<IActionResult> Warehouses(CancellationToken ct)
     {
         var counts = await db.Rolls.Where(r => r.WarehouseId != null && r.HolderUserId == null)
@@ -160,7 +160,7 @@ public class ManagementController(AppDbContext db) : ControllerBase
         return Ok(new { items = items.Select(w => new { w.Id, w.Name, w.Address, w.Archived, Rolls = counts.GetValueOrDefault(w.Id, 0) }) });
     }
 
-    [HttpPost("warehouses")]
+    [HttpPost("warehouses"), Perm("warehouses.edit")]
     public async Task<IActionResult> CreateWarehouse(WarehouseRequest req)
     {
         if (await ValidateWarehouse(req, null) is { } error) return BadRequest(new { error });
@@ -172,7 +172,7 @@ public class ManagementController(AppDbContext db) : ControllerBase
         return Ok(w);
     }
 
-    [HttpPut("warehouses/{id:int}")]
+    [HttpPut("warehouses/{id:int}"), Perm("warehouses.edit")]
     public async Task<IActionResult> UpdateWarehouse(int id, WarehouseRequest req)
     {
         var w = await db.Warehouses.FindAsync(id);
@@ -186,7 +186,7 @@ public class ManagementController(AppDbContext db) : ControllerBase
     }
 
     /// <summary>Deletes a warehouse. Blocked while any roll is recorded there; archive it instead.</summary>
-    [HttpDelete("warehouses/{id:int}")]
+    [HttpDelete("warehouses/{id:int}"), Perm("warehouses.edit")]
     public async Task<IActionResult> DeleteWarehouse(int id)
     {
         var w = await db.Warehouses.FindAsync(id);
@@ -210,8 +210,7 @@ public class ManagementController(AppDbContext db) : ControllerBase
     }
 
     // The customer list is confidential: only the super administrator may read it.
-    [Authorize(Policy = "SuperAdminPolicy")]
-    [HttpGet("customers")]
+    [HttpGet("customers"), Perm("customers.view")]
     public async Task<IActionResult> Customers([FromQuery] CustomerSearch f, CancellationToken ct)
     {
         var query = db.WarrantyRegistrations.AsNoTracking();

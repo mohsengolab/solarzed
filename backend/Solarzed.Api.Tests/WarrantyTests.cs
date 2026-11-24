@@ -71,7 +71,10 @@ public class WarrantyTests
     {
         var policy = typeof(RegistrationController).GetCustomAttributes(typeof(Microsoft.AspNetCore.Authorization.AuthorizeAttribute), true)
             .Cast<Microsoft.AspNetCore.Authorization.AuthorizeAttribute>().Single().Policy;
-        Assert.Equal("AdminPolicy", policy);
+        Assert.Equal("StaffPolicy", policy);
+        // Within staff, only roles allowed to decide warranties may register one by hand.
+        var create = typeof(RegistrationController).GetMethods().Single(m => m.GetCustomAttributes(typeof(Microsoft.AspNetCore.Mvc.HttpPostAttribute), false).Length > 0);
+        Assert.Equal(["warranties.edit"], create.GetCustomAttributes(typeof(Solarzed.Api.Application.PermAttribute), false).Cast<Solarzed.Api.Application.PermAttribute>().Single().Keys);
         Assert.Null(typeof(WarrantyController).GetMethod("Register"));
     }
 

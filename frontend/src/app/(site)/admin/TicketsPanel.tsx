@@ -4,12 +4,14 @@ import { FormEvent, useCallback, useEffect, useState } from "react";
 import { adminTickets, adminTicketDetail, adminTicketReply, adminTicketClose, adminTicketOpen, fa, FA_DATE, type AdminTicketRow, type AdminTicketDetail } from "@/lib/api";
 import s from "./admin.module.css";
 import { usePaged, SortTh, Pager, FilterBar, countActive, errorText } from "./AdminKit";
+import { useCan } from "./RolesPanel";
 
 const T_EMPTY = { q: "" };
 const date = (value: string) => new Date(value).toLocaleString(FA_DATE);
 
 /** Support inbox: every ticket shows who is writing (mobile, name, profile) — never masked. */
 export default function TicketsPanel() {
+  const canReply = useCan()("tickets.edit");
   const [status, setStatus] = useState("");
   const [f, setF] = useState(T_EMPTY);
   const [selectedId, setSelectedId] = useState<number | null>(null);
@@ -90,9 +92,9 @@ export default function TicketsPanel() {
         <div className={s.panelHead}>
           <h2>{detail.ticket.subject} · <code dir="ltr">{detail.ticket.code}</code></h2>
           <div className={s.filters}>
-            {detail.ticket.status !== "closed"
+            {canReply && (detail.ticket.status !== "closed"
               ? <button type="button" className={s.ghost} disabled={busy} onClick={() => act(() => adminTicketClose(selectedId))}>بستن تیکت</button>
-              : <button type="button" className={s.ghost} disabled={busy} onClick={() => act(() => adminTicketOpen(selectedId))}>بازگشایی</button>}
+              : <button type="button" className={s.ghost} disabled={busy} onClick={() => act(() => adminTicketOpen(selectedId))}>بازگشایی</button>)}
             <button type="button" className={s.ghost} onClick={() => setSelectedId(null)}>بستن گفتگو</button>
           </div>
         </div>
@@ -120,10 +122,10 @@ export default function TicketsPanel() {
             </article>
           ))}
         </div>
-        <form onSubmit={sendReply} className={s.adminForm}>
+        {canReply && <form onSubmit={sendReply} className={s.adminForm}>
           <label>پاسخ شما<textarea rows={3} maxLength={4000} required value={reply} onChange={e => setReply(e.target.value)} /></label>
           <button type="submit" className={s.btnPrimary} disabled={busy || !reply.trim()}>{busy ? "در حال ارسال…" : "ارسال پاسخ"}</button>
-        </form>
+        </form>}
       </>}
       {msg && <p role="alert" className={s.errorText}>{msg}</p>}
     </div>}

@@ -8,7 +8,7 @@ using Solarzed.Api.Infrastructure;
 
 namespace Solarzed.Api.Controllers;
 
-[ApiController, Route("api/admin"), Authorize(Policy = "AdminPolicy")]
+[ApiController, Route("api/admin"), Authorize(Policy = "StaffPolicy")]
 public class ClaimsController(AppDbContext db, Microsoft.AspNetCore.DataProtection.IDataProtectionProvider? protection = null) : ControllerBase
 {
     string Actor => AuditLog.Actor(HttpContext?.User);
@@ -31,7 +31,7 @@ public class ClaimsController(AppDbContext db, Microsoft.AspNetCore.DataProtecti
         Due = ClaimService.Due(c, now),
     };
 
-    [HttpGet("claims")]
+    [HttpGet("claims"), Perm("claims.view")]
     public async Task<IActionResult> List([FromQuery] ClaimSearch f, CancellationToken ct)
     {
         var now = DateTime.UtcNow;
@@ -66,7 +66,7 @@ public class ClaimsController(AppDbContext db, Microsoft.AspNetCore.DataProtecti
         });
     }
 
-    [HttpGet("claims/{id}")]
+    [HttpGet("claims/{id}"), Perm("claims.view")]
     public async Task<IActionResult> Get(string id, CancellationToken ct)
     {
         var c = await db.WarrantyClaims.AsNoTracking().FirstOrDefaultAsync(x => x.Id == id, ct);
@@ -83,7 +83,7 @@ public class ClaimsController(AppDbContext db, Microsoft.AspNetCore.DataProtecti
         });
     }
 
-    [HttpPost("claims")]
+    [HttpPost("claims"), Perm("claims.edit")]
     public async Task<IActionResult> Create([FromBody] CreateClaimRequest req)
     {
         // A claim opened from a warranty row sends its reference; one typed by hand sends the customer's code.
@@ -111,7 +111,7 @@ public class ClaimsController(AppDbContext db, Microsoft.AspNetCore.DataProtecti
         return Ok(Row(claim, now));
     }
 
-    [HttpPut("claims/{id}")]
+    [HttpPut("claims/{id}"), Perm("claims.edit")]
     public async Task<IActionResult> Update(string id, [FromBody] UpdateClaimRequest req)
     {
         var c = await db.WarrantyClaims.FirstOrDefaultAsync(x => x.Id == id);
@@ -149,7 +149,7 @@ public class ClaimsController(AppDbContext db, Microsoft.AspNetCore.DataProtecti
         Changes = JsonSerializer.Deserialize<Dictionary<string, JsonElement[]>>(a.ChangesJson) ?? [],
     };
 
-    [HttpGet("warranties/{code}/activity")]
+    [HttpGet("warranties/{code}/activity"), Perm("warranties.view", "claims.view")]
     public async Task<IActionResult> WarrantyActivity(string code, CancellationToken ct)
     {
         if (Confidential.Resolve(code, HttpContext?.User, protection) is not { } resolved) return NotFound();
@@ -159,7 +159,7 @@ public class ClaimsController(AppDbContext db, Microsoft.AspNetCore.DataProtecti
         return Ok(new { claims = claims.Select(c => Row(c, now)), history = await History("warranty", code, ct) });
     }
 
-    [HttpGet("audit")]
+    [HttpGet("audit"), Perm("history.view")]
     public async Task<IActionResult> Audit([FromQuery] AuditSearch f, CancellationToken ct)
     {
         var query = db.AuditEntries.AsNoTracking();

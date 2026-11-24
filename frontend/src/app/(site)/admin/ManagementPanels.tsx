@@ -4,6 +4,7 @@ import { FormEvent, useCallback, useEffect, useState } from "react";
 import { adminSession, adminUsers, adminCreateUser, adminUpdateUser, adminResetPassword, managementFetch, fa, FA_DATE, type AdminUserRow, type AdminRole, type Paged } from "@/lib/api";
 import s from "./admin.module.css";
 import { usePaged, SortTh, Pager, FilterBar, countActive, errorText as message } from "./AdminKit";
+import { useCan } from "./RolesPanel";
 
 type Product = { code: string; name: string; type: string; series: string; description: string; archived: boolean; updatedAt?: string;
   thicknessMil?: number | null; vlt?: number | null; irr?: number | null; uv?: number | null; tser?: number | null; warrantyYears?: number | null };
@@ -12,6 +13,7 @@ const empty: Product = { code: "", name: "", type: "tint", series: "", descripti
 const P_EMPTY = { q: "", type: "", series: "", availability: "" };
 
 export function ProductsPanel() {
+  const canEdit = useCan()("products.edit");
   const [form, setForm] = useState<Product>(empty);
   const [editing, setEditing] = useState(false);
   const [f, setF] = useState(P_EMPTY);
@@ -48,7 +50,7 @@ export function ProductsPanel() {
   return <section>
     <header className={s.panelHead}><div><span className={s.eyebrow}>کاتالوگ محصولات</span><h1>محصولات</h1></div></header>
     <p className={s.empty}>محصولات فعال به‌صورت خودکار و بر اساس نوع و سری در وب‌سایت نمایش داده می‌شوند. پس از تعریف، فقط نام محصول قابل ویرایش است؛ برای تغییر نوع، سری یا مشخصات فنی، محصول را حذف و دوباره بسازید (حذف وقتی ممکن است که رولی در موجودی نداشته باشد).</p>
-    <form className={`${s.card} ${s.adminForm}`} onSubmit={save}>
+    {canEdit && <form className={`${s.card} ${s.adminForm}`} onSubmit={save}>
       <h2>{editing ? "ویرایش محصول" : "تعریف محصول"}</h2>
       <div className={s.row2}>
         <label>کد محصول (فقط عدد)<input required maxLength={editing ? 24 : 12} pattern={editing ? undefined : "[0-9]+"} inputMode="numeric" disabled={editing} value={form.code} placeholder="مثلاً 1015" onChange={e => setForm({ ...form, code: e.target.value.replace(/[۰-۹]/g, d => String("۰۱۲۳۴۵۶۷۸۹".indexOf(d))).replace(/\D+/g, "") })} dir="ltr" /></label>
@@ -72,7 +74,7 @@ export function ProductsPanel() {
         : <label>وضعیت عرضه<select value={String(form.archived)} onChange={e => setForm({ ...form, archived: e.target.value === "true" })}><option value="false">فعال</option><option value="true">بایگانی — برای موجودی جدید در دسترس نیست</option></select></label>}
       <div className={s.filters}><button className={s.btnPrimary} disabled={busy}>{busy ? "در حال ذخیره…" : "ذخیره محصول"}</button>{editing && <button type="button" className={s.ghost} onClick={() => { setEditing(false); setForm(empty); }}>لغو ویرایش</button>}</div>
       {msg && <p role="status">{msg}</p>}
-    </form>
+    </form>}
     <FilterBar active={countActive(f)} onClear={() => setF(P_EMPTY)}>
       <label className={s.wide}>جستجوی محصول<input type="search" placeholder="کد، نام، سری یا توضیحات" value={f.q} onChange={set("q")} /></label>
       <label>نوع<select value={f.type} onChange={set("type")}><option value="">همه انواع</option><option value="tint">فیلم شیشه</option><option value="ppf">PPF</option></select></label>
@@ -82,16 +84,16 @@ export function ProductsPanel() {
     {list.error && <p role="alert" className={s.errorText}>{list.error}</p>}
     <div className={s.card}><table className={`${s.table} ${list.loading ? s.tableBusy : ""}`}><thead><tr>
       <SortTh column="code" label="کد" {...sortProps} /><SortTh column="name" label="نام" {...sortProps} /><SortTh column="type" label="نوع" {...sortProps} />
-      <SortTh column="series" label="سری" {...sortProps} /><th>VLT%</th><th>IRR%</th><th>TSER%</th><th>گارانتی</th><th>وضعیت</th><SortTh column="updatedAt" label="به‌روزرسانی" {...sortProps} /><th>عملیات</th></tr></thead><tbody>
+      <SortTh column="series" label="سری" {...sortProps} /><th>VLT%</th><th>IRR%</th><th>TSER%</th><th>گارانتی</th><th>وضعیت</th><SortTh column="updatedAt" label="به‌روزرسانی" {...sortProps} />{canEdit && <th>عملیات</th>}</tr></thead><tbody>
       {list.items.map(p => <tr key={p.code}><td><code dir="ltr">{p.code}</code></td><td>{p.name}</td><td>{p.type}</td><td>{p.series}</td>
         <td dir="ltr">{p.vlt != null ? p.vlt : "—"}</td><td dir="ltr">{p.irr != null ? p.irr : "—"}</td>
         <td dir="ltr">{p.tser != null ? p.tser : "—"}</td><td dir="ltr">{p.warrantyYears != null ? `${p.warrantyYears}Y` : "—"}</td>
         <td><span className={s.badge} data-tone={p.archived ? "muted" : "active"}>{p.archived ? "بایگانی" : "فعال"}</span></td>
         <td>{p.updatedAt ? new Date(p.updatedAt).toLocaleDateString(FA_DATE) : "—"}</td>
-        <td>
+        {canEdit && <td>
           <button type="button" className={s.ghost} onClick={() => { setForm({ ...empty, ...p }); setEditing(true); setMsg(""); window.scrollTo({ top: 0, behavior: "smooth" }); }}>ویرایش {p.code}</button>
           <button type="button" className={s.danger} disabled={busy} onClick={() => remove(p.code)}>حذف</button>
-        </td></tr>)}
+        </td>}</tr>)}
     </tbody></table>
       {!list.loading && list.items.length === 0 && <p className={s.empty}>{countActive(f) ? "محصولی با این فیلترها یافت نشد." : "هنوز محصولی تعریف نشده است."}</p>}
       <Pager page={list.page} pageSize={list.pageSize} total={list.total} loading={list.loading} onPage={list.setPage} />
@@ -208,8 +210,8 @@ export function UsersPanel() {
         <label>رمز عبور<input required minLength={12} maxLength={72} type="password" autoComplete="new-password" value={form.password} onChange={e => setForm({ ...form, password: e.target.value })} dir="ltr" /></label>
         <label>نقش<select value={form.role} onChange={e => setForm({ ...form, role: e.target.value as AdminRole })}>
           <option value="superadmin">مدیر کل — همه چیز + لیست مشتریان</option>
-          <option value="admin">مدیر — بدون شناسه رول و کد گارانتی؛ رول‌ها: فقط لوکیشن و وضعیت</option>
-          <option value="counter">کانتر — بررسی عکس‌های نصب و سریال روی جعبه</option>
+          <option value="admin">مدیر — دسترسی‌ها طبق «دسترسی نقش‌ها»</option>
+          <option value="counter">کانتر — دسترسی‌ها طبق «دسترسی نقش‌ها»</option>
         </select></label>
         <label>وضعیت<select value={String(form.active)} onChange={e => setForm({ ...form, active: e.target.value === "true" })}><option value="true">فعال</option><option value="false">غیرفعال</option></select></label>
       </div>

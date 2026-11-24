@@ -3,6 +3,7 @@ import { FormEvent, useCallback, useEffect, useState } from "react";
 import { managementFetch, fa, FA_DATE } from "@/lib/api";
 import s from "./admin.module.css";
 import { errorText } from "./AdminKit";
+import { useCan } from "./RolesPanel";
 
 type Policy = { enabled: boolean; otpMinutes: number; resendSeconds: number; dailyLimit: number };
 type EmailStatus = { configured: boolean; host: string; port: number; from: string; senderName: string; user: string; passwordStored: boolean };
@@ -16,6 +17,7 @@ const fetchAll = () => Promise.all([managementFetch<Status>("sms"), managementFe
 const Msg = ({ note }: { note: Note }) => note ? <p role={note.ok ? "status" : "alert"} className={note.ok ? s.okText : s.errorText}>{note.text}</p> : null;
 
 export default function SmsSettingsPanel() {
+  const canEdit = useCan()("sms.edit");
   const [status, setStatus] = useState<Status | null>(null);
   const [form, setForm] = useState({ mode: "soap", endpoint: "http://185.112.33.61/wbs/send.php", token: "", pattern: "2675", line: "21000051112", codeVariable: "code1" });
   const [policy, setPolicy] = useState<Policy>({ enabled: true, otpMinutes: 5, resendSeconds: 60, dailyLimit: 10 });
@@ -91,6 +93,8 @@ export default function SmsSettingsPanel() {
     </div>
     {status && !status.configured && <p className={s.empty}>{fa(status.connected ? "Sending is paused. Customer activation is unavailable until sending is resumed." : "SMS is not connected. Customer activation remains unavailable.")}</p>}
 
+    {!canEdit && <p className={s.empty}>دسترسی شما به این صفحه فقط مشاهده است.</p>}
+    <fieldset disabled={!canEdit} style={{ display: "contents" }}>
     <div className={s.row2} style={{ alignItems: "start" }}>
       <form onSubmit={saveConnection} className={`${s.card} ${s.adminForm}`}>
         <h2>اتصال</h2>
@@ -172,6 +176,7 @@ export default function SmsSettingsPanel() {
         </form>
       </div>
     </div>
+    </fieldset>
 
     <div className={s.card}>
       <h2>فعالیت اخیر</h2>

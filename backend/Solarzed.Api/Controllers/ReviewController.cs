@@ -17,7 +17,7 @@ namespace Solarzed.Api.Controllers;
 [ApiController, Route("api/admin/review"), Authorize(Policy = "StaffPolicy")]
 public class ReviewController(AppDbContext db, IDataProtectionProvider? protection = null, WarrantyCards? cards = null) : ControllerBase
 {
-    [HttpGet]
+    [HttpGet, Perm("review.view")]
     public async Task<IActionResult> List([FromQuery] string? status, CancellationToken ct)
     {
         var wanted = status switch { "active" => WarrantyStatus.Active, "rejected" => WarrantyStatus.Rejected, _ => WarrantyStatus.Pending };
@@ -51,7 +51,7 @@ public class ReviewController(AppDbContext db, IDataProtectionProvider? protecti
     }
 
     /// <summary>The installation photos of one registration (by its opaque reference), for the warranty decision dialog.</summary>
-    [HttpGet("photos")]
+    [HttpGet("photos"), Perm("review.view", "warranties.view")]
     public async Task<IActionResult> PhotosOf([FromQuery(Name = "ref")] string? reference, CancellationToken ct)
     {
         var code = Confidential.Resolve(reference ?? "", User, protection);
@@ -61,7 +61,7 @@ public class ReviewController(AppDbContext db, IDataProtectionProvider? protecti
         return Ok(new { items });
     }
 
-    [HttpGet("photos/{id:long}")]
+    [HttpGet("photos/{id:long}"), Perm("review.view", "warranties.view")]
     public async Task<IActionResult> Photo(long id, CancellationToken ct)
     {
         var photo = await db.WarrantyPhotos.AsNoTracking().FirstOrDefaultAsync(p => p.Id == id, ct);
@@ -70,7 +70,7 @@ public class ReviewController(AppDbContext db, IDataProtectionProvider? protecti
         return File(photo.Data, photo.ContentType);
     }
 
-    [HttpPost("decision")]
+    [HttpPost("decision"), Perm("review.edit")]
     public async Task<IActionResult> Decide([FromBody] ReviewDecisionRequest req, CancellationToken ct)
     {
         var code = Confidential.Resolve(req.Ref ?? "", User, protection);
@@ -95,7 +95,7 @@ public class ReviewController(AppDbContext db, IDataProtectionProvider? protecti
     }
 
     /// <summary>Sends the gold card SMS to the owner of an approved warranty again (or for the first time).</summary>
-    [HttpPost("card-sms")]
+    [HttpPost("card-sms"), Perm("review.edit", "warranties.edit")]
     public async Task<IActionResult> ResendCard([FromBody] ReviewCardRequest req, CancellationToken ct)
     {
         var code = Confidential.Resolve(req.Ref ?? "", User, protection);

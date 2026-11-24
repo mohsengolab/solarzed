@@ -347,7 +347,7 @@ export function warrantyCard(code: string, key: string) {
 // ── Admin ────────────────────────────────────────────────────────────────────
 
 // The session lives in an HttpOnly cookie set by the API, so scripts never see the token.
-export function adminSession() { return apiFetch<{ username: string; role: string }>("/api/admin/session"); }
+export function adminSession() { return apiFetch<{ username: string; role: string; permissions?: string[] }>("/api/admin/session"); }
 export function adminLogout() { return apiFetch<{ ok: boolean }>("/api/admin/logout", { method: "POST" }); }
 
 export function managementFetch<T>(path: string, data?: unknown, method = "POST") {
@@ -372,6 +372,15 @@ export function adminCreateUser(data: { username: string; password: string; role
 }
 export function adminUpdateUser(id: number, data: { role?: AdminRole; displayName?: string; active?: boolean }) {
   return apiFetch(`/api/admin/users/${id}`, { method: "POST", body: JSON.stringify(data) });
+}
+// ── Role permissions (super administrator only): which pages, and which actions on them, each staff role gets ──
+export interface PermissionItem { key: string; label: string }
+export interface PermissionPage { page: string; label: string; items: PermissionItem[] }
+export type EditableRole = "admin" | "counter";
+export interface RolePermissions { catalog: PermissionPage[]; roles: Record<EditableRole, string[]>; defaults: Record<EditableRole, string[]> }
+export function adminPermissions() { return apiFetch<RolePermissions>("/api/admin/permissions"); }
+export function adminSavePermissions(role: EditableRole, permissions: string[]) {
+  return apiFetch<{ role: EditableRole; permissions: string[] }>(`/api/admin/permissions/${role}`, { method: "POST", body: JSON.stringify({ permissions }) });
 }
 export function adminResetPassword(id: number, password: string) {
   return apiFetch(`/api/admin/users/${id}/password`, { method: "POST", body: JSON.stringify({ password }) });

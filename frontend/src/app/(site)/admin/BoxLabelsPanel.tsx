@@ -6,17 +6,20 @@ import { adminBoxLabels, adminRolls, adminGetSettings, issueBoxLabels, releaseRo
 import styles from "./admin.module.css";
 import labelsStyle from "./labels.module.css";
 import BoxTransfers, { holderName } from "./BoxTransfers";
+import { useCan } from "./RolesPanel";
 import { printQrLabels } from "./qrPrint";
 import { printBarcodeLabels } from "./barcode";
 import SerialInput from "@/components/SerialInput";
 
-type Role = "superadmin" | "admin" | "counter";
 type Roll = { id: string; rollNo?: string | null; modelCode: string; type: "tint" | "ppf"; qc: string; status: string; supplier: string; lengthM: number | null };
 type CoverageSettings = { durations: Record<"tint" | "ppf", { film: number | null; install: number | null }> };
 const message = (error: unknown) => error instanceof Error ? fa(error.message) : fa("The request failed.");
 
-export default function BoxLabelsPanel({ onSettings, role }: { onSettings: () => void; role: Role }) {
-  const canManage = role !== "counter";
+export default function BoxLabelsPanel({ onSettings }: { onSettings: () => void }) {
+  const can = useCan();
+  // Issuing cards (and the full carton details) is its own permission; moving cartons is another.
+  const canManage = can("labels.edit");
+  const canTransfer = can("labels.transfer");
   const [labels, setLabels] = useState<BoxLabel[]>([]);
   const [rolls, setRolls] = useState<Roll[]>([]);
   const [rollId, setRollId] = useState("");
@@ -127,7 +130,7 @@ export default function BoxLabelsPanel({ onSettings, role }: { onSettings: () =>
           </table></div>
           {loaded && !labels.length && <p className={styles.empty}>{fa("No box labels issued yet.")}</p>}
         </div>
-        <BoxTransfers selected={validSelection.map(label => label.id)} onChanged={() => { load().catch(ex => setError(message(ex))); }} />
+        {canTransfer && <BoxTransfers selected={validSelection.map(label => label.id)} onChanged={() => { load().catch(ex => setError(message(ex))); }} />}
       </section>
     );
   }
@@ -165,7 +168,7 @@ export default function BoxLabelsPanel({ onSettings, role }: { onSettings: () =>
         </tr>)}</tbody></table></div>
         {loaded && !labels.length && <p className={styles.empty}>{fa("No box labels issued yet.")}</p>}
       </div>
-      <BoxTransfers selected={validSelection.map(label => label.id)} onChanged={() => { load().catch(ex => setError(message(ex))); }} />
+      {canTransfer && <BoxTransfers selected={validSelection.map(label => label.id)} onChanged={() => { load().catch(ex => setError(message(ex))); }} />}
       <div className={labelsStyle.previews}>{validSelection.map(label => <article key={label.id} className={labelsStyle.preview}>
         {/* eslint-disable-next-line @next/next/no-img-element */}
         {previews[label.id] && <img src={previews[label.id]} alt={`QR ${label.id}`} width={150} height={150} />}

@@ -9,7 +9,7 @@ using Solarzed.Api.Application;
 
 namespace Solarzed.Api.Controllers;
 
-[ApiController, Route("api/admin/sms"), Authorize(Policy = "AdminPolicy")]
+[ApiController, Route("api/admin/sms"), Authorize(Policy = "StaffPolicy")]
 [ResponseCache(NoStore = true, Location = ResponseCacheLocation.None)]
 public class SmsSettingsController(IConfiguration config, IWebHostEnvironment env, IDataProtectionProvider protection,
     IHttpClientFactory clients, IActivationSmsSender sender, SmsLog log, IEmailSender email) : ControllerBase
@@ -37,7 +37,7 @@ public class SmsSettingsController(IConfiguration config, IWebHostEnvironment en
         catch (CryptographicException) { return null; }
     }
 
-    [HttpGet]
+    [HttpGet, Perm("sms.view")]
     public IActionResult Get()
     {
         var policy = SmsPolicy.From(config);
@@ -64,7 +64,7 @@ public class SmsSettingsController(IConfiguration config, IWebHostEnvironment en
 
     // Connection: verifies the account and pattern with read-only provider calls. The API key may be
     // left empty to keep the stored key (for example when only the pattern or line changes).
-    [HttpPost]
+    [HttpPost, Perm("sms.edit")]
     [RequestSizeLimit(8192)]
     public async Task<IActionResult> Save(SmsRequest req, CancellationToken ct)
     {
@@ -109,7 +109,7 @@ public class SmsSettingsController(IConfiguration config, IWebHostEnvironment en
     }
 
     // The "warranty active" pattern: the owner's SMS with the warranty number and the gold card link.
-    [HttpPost("warranty")]
+    [HttpPost("warranty"), Perm("sms.edit")]
     [RequestSizeLimit(2048)]
     public async Task<IActionResult> SaveWarranty(SmsWarrantyRequest req, CancellationToken ct)
     {
@@ -130,7 +130,7 @@ public class SmsSettingsController(IConfiguration config, IWebHostEnvironment en
     }
 
     /// <summary>Sends the gold card SMS to active warranties that never got it, for example those approved before the pattern was set.</summary>
-    [HttpPost("warranty/send-unsent"), RequestSizeLimit(256)]
+    [HttpPost("warranty/send-unsent"), RequestSizeLimit(256), Perm("sms.edit")]
     public async Task<IActionResult> SendUnsentCards([FromServices] WarrantyCards cards, CancellationToken ct)
     {
         var (sent, failed, error) = await cards.NotifyUnsent(200, ct);
@@ -138,7 +138,7 @@ public class SmsSettingsController(IConfiguration config, IWebHostEnvironment en
         return Ok(new { sent, failed, error, message = $"{sent} card SMS sent" + (failed > 0 ? $", {failed} failed ({error})." : ".") });
     }
 
-    [HttpPost("policy")]
+    [HttpPost("policy"), Perm("sms.edit")]
     [RequestSizeLimit(4096)]
     public async Task<IActionResult> SavePolicy(SmsPolicyRequest req, CancellationToken ct)
     {
@@ -150,7 +150,7 @@ public class SmsSettingsController(IConfiguration config, IWebHostEnvironment en
     }
 
     // Sends one real pattern SMS with a random code to a number the administrator enters.
-    [HttpPost("test")]
+    [HttpPost("test"), Perm("sms.edit")]
     [RequestSizeLimit(1024)]
     [EnableRateLimiting("sms-test")]
     public async Task<IActionResult> Test(SmsTestRequest req, CancellationToken ct)
@@ -171,7 +171,7 @@ public class SmsSettingsController(IConfiguration config, IWebHostEnvironment en
     }
 
     // Saves SMTP settings for the email verification channel. An empty password keeps the stored one.
-    [HttpPost("email")]
+    [HttpPost("email"), Perm("sms.edit")]
     [RequestSizeLimit(4096)]
     public async Task<IActionResult> SaveEmail(EmailRequest req, CancellationToken ct)
     {
@@ -199,7 +199,7 @@ public class SmsSettingsController(IConfiguration config, IWebHostEnvironment en
     }
 
     // Sends one real verification email to an address the administrator enters.
-    [HttpPost("email/test")]
+    [HttpPost("email/test"), Perm("sms.edit")]
     [RequestSizeLimit(1024)]
     [EnableRateLimiting("sms-test")]
     public async Task<IActionResult> TestEmail(EmailTestRequest req, CancellationToken ct)
@@ -220,10 +220,10 @@ public class SmsSettingsController(IConfiguration config, IWebHostEnvironment en
         { log.Add(to, "email-test", false, "Provider unreachable"); return StatusCode(503, new { error = "Could not reach the SMTP server." }); }
     }
 
-    [HttpGet("log")]
+    [HttpGet("log"), Perm("sms.view")]
     public IActionResult Log() => Ok(log.Recent());
 
-    [HttpDelete]
+    [HttpDelete, Perm("sms.edit")]
     public async Task<IActionResult> Disconnect(CancellationToken ct)
     {
         await Update(root => root.Remove("Faraz"), ct);

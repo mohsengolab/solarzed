@@ -22,6 +22,7 @@ public class AppDbContext(DbContextOptions<AppDbContext> options) : DbContext(op
     public DbSet<TicketReply> TicketReplies => Set<TicketReply>();
     public DbSet<WarrantyPhoto> WarrantyPhotos => Set<WarrantyPhoto>();
     public DbSet<RollTransfer> RollTransfers => Set<RollTransfer>();
+    public DbSet<RolePermission> RolePermissions => Set<RolePermission>();
 
     // Every timestamp is written as DateTime.UtcNow, but SQL Server's datetime2 has no time zone, so values come back
     // as Kind=Unspecified and serialize without "Z". Browsers then read them as local time (3.5 h off in Tehran).

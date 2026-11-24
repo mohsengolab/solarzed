@@ -20,24 +20,30 @@ import { PartnersPanel, ReviewPanel, WarrantyPhotos } from "./PartnersPanels";
 import SerialInput from "@/components/SerialInput";
 import SmsSettingsPanel from "./SmsSettingsPanel";
 import { ClaimsPanel, HistoryPanel, WarrantyActivity } from "./ClaimsPanels";
+import { RolesPanel, PermsProvider, useCan } from "./RolesPanel";
 import { usePaged, SortTh, Pager, FilterBar, countActive, downloadCsv, errorText } from "./AdminKit";
 
 type Role = "superadmin" | "admin" | "counter";
-const VIEWS = ["overview", "reports", "warranties", "review", "partners", "claims", "rolls", "warehouses", "products", "customers", "tickets", "labels", "history", "sms", "settings", "account", "users"] as const;
+const VIEWS = ["overview", "reports", "warranties", "review", "partners", "claims", "rolls", "warehouses", "products", "customers", "tickets", "labels", "history", "sms", "settings", "account", "users", "roles"] as const;
 type View = typeof VIEWS[number];
 const LABELS: Record<View, string> = {
   overview: "نمای کلی", reports: "گزارش‌ها", warranties: "گارانتی‌ها", review: "بررسی عکس‌ها (کانتر)", partners: "همکاران", claims: "ادعاها", history: "سابقه تغییرات", rolls: "رول‌ها", warehouses: "انبارها", products: "محصولات",
-  labels: "برچسب‌ها", customers: "مشتریان", tickets: "تیکت‌ها", sms: "پیامک", settings: "تنظیمات", account: "حساب کاربری", users: "کاربران",
+  labels: "برچسب‌ها", customers: "مشتریان", tickets: "تیکت‌ها", sms: "پیامک", settings: "تنظیمات", account: "حساب کاربری", users: "کاربران", roles: "دسترسی نقش‌ها",
 };
-// The customer list is confidential, and user management belongs to the super administrator alone.
-const VIEWS_BY_ROLE: Record<Role, readonly View[]> = {
-  // Managers decide warranties (with their photos) from «گارانتی‌ها»; the photo review page is the counter's alone.
-  superadmin: VIEWS.filter(v => v !== "review"),
-  admin: VIEWS.filter(v => v !== "customers" && v !== "users" && v !== "review"),
-  // Counter (کانتر): reviews installers' photos and reads carton serials; never sees warranty codes.
-  counter: ["review", "labels", "account"],
-};
+// Which pages a role sees is chosen by the super administrator («دسترسی نقش‌ها»); the API sends the role's permissions
+// with the session. Users and role permissions belong to the super administrator alone; everyone has their own account.
+type Session = { role: Role; perms: ReadonlySet<string> };
+function allowedViews({ role, perms }: Session): View[] {
+  return VIEWS.filter(v => {
+    if (v === "account") return true;
+    if (v === "users" || v === "roles") return role === "superadmin";
+    // The super administrator decides warranties (with their photos) from «گارانتی‌ها».
+    if (v === "review" && role === "superadmin") return false;
+    return perms.has(`${v}.view`);
+  });
+}
 const roleFromSession = (value: string): Role => value === "superadmin" || value === "counter" ? value : "admin";
+const sessionFrom = (s: { role: string; permissions?: string[] }): Session => ({ role: roleFromSession(s.role), perms: new Set(s.permissions ?? []) });
 
 // ── SVG Nav Icons ─────────────────────────────────────────────────────────────
 const NavIcons: Record<View, JSX.Element> = {
@@ -57,6 +63,7 @@ const NavIcons: Record<View, JSX.Element> = {
   sms:      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>,
   settings: <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>,
   account:  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>,
+  roles:    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/><circle cx="12" cy="10" r="2"/><path d="M12 12v4"/></svg>,
   users:    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="9" cy="7" r="4"/><path d="M3 21v-2a4 4 0 0 1 4-4h4a4 4 0 0 1 4 4v2"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/><path d="M21 21v-2a4 4 0 0 0-3-3.87"/></svg>,
 };
 const viewFromHash = (): View => {
@@ -67,27 +74,48 @@ const viewFromHash = (): View => {
 export default function AdminPage() {
   const [state, setState] = useState<"checking" | "out" | "in">("checking");
   const [view, setView] = useState<View>("overview");
-  const [role, setRole] = useState<Role>("admin");
+  const [session, setSession] = useState<Session>({ role: "admin", perms: new Set() });
+  const allowed = allowedViews(session);
+  const allowedKey = allowed.join(",");
+
+  const enter = useCallback((next: Session) => {
+    setSession(next);
+    const views = allowedViews(next), wanted = viewFromHash();
+    setView(views.includes(wanted) ? wanted : views[0]);
+    setState("in");
+  }, []);
 
   // Restore an existing HttpOnly-cookie session; any 401 later returns to the sign-in form.
   useEffect(() => {
     let live = true;
     adminSession()
-      .then(s => {
-        if (!live) return;
-        const r = roleFromSession(s.role);
-        setRole(r);
-        const wanted = viewFromHash();
-        setView(VIEWS_BY_ROLE[r].includes(wanted) ? wanted : VIEWS_BY_ROLE[r][0]);
-        setState("in");
-      })
+      .then(s => { if (live) enter(sessionFrom(s)); })
       .catch(() => { if (live) setState("out"); });
+    return () => { live = false; };
+  }, [enter]);
+
+  useEffect(() => {
     const out = () => setState("out");
-    const hash = () => setView(v => (VIEWS_BY_ROLE[role].includes(viewFromHash()) ? viewFromHash() : v));
+    const views = allowedKey.split(",");
+    const hash = () => setView(v => (views.includes(viewFromHash()) ? viewFromHash() : v));
     window.addEventListener(ADMIN_UNAUTHORIZED, out);
     window.addEventListener("hashchange", hash);
-    return () => { live = false; window.removeEventListener(ADMIN_UNAUTHORIZED, out); window.removeEventListener("hashchange", hash); };
-  }, [role]);
+    return () => { window.removeEventListener(ADMIN_UNAUTHORIZED, out); window.removeEventListener("hashchange", hash); };
+  }, [allowedKey]);
+
+  // The super administrator may change this role's permissions at any time; pick them up when the tab comes back.
+  useEffect(() => {
+    if (state !== "in") return;
+    const refresh = () => {
+      if (document.visibilityState !== "visible") return;
+      adminSession().then(s => {
+        const next = sessionFrom(s);
+        setSession(prev => prev.role === next.role && prev.perms.size === next.perms.size && [...next.perms].every(k => prev.perms.has(k)) ? prev : next);
+      }).catch(() => {});
+    };
+    document.addEventListener("visibilitychange", refresh);
+    return () => document.removeEventListener("visibilitychange", refresh);
+  }, [state]);
 
   const nav = useCallback((v: View) => {
     setView(v);
@@ -95,13 +123,15 @@ export default function AdminPage() {
   }, []);
 
   if (state === "checking") return <div className={styles.loginWrap}><p className={styles.loading}>{fa("Loading…")}</p></div>;
-  if (state === "out") return <LoginView onLogin={r => { setRole(r); setView(VIEWS_BY_ROLE[r][0]); setState("in"); }} />;
-  return <AdminApp view={view} role={role} onNav={nav} onLogout={() => { adminLogout().catch(() => {}).finally(() => setState("out")); }} />;
+  if (state === "out") return <LoginView onLogin={enter} />;
+  return <PermsProvider value={session.perms}>
+    <AdminApp view={view} role={session.role} allowed={allowed} onNav={nav} onLogout={() => { adminLogout().catch(() => {}).finally(() => setState("out")); }} />
+  </PermsProvider>;
 }
 
 // ── Login ────────────────────────────────────────────────────────────────────
 
-function LoginView({ onLogin }: { onLogin: (role: Role) => void }) {
+function LoginView({ onLogin }: { onLogin: (session: Session) => void }) {
   const [username, setUsername] = useState("");
   const [pw, setPw] = useState("");
   const [err, setErr] = useState("");
@@ -112,9 +142,10 @@ function LoginView({ onLogin }: { onLogin: (role: Role) => void }) {
     setLoading(true);
     setErr("");
     try {
-      const session = await adminLogin(username.trim(), pw);
+      const login = await adminLogin(username.trim(), pw);
       setPw("");
-      onLogin(roleFromSession(session.role));
+      // The session carries the role's current permissions; fall back to the role alone if it cannot be read.
+      onLogin(await adminSession().then(sessionFrom).catch(() => sessionFrom(login)));
     } catch (ex: unknown) {
       setErr(fa(errorText(ex, fa("Login failed"))));
     } finally {
@@ -148,11 +179,12 @@ const NAV_GROUPS: { label?: string; views: View[] }[] = [
   { views: ["overview", "reports"] },
   { label: "مدیریت", views: ["warranties", "review", "partners", "claims", "tickets", "rolls", "warehouses", "products", "customers", "labels", "history"] },
   { label: "پیکربندی", views: ["sms", "settings"] },
-  { label: "حساب", views: ["account", "users"] },
+  { label: "حساب", views: ["account", "users", "roles"] },
 ];
 
-function AdminApp({ view, role, onNav, onLogout }: { view: View; role: Role; onNav: (v: View) => void; onLogout: () => void }) {
-  const allowed = VIEWS_BY_ROLE[role];
+function AdminApp({ view: wanted, role, allowed, onNav, onLogout }: { view: View; role: Role; allowed: readonly View[]; onNav: (v: View) => void; onLogout: () => void }) {
+  // Never render a page the role is not allowed (e.g. right after the super administrator takes it away).
+  const view = allowed.includes(wanted) ? wanted : allowed[0];
   return (
     <div className={styles.app}>
       <aside className={styles.side}>
@@ -202,15 +234,16 @@ function AdminApp({ view, role, onNav, onLogout }: { view: View; role: Role; onN
         {view === "customers" && <CustomersPanel />}
         {view === "account"   && <AccountPanel role={role} />}
         {view === "users"     && <UsersPanel />}
-        {view === "warranties"&& <WarrantiesPanel role={role} />}
+        {view === "roles"     && <RolesPanel />}
+        {view === "warranties"&& <WarrantiesPanel />}
         {view === "review"    && <ReviewPanel />}
         {view === "partners"  && <PartnersPanel onReview={() => onNav("warranties")} />}
         {view === "claims"    && <ClaimsPanel />}
         {view === "tickets"   && <TicketsPanel />}
         {view === "history"   && <HistoryPanel />}
-        {view === "rolls"     && <RollsPanel role={role} />}
+        {view === "rolls"     && <RollsPanel />}
         {view === "warehouses"&& <WarehousesPanel />}
-        {view === "labels"    && <BoxLabelsPanel onSettings={() => onNav("settings")} role={role} />}
+        {view === "labels"    && <BoxLabelsPanel onSettings={() => onNav("settings")} />}
         {view === "sms"       && <SmsSettingsPanel />}
         {view === "settings"  && <SettingsPanel />}
       </main>
@@ -572,8 +605,9 @@ const loadWarranties = (q: string) => adminWarranties<WRow>(q).then(r => {
   return { ...r, items: r.items.map((w, i) => ({ ...w, ref: refs[i] ?? w.code })) };
 });
 
-function WarrantiesPanel({ role }: { role: Role }) {
-  const seesCodes = role === "superadmin";
+function WarrantiesPanel() {
+  const can = useCan();
+  const seesCodes = can("codes.view");
   const [status, setStatus] = useState("pending");
   const [f, setF] = useState(W_EMPTY);
   const [selected, setSelected] = useState<WRow | null>(null);
@@ -784,7 +818,7 @@ function WarrantiesPanel({ role }: { role: Role }) {
                 {selected.reviewNote ? <p className={styles.wNote}><b>یادداشت بررسی</b>{fa(String(selected.reviewNote))}</p> : null}
               </>;
             })()}
-            <div className={`${styles.wDecide} ${styles.adminForm}`}>
+            {can("warranties.edit") && <div className={`${styles.wDecide} ${styles.adminForm}`}>
               <h3>تصمیم</h3>
               <div className={styles.wSeg} role="radiogroup" aria-label="وضعیت">
                 {([["active", "فعال‌سازی"], ["rejected", "رد"], ["pending", "در انتظار بماند"]] as const).map(([v, l]) => (
@@ -799,7 +833,7 @@ function WarrantiesPanel({ role }: { role: Role }) {
                 {saving ? "در حال ذخیره…" : "ذخیره تصمیم"}
               </button>
               {msg && <p>{msg}</p>}
-            </div>
+            </div>}
             <WarrantyActivity key={String(selected.ref ?? selected.code)} code={String(selected.ref ?? selected.code)} />
           </div>
         </div>
@@ -886,8 +920,9 @@ function RollHistoryItem({ h }: { h: RollHistoryEvent }) {
   </li>;
 }
 
-function RollsPanel({ role }: { role: Role }) {
-  const seesCodes = role === "superadmin";
+function RollsPanel() {
+  const can = useCan();
+  const seesCodes = can("codes.view");
   const [form, setForm] = useState({ modelCode: "", type: "tint", batch: "", supplier: "", qc: "pending", widthCm: "", lengthM: "", warehouseId: "" });
   // Location choices: warehouses (for receipt and moves) and system users (who can hold a roll).
   const [locations, setLocations] = useState<{ warehouses: { id: number; name: string }[]; users: { id: number; name: string }[] }>({ warehouses: [], users: [] });
@@ -980,8 +1015,8 @@ function RollsPanel({ role }: { role: Role }) {
     try {
       const num = (v: string) => (v.trim() === "" ? null : Number(v));
       if (!selectedProduct) { setMsg("مدل فیلم را انتخاب کنید."); return; }
-      const made = await adminCreateRolls({ ...form, modelCode: selectedProduct.code, quantity: rollNos.length || 1, rollNos, widthCm: num(form.widthCm), lengthM: num(form.lengthM), warehouseId: receiveWarehouse ? Number(receiveWarehouse) : null }) as { id: string }[];
-      const ids = made.map(r => r.id);
+      const made = await adminCreateRolls({ ...form, modelCode: selectedProduct.code, quantity: rollNos.length || 1, rollNos, widthCm: num(form.widthCm), lengthM: num(form.lengthM), warehouseId: receiveWarehouse ? Number(receiveWarehouse) : null }) as { id: string | null; number: number }[];
+      const ids = made.map(r => r.id ?? `#${r.number}`);
       setRollNos([]);
       setMsg(`${ids.length.toLocaleString("fa-IR")} رول ساخته شد: ${ids.join("، ")}`);
       // Show the new rolls: clear filters, newest first, first page, then scroll down to them.
@@ -1010,7 +1045,7 @@ function RollsPanel({ role }: { role: Role }) {
   return (
     <section>
       <header className={styles.panelHead}><div><span className={styles.eyebrow}>ثبت رول‌ها</span><h1>رول‌ها و Batchها</h1></div></header>
-      {seesCodes && <div className={styles.card}>
+      {can("rolls.create") && <div className={styles.card}>
         <h2>دریافت رول</h2>
         <form onSubmit={onSubmit} className={styles.adminForm}>
           <div className={styles.row2}>
@@ -1125,10 +1160,10 @@ function RollsPanel({ role }: { role: Role }) {
                   <button type="button" className={`${styles.ghost} ${styles.iconBtn}`} title="تاریخچه" aria-label={`تاریخچه رول ${r.number}`} onClick={() => openHistory(r)}>
                     <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><path d="M3 12a9 9 0 1 0 3-6.7L3 8"/><path d="M3 3v5h5"/><path d="M12 7v5l3 2"/></svg>
                   </button>
-                  <button type="button" className={`${styles.ghost} ${styles.iconBtn}`} title="مدیریت" aria-label={`مدیریت رول ${r.number}`} onClick={() => openEdit(r)}>
+                  {can("rolls.edit") && <button type="button" className={`${styles.ghost} ${styles.iconBtn}`} title="مدیریت" aria-label={`مدیریت رول ${r.number}`} onClick={() => openEdit(r)}>
                     <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><path d="M12 20h9"/><path d="M16.5 3.5a2.1 2.1 0 0 1 3 3L7 19l-4 1 1-4z"/></svg>
-                  </button>
-                  {seesCodes && <button type="button" className={`${styles.danger} ${styles.iconBtn}`} title="حذف" aria-label={`حذف رول ${r.id}`} onClick={() => deleteRoll(r.id)}>
+                  </button>}
+                  {can("rolls.delete") && <button type="button" className={`${styles.danger} ${styles.iconBtn}`} title="حذف" aria-label={`حذف رول ${r.id || r.number}`} onClick={() => deleteRoll(r.id || String(r.number))}>
                     <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"/><path d="M10 11v6"/><path d="M14 11v6"/><path d="M9 6V4a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v2"/></svg>
                   </button>}
                 </div></td>
@@ -1169,7 +1204,7 @@ function RollsPanel({ role }: { role: Role }) {
         <label>یادداشت تغییر<textarea maxLength={1000} value={note} onChange={e => setNote(e.target.value)} /></label>
         <div className={styles.filters}>
           <button className={styles.btnPrimary} disabled={saving}>{saving ? "در حال ذخیره…" : "ذخیره موجودی"}</button>
-          {seesCodes && <button type="button" className={styles.danger} disabled={saving} onClick={() => { deleteRoll(edit.id); setEdit(null); }}>حذف رول</button>}
+          {can("rolls.delete") && <button type="button" className={styles.danger} disabled={saving} onClick={() => { deleteRoll(edit.id || String(edit.number)); setEdit(null); }}>حذف رول</button>}
         </div>
         {msg && <p role="alert">{msg}</p>}
       </form></div>}
@@ -1205,6 +1240,7 @@ function RollsPanel({ role }: { role: Role }) {
 // ── Settings ──────────────────────────────────────────────────────────────────
 
 function SettingsPanel() {
+  const canEdit = useCan()("settings.edit");
   const [vals, setVals] = useState({ tintFilm: null as number | null, tintInstall: null as number | null, ppfFilm: null as number | null, ppfInstall: null as number | null });
   const [codeLength, setCodeLength] = useState(16);
   const [msg, setMsg] = useState("");
@@ -1241,7 +1277,7 @@ function SettingsPanel() {
     <section>
       <header className={styles.panelHead}><div><span className={styles.eyebrow}>تنظیمات</span><h1>{fa("Coverage periods")}</h1></div></header>
       <div className={styles.card} style={{ maxWidth: 540 }}>
-        <form onSubmit={onSubmit} className={styles.adminForm}>
+        <form onSubmit={onSubmit} className={styles.adminForm}><fieldset disabled={!canEdit} style={{ display: "contents" }}>
           {[
             { label: "Tint – film warranty", key: "tintFilm" as const },
             { label: "Tint – installation warranty", key: "tintInstall" as const },
@@ -1264,7 +1300,7 @@ function SettingsPanel() {
             {saving ? fa("Saving…") : fa("Save periods ↗")}
           </button>
           {msg && <p>{msg}</p>}
-        </form>
+        </fieldset></form>
       </div>
       <p className={styles.empty}>اتصال پیامک و قواعد تأیید به بخش پیامک منتقل شده است.</p>
     </section>

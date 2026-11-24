@@ -14,10 +14,10 @@ namespace Solarzed.Api.Controllers;
 /// </summary>
 [ApiController]
 [Route("api/registrations")]
-[Authorize(Policy = "AdminPolicy")]
+[Authorize(Policy = "StaffPolicy")]
 public class RegistrationController(AppDbContext db) : ControllerBase
 {
-    [HttpPost]
+    [HttpPost, Perm("warranties.edit")]
     public async Task<IActionResult> Register([FromBody] RegisterRequest req)
     {
         var setting = await db.CoverageSettings.AsNoTracking().FirstOrDefaultAsync();
@@ -41,7 +41,7 @@ public class RegistrationController(AppDbContext db) : ControllerBase
         return Ok(new { code = entity.Code, flags });
     }
 
-    [HttpGet("{code}")]
+    [HttpGet("{code}"), Perm("warranties.view")]
     public async Task<IActionResult> GetByCode(string code)
     {
         var w = await db.WarrantyRegistrations.FirstOrDefaultAsync(x => x.Code == code);

@@ -11,7 +11,7 @@ namespace Solarzed.Api.Controllers;
 /// Installer partners (همکاران): public-site accounts that may register warranties for customers. Partners apply from
 /// their account or are added here by mobile; managers approve or suspend them and see their work.
 /// </summary>
-[ApiController, Route("api/admin/partners"), Authorize(Policy = "AdminPolicy")]
+[ApiController, Route("api/admin/partners"), Authorize(Policy = "StaffPolicy")]
 public class PartnersController(AppDbContext db) : ControllerBase
 {
     static readonly Dictionary<string, PartnerStatus> Statuses = new()
@@ -20,7 +20,7 @@ public class PartnersController(AppDbContext db) : ControllerBase
         ["suspended"] = PartnerStatus.Suspended, ["none"] = PartnerStatus.None,
     };
 
-    [HttpGet]
+    [HttpGet, Perm("partners.view")]
     public async Task<IActionResult> List([FromQuery] string? status, [FromQuery] string? q, CancellationToken ct)
     {
         var query = db.PortalUsers.AsNoTracking().Where(u => u.Partner != PartnerStatus.None && u.Phone != null);
@@ -64,7 +64,7 @@ public class PartnersController(AppDbContext db) : ControllerBase
     }
 
     /// <summary>Adds (or approves) a partner by mobile; the partner then signs in on the site with that mobile.</summary>
-    [HttpPost]
+    [HttpPost, Perm("partners.edit")]
     public async Task<IActionResult> Add([FromBody] PartnerSaveRequest req, CancellationToken ct)
     {
         string phone;
@@ -89,7 +89,7 @@ public class PartnersController(AppDbContext db) : ControllerBase
         return Ok(new { id = user.Id });
     }
 
-    [HttpPost("{id:int}/status")]
+    [HttpPost("{id:int}/status"), Perm("partners.edit")]
     public async Task<IActionResult> SetStatus(int id, [FromBody] PartnerStatusRequest req, CancellationToken ct)
     {
         if (req.Status == null || !Statuses.TryGetValue(req.Status, out var next) || next == PartnerStatus.Pending)

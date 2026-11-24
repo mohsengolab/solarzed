@@ -10,27 +10,28 @@ namespace Solarzed.Api.Controllers;
 [ApiController, Route("api/admin/box-labels"), Authorize(Policy = "StaffPolicy")]
 public class BoxLabelsController(AppDbContext db, BoxLabelService labels, BoxTransferService transfers, IActivationSmsSender sms) : ControllerBase
 {
-    bool IsAdmin => User.IsInRole("admin") || User.IsInRole("superadmin");
+    // Full label details (activation links, card codes) go with the permission to issue cards.
+    bool IsAdmin => Permissions.Has(User, "labels.edit");
 
     // Both managers and carton operators move boxes; the box serial is the only identifier used.
-    [HttpPost("transfers")]
+    [HttpPost("transfers"), Perm("labels.transfer")]
     public async Task<IActionResult> Transfer(TransferRequest request)
     {
         try { return Ok(await transfers.Transfer(request, AuditLog.Actor(User))); }
         catch (ActivationError ex) { return StatusCode(ex.Status, new { error = ex.Message }); }
     }
 
-    [HttpGet("{serial}/transfers")]
+    [HttpGet("{serial}/transfers"), Perm("labels.view", "labels.transfer")]
     public async Task<IActionResult> History(string serial)
     {
         try { return Ok(await transfers.History(serial)); }
         catch (ActivationError ex) { return StatusCode(ex.Status, new { error = ex.Message }); }
     }
 
-    [HttpGet("holders")]
+    [HttpGet("holders"), Perm("labels.view", "labels.transfer")]
     public async Task<IActionResult> Holders() => Ok(new { holders = await transfers.Holders() });
 
-    [HttpGet]
+    [HttpGet, Perm("labels.view", "warranties.view")]
     public async Task<IActionResult> List()
     {
         var site = await labels.Site();
@@ -41,7 +42,7 @@ public class BoxLabelsController(AppDbContext db, BoxLabelService labels, BoxTra
     }
 
     // Issuing labels is a manager action; the counter role can only read serials.
-    [HttpPost, Authorize(Policy = "AdminPolicy")]
+    [HttpPost, Perm("labels.edit")]
     public async Task<IActionResult> Issue(IssueLabelsRequest request)
     {
         try
@@ -56,14 +57,14 @@ public class BoxLabelsController(AppDbContext db, BoxLabelService labels, BoxTra
     }
 
     // Rolls with a recorded carton Roll No: one warranty card each, issued straight from the roll list.
-    [HttpPost("from-rolls"), Authorize(Policy = "AdminPolicy")]
+    [HttpPost("from-rolls"), Perm("labels.edit")]
     public async Task<IActionResult> IssueForRolls(IssueForRollsRequest request)
     {
         try { return Ok(new { labels = await labels.IssueForRolls(request.RollIds) }); }
         catch (ActivationError ex) { return StatusCode(ex.Status, new { error = ex.Message }); }
     }
 
-    [HttpPost("site"), Authorize(Policy = "AdminPolicy")]
+    [HttpPost("site"), Perm("labels.edit")]
     public async Task<IActionResult> Site(SiteUrlRequest request)
     {
         try

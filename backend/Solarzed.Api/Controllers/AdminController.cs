@@ -73,7 +73,10 @@ public class AdminController(AppDbContext db, IConfiguration cfg, Microsoft.AspN
         var role = User.FindFirst(ClaimTypes.Role)?.Value;
         if (string.IsNullOrEmpty(role) && name != null)
             role = await db.AdminUsers.Where(a => a.Username == name).Select(a => a.Role).FirstOrDefaultAsync();
-        return Ok(new { username = name ?? "admin", role = role ?? "admin" });
+        // The pages and actions this role may use, so the admin UI shows only what the API will allow.
+        var permissions = User.Claims.Where(c => c.Type == Permissions.ClaimType).Select(c => c.Value).Distinct().OrderBy(k => k).ToArray();
+        if (role == "superadmin") permissions = [.. Permissions.All.OrderBy(k => k)];
+        return Ok(new { username = name ?? "admin", role = role ?? "admin", permissions });
     }
 
     [AllowAnonymous]
@@ -106,7 +109,7 @@ public class AdminController(AppDbContext db, IConfiguration cfg, Microsoft.AspN
     // ── Overview ────────────────────────────────────────────────────────────
 
     [HttpGet("overview")]
-    [Authorize(Policy = "AdminPolicy")]
+    [Perm("overview.view", "reports.view")]
     public async Task<IActionResult> Overview()
     {
         var total = await db.WarrantyRegistrations.CountAsync();
@@ -142,7 +145,7 @@ public class AdminController(AppDbContext db, IConfiguration cfg, Microsoft.AspN
     };
 
     [HttpGet("warranties")]
-    [Authorize(Policy = "AdminPolicy")]
+    [Perm("warranties.view", "reports.view")]
     public async Task<IActionResult> Warranties([FromQuery] WarrantySearch f, CancellationToken ct)
     {
         var query = db.WarrantyRegistrations.AsNoTracking();
@@ -191,7 +194,7 @@ public class AdminController(AppDbContext db, IConfiguration cfg, Microsoft.AspN
     }
 
     [HttpPost("warranties/{code}/decision")]
-    [Authorize(Policy = "AdminPolicy")]
+    [Perm("warranties.edit")]
     public async Task<IActionResult> Decision(string code, [FromBody] DecisionRequest req)
     {
         if (Confidential.Resolve(code, HttpContext?.User, protection) is not { } resolved) return NotFound();
@@ -252,6 +255,7 @@ public class AdminController(AppDbContext db, IConfiguration cfg, Microsoft.AspN
     };
 
     [HttpGet("rolls")]
+    [Perm("rolls.view", "reports.view", "labels.edit")]
     public async Task<IActionResult> GetRolls([FromQuery] RollSearch f, CancellationToken ct)
     {
         var query = db.Rolls.AsNoTracking();
@@ -348,7 +352,7 @@ public class AdminController(AppDbContext db, IConfiguration cfg, Microsoft.AspN
     }
 
     [HttpPost("rolls")]
-    [Authorize(Policy = "SuperAdminPolicy")]   // receiving shows the new roll IDs
+    [Perm("rolls.create")]
     public async Task<IActionResult> ReceiveRolls([FromBody] CreateRollsRequest req)
     {
         if (string.IsNullOrWhiteSpace(req.ModelCode)) return BadRequest(new { error = "modelCode required" });
@@ -387,7 +391,8 @@ public class AdminController(AppDbContext db, IConfiguration cfg, Microsoft.AspN
         // Two receipts of the same carton at once trip the unique Roll No index.
         // Two receipts at once trip the unique Roll No or register-number index.
         catch (DbUpdateException) { return Conflict(new { error = "Another receipt was saved at the same time. Refresh and try again." }); }
-        return Ok(rolls.Select(r => new { r.Id, r.Number, r.RollNo, r.ModelCode, r.Type, r.Batch }));
+        // A role allowed to receive rolls but not to see codes gets the register number only.
+        return Ok(rolls.Select(r => new { Id = SeesCodes ? r.Id : null, r.Number, r.RollNo, r.ModelCode, r.Type, r.Batch }));
     }
 
     /// <summary>A location's display name for transfer records: the user holding the roll wins over its warehouse.</summary>
@@ -406,7 +411,7 @@ public class AdminController(AppDbContext db, IConfiguration cfg, Microsoft.AspN
     /// A null <c>From</c>/<c>To</c> on a hand-over means the warehouse.
     /// </summary>
     [HttpGet("rolls/{id}/history")]
-    [Authorize(Policy = "AdminPolicy")]
+    [Perm("rolls.view")]
     public async Task<IActionResult> RollHistory(string id, CancellationToken ct)
     {
         var roll = int.TryParse(id, out var number)
@@ -458,6 +463,7 @@ public class AdminController(AppDbContext db, IConfiguration cfg, Microsoft.AspN
 
     /// <summary>Choices for a roll's location: active warehouses and active system users (names only).</summary>
     [HttpGet("locations")]
+    [Perm("rolls.view")]
     public async Task<IActionResult> Locations(CancellationToken ct) => Ok(new
     {
         warehouses = await db.Warehouses.AsNoTracking().Where(w => !w.Archived).OrderBy(w => w.Name)
@@ -467,7 +473,7 @@ public class AdminController(AppDbContext db, IConfiguration cfg, Microsoft.AspN
     });
 
     [HttpPost("rolls/{id}")]
-    [Authorize(Policy = "AdminPolicy")]
+    [Perm("rolls.edit")]
     public async Task<IActionResult> UpdateRoll(string id, [FromBody] UpdateRollRequest req)
     {
         // Other staff address a roll by its register number, since they do not see roll IDs.
@@ -580,11 +586,15 @@ public class AdminController(AppDbContext db, IConfiguration cfg, Microsoft.AspN
     /// cannot be given to another carton. Warranty registrations are customer records and are only unlinked.
     /// </summary>
     [HttpDelete("rolls/{id}")]
-    [Authorize(Policy = "SuperAdminPolicy")]
+    [Perm("rolls.delete")]
     public async Task<IActionResult> DeleteRoll(string id)
     {
-        var roll = await db.Rolls.FirstOrDefaultAsync(r => r.Id == id);
+        // A role allowed to delete without seeing roll IDs addresses the roll by its register number.
+        var roll = int.TryParse(id, out var number)
+            ? await db.Rolls.FirstOrDefaultAsync(r => r.Number == number)
+            : await db.Rolls.FirstOrDefaultAsync(r => r.Id == id);
         if (roll == null) return NotFound();
+        id = roll.Id;
 
         var labels = await db.BoxLabels.Where(b => b.RollId == id).ToListAsync();
         var kept = labels.Where(b => b.ActivatedAt != null).ToList();
@@ -640,7 +650,7 @@ public class AdminController(AppDbContext db, IConfiguration cfg, Microsoft.AspN
     }
 
     [HttpPost("settings")]
-    [Authorize(Policy = "AdminPolicy")]
+    [Perm("settings.edit")]
     public async Task<IActionResult> SaveSettings([FromBody] SettingsRequest req)
     {
         foreach (var period in new[] { req.Durations?.Tint, req.Durations?.Ppf })
