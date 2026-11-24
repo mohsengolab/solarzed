@@ -42,7 +42,9 @@
     ".next-b/types/**/*.ts",
     ".next-b/dev/types/**/*.ts",
     ".next-history/types/**/*.ts",
-    ".next-history/dev/types/**/*.ts"
+    ".next-history/dev/types/**/*.ts",
+    ".next-roles/types/**/*.ts",
+    ".next-roles/dev/types/**/*.ts"
   ],
   "exclude": [
     "node_modules",
