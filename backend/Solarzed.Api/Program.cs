@@ -33,6 +33,8 @@ if (builder.Configuration["SOLARZED_KEYS_DIR"] is { Length: > 0 } keysDir)
 }
 builder.Services.AddSingleton(TimeProvider.System);
 builder.Services.AddSingleton<LoginThrottle>();
+builder.Services.AddSingleton<PermissionStore>();
+builder.Services.AddSingleton<Microsoft.AspNetCore.Authorization.IAuthorizationPolicyProvider, PermissionPolicyProvider>();
 builder.Services.AddSingleton<SmsLog>();
 builder.Services.AddScoped<BoxLabelService>();
 builder.Services.AddScoped<BoxTransferService>();
@@ -144,7 +146,14 @@ authentication.AddJwtBearer(o =>
                     .Select(a => new { a.PasswordHash, a.Role, a.Active })
                     .FirstOrDefaultAsync();
                 if (account == null || !account.Active || stamp != AdminAuth.Stamp(account.PasswordHash) || role != account.Role)
+                {
                     ctx.Fail("Session revoked.");
+                    return;
+                }
+                // The role's current permissions (set by the super administrator) ride along as "perm" claims,
+                // so a change applies on the next request without signing anyone out.
+                var perms = await ctx.HttpContext.RequestServices.GetRequiredService<PermissionStore>().For(account.Role, db);
+                ctx.Principal!.AddIdentity(new ClaimsIdentity(perms.Select(p => new Claim(Permissions.ClaimType, p))));
             },
         };
     });

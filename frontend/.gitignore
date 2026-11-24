@@ -45,4 +45,5 @@ next-env.d.ts
 /.next-a/
 /.next-b/
 /.next-sn/
+/.next-roles/
 /.next-slot

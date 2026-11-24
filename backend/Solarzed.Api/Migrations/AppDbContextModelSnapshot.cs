@@ -515,6 +515,24 @@ namespace Solarzed.Api.Migrations
                     b.ToTable("Products");
                 });
 
+            modelBuilder.Entity("Solarzed.Api.Domain.RolePermission", b =>
+                {
+                    b.Property<string>("Role")
+                        .HasMaxLength(20)
+                        .HasColumnType("nvarchar(20)");
+
+                    b.Property<string>("PermissionsJson")
+                        .IsRequired()
+                        .HasColumnType("nvarchar(max)");
+
+                    b.Property<DateTime>("UpdatedAt")
+                        .HasColumnType("datetime2");
+
+                    b.HasKey("Role");
+
+                    b.ToTable("RolePermissions");
+                });
+
             modelBuilder.Entity("Solarzed.Api.Domain.Roll", b =>
                 {
                     b.Property<string>("Id")

@@ -8,6 +8,7 @@ import {
 import s from "./admin.module.css";
 import own from "./partners.module.css";
 import { errorText as message } from "./AdminKit";
+import { useCan } from "./RolesPanel";
 
 const date = (v: string | null) => v ? new Date(v).toLocaleDateString(FA_DATE) : "—";
 const STATUS_FA: Record<PartnerRow["status"], string> = { pending: "در انتظار تأیید", approved: "تأییدشده", suspended: "تعلیق" };
@@ -17,6 +18,7 @@ const EMPTY = { phone: "", shopName: "", firstName: "", lastName: "", country: "
 // ── همکاران (نصاب‌ها) ─────────────────────────────────────────────────────────
 
 export function PartnersPanel({ onReview }: { onReview: () => void }) {
+  const canEdit = useCan()("partners.edit");
   const [rows, setRows] = useState<PartnerRow[]>([]);
   const [counts, setCounts] = useState<Record<string, number>>({});
   const [status, setStatus] = useState("");
@@ -58,7 +60,7 @@ export function PartnersPanel({ onReview }: { onReview: () => void }) {
   return <section>
     <header className={s.panelHead}>
       <div><span className={s.eyebrow}>نصاب‌ها و فروشگاه‌ها</span><h1>همکاران</h1></div>
-      <button type="button" className={s.btnPrimary} onClick={() => setAdding(v => !v)}>{adding ? "بستن" : "+ افزودن همکار"}</button>
+      {canEdit && <button type="button" className={s.btnPrimary} onClick={() => setAdding(v => !v)}>{adding ? "بستن" : "+ افزودن همکار"}</button>}
     </header>
     <p className={s.empty}>همکاران با موبایل خود در سایت وارد می‌شوند، کارت گارانتی داخل کارتن را اسکن می‌کنند و مشخصات خودرو، موبایل مشتری و عکس‌های نصب را ثبت می‌کنند. گارانتی به نام مشتری ثبت می‌شود و پس از تأیید عکس‌ها توسط کانتر فعال می‌شود.</p>
 
@@ -69,7 +71,7 @@ export function PartnersPanel({ onReview }: { onReview: () => void }) {
         </button>)}
     </div>
 
-    {adding && <form className={`${s.card} ${s.adminForm}`} onSubmit={add}>
+    {adding && canEdit && <form className={`${s.card} ${s.adminForm}`} onSubmit={add}>
       <h2>افزودن همکار</h2>
       <div className={s.row2}>
         <label>موبایل<input required dir="ltr" type="tel" inputMode="tel" maxLength={20} placeholder="09…" value={form.phone} onChange={e => setForm({ ...form, phone: e.target.value })} /></label>
@@ -98,11 +100,11 @@ export function PartnersPanel({ onReview }: { onReview: () => void }) {
         <td>{p.pendingReview > 0 ? <button type="button" className={s.ghost} onClick={onReview}>{fa(String(p.pendingReview))} مورد</button> : "—"}</td>
         <td>{fa(String(p.cartons))}</td>
         <td>{date(p.lastInstall)}</td>
-        <td className={own.actions}>
+        <td className={own.actions}>{canEdit && <>
           {p.status !== "approved" && <button type="button" className={s.ghost} onClick={() => change(p, "approved")}>تأیید</button>}
           {p.status !== "suspended" && <button type="button" className={s.danger} onClick={() => change(p, "suspended")}>تعلیق</button>}
           {p.status !== "approved" && <button type="button" className={s.ghost} onClick={() => change(p, "none")}>حذف از همکاران</button>}
-        </td>
+        </>}</td>
       </tr>)}
     </tbody></table>
       {rows.length === 0 && <p className={s.empty}>{status || q ? "همکاری با این فیلتر یافت نشد." : "هنوز همکاری ثبت نشده است. همکاران از صفحه «حساب من» در سایت درخواست می‌دهند یا اینجا اضافه می‌شوند."}</p>}
@@ -151,6 +153,7 @@ export function WarrantyPhotos({ refId }: { refId: string }) {
 }
 
 export function ReviewPanel() {
+  const canDecide = useCan()("review.edit");
   const [tab, setTab] = useState<"pending" | "active" | "rejected">("pending");
   const [items, setItems] = useState<ReviewItem[]>([]);
   const [pending, setPending] = useState(0);
@@ -212,7 +215,7 @@ export function ReviewPanel() {
         {item.flags.includes("vin_repeat") && <p className={s.errorText}>این VIN قبلاً گارانتی هم‌نوع داشته است.</p>}
         <div className={own.photos}>{item.photos.map(p => <Photo key={p.id} id={p.id} alt={KIND_FA[p.kind] ?? p.kind} onOpen={setZoom} />)}
           {item.photos.length === 0 && <p className={s.empty}>عکسی ارسال نشده است.</p>}</div>
-        {item.status === "pending" ? <div className={own.decide}>
+        {item.status === "pending" ? canDecide && <div className={own.decide}>
           <label>یادداشت برای نصاب (برای برگرداندن الزامی)<input maxLength={500} value={notes[item.ref] ?? ""} onChange={e => setNotes(n => ({ ...n, [item.ref]: e.target.value }))} placeholder="مثلاً پلاک در عکس خودرو خوانا نیست" /></label>
           <div className={s.filters}>
             <button type="button" className={s.btnPrimary} disabled={busy === item.ref || item.photos.length === 0} onClick={() => decide(item, true)}>تأیید و فعال‌سازی گارانتی</button>
@@ -220,7 +223,7 @@ export function ReviewPanel() {
           </div>
         </div> : <>
           {item.reviewNote && <p className={own.sub}>یادداشت: {item.reviewNote}{item.reviewedAt && ` · ${date(item.reviewedAt)}`}</p>}
-          {item.status === "active" && <div className={s.filters}>
+          {item.status === "active" && canDecide && <div className={s.filters}>
             <span className={own.sub}>{item.cardSentAt ? `پیامک کارت طلایی: ارسال شد · ${date(item.cardSentAt)}` : "پیامک کارت طلایی: ارسال نشده"}</span>
             <button type="button" className={s.btnPrimary} disabled={busy === item.ref} onClick={() => resendCard(item)}>{busy === item.ref ? "در حال ارسال…" : item.cardSentAt ? "ارسال دوباره پیامک کارت" : "ارسال پیامک کارت"}</button>
           </div>}

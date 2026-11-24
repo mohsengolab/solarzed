@@ -2,6 +2,7 @@
 
 import { useEffect, useRef, useState } from "react";
 import css from "./ScanButton.module.css";
+import { backdropProps } from "./backdrop";
 
 type Detector = { detect(source: HTMLVideoElement): Promise<{ rawValue: string }[]> };
 type DetectorClass = new (options: { formats: string[] }) => Detector;
@@ -62,7 +63,7 @@ export default function ScanButton({ onScan, label = "Scan", disabled }: { onSca
       <svg viewBox="0 0 24 24" width="18" height="18" aria-hidden="true" fill="none" stroke="currentColor" strokeWidth="2"><path d="M4 8V5a1 1 0 0 1 1-1h3M16 4h3a1 1 0 0 1 1 1v3M20 16v3a1 1 0 0 1-1 1h-3M8 20H5a1 1 0 0 1-1-1v-3M7 12h10" /></svg>
       {label}
     </button>
-    {open && <div className={css.overlay} role="dialog" aria-modal="true" aria-label="Scan the Serial Number">
+    {open && <div className={css.overlay} role="dialog" aria-modal="true" aria-label="Scan the Serial Number" {...backdropProps(() => setOpen(false))}>
       <div className={css.sheet}>
         <video ref={video} className={css.video} playsInline muted />
         <div className={css.frame} aria-hidden="true" />

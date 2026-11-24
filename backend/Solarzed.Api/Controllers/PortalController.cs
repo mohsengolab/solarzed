@@ -26,12 +26,17 @@ public class PortalController(PortalService portal, BoxTransferService transfers
         return user;
     }
 
+    /// <summary>Email codes (sign-in and adding an email) are off unless Portal:EmailVerification is true.</summary>
+    bool EmailVerification => cfg.GetValue("Portal:EmailVerification", false);
+    ObjectResult EmailOff() => StatusCode(503, new { error = "Email verification is temporarily unavailable. Please sign in with your mobile number." });
+
     [AllowAnonymous, HttpPost("otp"), EnableRateLimiting("portal-otp")]
     public async Task<IActionResult> SendCode(PortalOtpRequest request, CancellationToken ct)
     {
         try
         {
             var channel = string.Equals(request.Channel, "email", StringComparison.OrdinalIgnoreCase) || (string.IsNullOrWhiteSpace(request.Phone) && !string.IsNullOrWhiteSpace(request.Email)) ? "email" : "sms";
+            if (channel == "email" && !EmailVerification) return EmailOff();
             var identifier = channel == "email" ? request.Email : request.Phone;
             var challenge = await portal.SendCode(identifier ?? "", channel, ct);
             return Ok(new { challengeId = challenge.Id, phone = challenge.Phone, email = challenge.Email, channel,
@@ -118,6 +123,7 @@ public class PortalController(PortalService portal, BoxTransferService transfers
     [HttpPost("bind-email")]
     public async Task<IActionResult> BindEmail([FromBody] PortalBindRequest request, CancellationToken ct)
     {
+        if (!EmailVerification) return EmailOff();
         try
         {
             var me = await Me();

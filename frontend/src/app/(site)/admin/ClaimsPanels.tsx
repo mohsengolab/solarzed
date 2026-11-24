@@ -3,7 +3,9 @@
 import { FormEvent, useCallback, useEffect, useState } from "react";
 import { managementFetch, FA_DATE, type Paged } from "@/lib/api";
 import s from "./admin.module.css";
+import { backdropProps } from "@/components/backdrop";
 import { usePaged, SortTh, Pager, FilterBar, countActive, errorText } from "./AdminKit";
+import { useCan } from "./RolesPanel";
 
 // ── Labels (policy §4–§6) ─────────────────────────────────────────────────────
 
@@ -135,6 +137,7 @@ export function WarrantyActivity({ code }: { code: string }) {
 // ── Claim dialog ──────────────────────────────────────────────────────────────
 
 function ClaimDialog({ id, onClose, onSaved }: { id: string; onClose: () => void; onSaved: () => void }) {
+  const canEditClaim = useCan()("claims.edit");
   const [detail, setDetail] = useState<ClaimDetail | null>(null);
   const [form, setForm] = useState<Record<string, string>>({});
   const [msg, setMsg] = useState("");
@@ -172,7 +175,7 @@ function ClaimDialog({ id, onClose, onSaved }: { id: string; onClose: () => void
   const stageOrder = Object.keys(STAGES);
   const goingBack = c ? stageOrder.indexOf(form.stage) < stageOrder.indexOf(c.stage) : false;
 
-  return <div className={s.dialog} role="dialog" aria-modal="true" aria-label="پرونده ادعا" onKeyDown={e => { if (e.key === "Escape") onClose(); }}>
+  return <div className={s.dialog} role="dialog" aria-modal="true" aria-label="پرونده ادعا" {...backdropProps(onClose)}>
     <div className={s.dialogInner}>
       <button type="button" onClick={onClose} className={s.dialogClose} aria-label="بستن">×</button>
       <h2>پرونده ادعا — <span dir="ltr">{id}</span></h2>
@@ -189,7 +192,7 @@ function ClaimDialog({ id, onClose, onSaved }: { id: string; onClose: () => void
           تأیید دریافت تا {when(c!.due.acknowledgeBy)} · بررسی اولیه تا {when(c!.due.initialReviewBy)}
           {c!.due.decisionBy && <> · تصمیم تا {when(c!.due.decisionBy)}</>}
         </p>
-        <form className={s.adminForm} onSubmit={save}>
+        <form className={s.adminForm} onSubmit={save}><fieldset disabled={!canEditClaim} style={{ display: "contents" }}>
           <div className={s.row2}>
             <label>مرحله<select aria-label="مرحله" value={form.stage} onChange={set("stage")}>{Object.entries(STAGES).map(([k, v]) => <option key={k} value={k}>{v}</option>)}</select></label>
             <label>علت عیب<select aria-label="علت عیب" value={form.cause} onChange={set("cause")}>{Object.entries(CAUSES).map(([k, v]) => <option key={k} value={k}>{v}</option>)}</select></label>
@@ -207,7 +210,7 @@ function ClaimDialog({ id, onClose, onSaved }: { id: string; onClose: () => void
           <label>دلیل این تغییر {goingBack && <span style={{ color: "var(--sz-red)" }}>(برای بازگشت به مرحله قبل الزامی)</span>}<input maxLength={1000} value={form.reason} onChange={set("reason")} /></label>
           <div className={s.filters}><button className={s.btnPrimary} disabled={busy}>{busy ? "در حال ذخیره…" : "ذخیره پرونده"}</button></div>
           {msg && <p role="status">{msg}</p>}
-        </form>
+        </fieldset></form>
         <h3>سابقه تغییرات پرونده</h3>
         <AuditList rows={detail.history} />
       </>}
@@ -220,6 +223,7 @@ function ClaimDialog({ id, onClose, onSaved }: { id: string; onClose: () => void
 const CL_EMPTY = { q: "", open: "true", overdue: "", stage: "", decision: "", cause: "", createdFrom: "", createdTo: "" };
 
 export function ClaimsPanel() {
+  const canEdit = useCan()("claims.edit");
   const [f, setF] = useState(CL_EMPTY);
   // A claim link in the warranty dialog asks this panel to open that claim.
   const [openId, setOpenId] = useState<string | null>(() => {
@@ -238,10 +242,10 @@ export function ClaimsPanel() {
   return <section>
     <header className={s.panelHead}>
       <div><span className={s.eyebrow}>خدمات پس از فروش</span><h1>ادعاهای گارانتی</h1></div>
-      <button type="button" className={s.btnPrimary} onClick={() => setShowNew(v => !v)}>{showNew ? "بستن فرم" : "ادعای جدید"}</button>
+{canEdit && <button type="button" className={s.btnPrimary} onClick={() => setShowNew(v => !v)}>{showNew ? "بستن فرم" : "ادعای جدید"}</button>}
     </header>
     <p className={s.empty}>اهداف خدماتی پیشنهادی: تأیید دریافت ۲ روز کاری، بررسی اولیه ۳ روز کاری، تصمیم ۷ روز کاری پس از تکمیل مدارک (جمعه تعطیل). این‌ها هدف عملیاتی‌اند، نه مهلت قانونی.</p>
-    {showNew && <NewClaimForm onCreated={c => { list.reload(); setOpenId(c.id); setShowNew(false); }} />}
+    {showNew && canEdit && <NewClaimForm onCreated={c => { list.reload(); setOpenId(c.id); setShowNew(false); }} />}
     <FilterBar active={countActive(f, CL_EMPTY)} onClear={() => setF(CL_EMPTY)}>
       <label className={s.wide}>جستجو<input type="search" placeholder="شماره پیگیری، کد گارانتی، مالک، موبایل، VIN، پلاک، شرح" value={f.q} onChange={set("q")} /></label>
       <label>نمایش<select value={f.open} onChange={set("open")}><option value="true">فقط باز</option><option value="">همه</option></select></label>

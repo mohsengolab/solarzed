@@ -11,12 +11,12 @@ namespace Solarzed.Api.Controllers;
 /// Support tickets opened by portal users. Every ticket carries the writer's mobile, first and last name
 /// (and their profile) so whoever reads the conversation always knows who they are answering.
 /// </summary>
-[ApiController, Route("api/admin/tickets"), Authorize(Policy = "AdminPolicy")]
+[ApiController, Route("api/admin/tickets"), Authorize(Policy = "StaffPolicy")]
 public class TicketsController(AppDbContext db) : ControllerBase
 {
     string Actor => AuditLog.Actor(HttpContext?.User);
 
-    [HttpGet]
+    [HttpGet, Perm("tickets.view")]
     public async Task<IActionResult> List([FromQuery] TicketSearch f, CancellationToken ct)
     {
         var query = db.Tickets.AsNoTracking();
@@ -49,7 +49,7 @@ public class TicketsController(AppDbContext db) : ControllerBase
         });
     }
 
-    [HttpGet("{id:long}")]
+    [HttpGet("{id:long}"), Perm("tickets.view")]
     public async Task<IActionResult> Detail(long id)
     {
         var ticket = await db.Tickets.AsNoTracking().FirstOrDefaultAsync(t => t.Id == id);
@@ -74,7 +74,7 @@ public class TicketsController(AppDbContext db) : ControllerBase
         });
     }
 
-    [HttpPost("{id:long}/reply")]
+    [HttpPost("{id:long}/reply"), Perm("tickets.edit")]
     public async Task<IActionResult> Reply(long id, [FromBody] TicketReplyRequest request)
     {
         var message = (request.Message ?? "").Trim();
@@ -90,7 +90,7 @@ public class TicketsController(AppDbContext db) : ControllerBase
         return Ok(new { ok = true, status = "answered" });
     }
 
-    [HttpPost("{id:long}/close")]
+    [HttpPost("{id:long}/close"), Perm("tickets.edit")]
     public async Task<IActionResult> Close(long id)
     {
         var ticket = await db.Tickets.FirstOrDefaultAsync(t => t.Id == id);
@@ -103,7 +103,7 @@ public class TicketsController(AppDbContext db) : ControllerBase
         return Ok(new { ok = true, status = "closed" });
     }
 
-    [HttpPost("{id:long}/open")]
+    [HttpPost("{id:long}/open"), Perm("tickets.edit")]
     public async Task<IActionResult> Open(long id)
     {
         var ticket = await db.Tickets.FirstOrDefaultAsync(t => t.Id == id);

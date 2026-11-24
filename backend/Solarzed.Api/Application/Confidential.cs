@@ -13,9 +13,9 @@ public static class Confidential
     // Used when no provider is injected (tests), so a reference is never the plain code.
     static readonly IDataProtectionProvider Fallback = new EphemeralDataProtectionProvider();
 
-    /// <summary>True for the super administrator. A request with no signed-in user (internal calls, tests) sees everything.</summary>
+    /// <summary>True for the super administrator, or a role granted «codes.view». A request with no signed-in user (internal calls, tests) sees everything.</summary>
     public static bool SeesCodes(ClaimsPrincipal? user) =>
-        user?.Identity?.IsAuthenticated != true || user.IsInRole("superadmin");
+        user?.Identity?.IsAuthenticated != true || Permissions.Has(user, "codes.view");
 
     public static string Mask(string? code) =>
         string.IsNullOrEmpty(code) ? "" : "••••" + code[^Math.Min(4, code.Length)..];
