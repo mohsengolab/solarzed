@@ -409,8 +409,14 @@ export function adminCreateRolls(data: Record<string, unknown>) {
 }
 
 /** Updates a roll's stock fields plus its batch, supplier and physical dimensions. */
-export function adminUpdateRoll(id: string, data: { qc?: string; status?: string; note?: string; batch?: string; supplier?: string; widthCm?: number | null; lengthM?: number | null; rollNo?: string; location?: string }) {
+export function adminUpdateRoll(id: string, data: { qc?: string; status?: string; note?: string; batch?: string; supplier?: string; widthCm?: number | null; lengthM?: number | null; rollNo?: string; location?: string; transferInfo?: string; deliveredAt?: string | null }) {
   return apiFetch(`/api/admin/rolls/${encodeURIComponent(id)}`, { method: "POST", body: JSON.stringify(data) });
+}
+
+export type RollHistoryEvent = { at: string; kind: "received" | "moved" | "card" | "handover" | "install" | "note"; from?: string | null; to?: string | null; detail?: string | null; deliveredAt?: string | null; by?: string | null; installed?: string | null; status?: string | null };
+/** The whole journey of a roll (receipt, warehouse moves, carton hand-overs to reps/installers, installs, notes), newest first. */
+export function adminRollHistory(id: string) {
+  return apiFetch<{ items: RollHistoryEvent[] }>(`/api/admin/rolls/${encodeURIComponent(id)}/history`);
 }
 
 /** Deletes a roll. The API refuses while warranty registrations or carton labels still reference it. */

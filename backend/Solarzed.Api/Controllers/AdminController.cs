@@ -295,6 +295,22 @@ public class AdminController(AppDbContext db, IConfiguration cfg, Microsoft.AspN
             .GroupBy(b => b.RollId!)
             .Select(g => new { RollId = g.Key, Count = g.Count() })
             .ToDictionaryAsync(x => x.RollId, x => x.Count, ct);
+        // Warranty meters left on each roll: the carton's card tracks what installs have used; an unused card
+        // (or no card yet) still has the full roll length. Old cards activated before tracking have no figure.
+        var labelMeters = (await db.BoxLabels.Where(b => b.RollId != null && ids.Contains(b.RollId))
+            .Select(b => new { RollId = b.RollId!, b.RemainingLengthM, b.ActivatedAt }).ToListAsync(ct))
+            .GroupBy(b => b.RollId).ToDictionary(g => g.Key, g => g.ToList());
+        var usedMeters = await db.WarrantyRegistrations
+            .Where(w => w.RollId != null && ids.Contains(w.RollId) && w.UsedLengthM != null)
+            .GroupBy(w => w.RollId!)
+            .Select(g => new { RollId = g.Key, Used = g.Sum(w => w.UsedLengthM!.Value) })
+            .ToDictionaryAsync(x => x.RollId, x => x.Used, ct);
+        decimal? RemainingM(Roll r)
+        {
+            if (!labelMeters.TryGetValue(r.Id, out var labels)) return r.LengthM;
+            var known = labels.Select(b => b.RemainingLengthM ?? (b.ActivatedAt == null ? r.LengthM : null)).Where(m => m != null).ToList();
+            return known.Count > 0 ? known.Sum() : null;
+        }
         // Where each roll is: a system user holding it, the person its carton was handed to, or its warehouse.
         var warehouseIds = result.Items.Where(r => r.WarehouseId != null).Select(r => r.WarehouseId!.Value).Distinct().ToList();
         var warehouses = await db.Warehouses.Where(w => warehouseIds.Contains(w.Id)).ToDictionaryAsync(w => w.Id, w => w.Name, ct);
@@ -304,6 +320,10 @@ public class AdminController(AppDbContext db, IConfiguration cfg, Microsoft.AspN
         var holders = (await db.BoxLabels.Where(b => b.RollId != null && ids.Contains(b.RollId) && b.Holder != null)
             .Select(b => new { RollId = b.RollId!, b.Holder, b.HolderPhone }).ToListAsync(ct))
             .GroupBy(b => b.RollId).ToDictionary(g => g.Key, g => g.First());
+        // The latest move of each roll, shown under its location (e.g. delivery time).
+        var lastMoves = (await db.RollTransfers.AsNoTracking().Where(t => ids.Contains(t.RollId))
+            .Select(t => new { t.RollId, t.From, t.To, t.Info, t.DeliveredAt, t.At }).ToListAsync(ct))
+            .GroupBy(t => t.RollId).ToDictionary(g => g.Key, g => g.MaxBy(t => t.At));
         RollLocation? Location(Roll r) =>
             r.HolderUserId is { } u ? new RollLocation("user", u, users.GetValueOrDefault(u, "?"), null)
             : holders.TryGetValue(r.Id, out var h) ? new RollLocation("person", 0, h.Holder!, h.HolderPhone)
@@ -316,10 +336,12 @@ public class AdminController(AppDbContext db, IConfiguration cfg, Microsoft.AspN
             {
                 Id = SeesCodes ? r.Id : null, r.Number, r.RollNo, r.ModelCode, r.Type, r.Batch, r.Supplier, r.HistoryJson, r.WidthCm, r.LengthM,
                 Qc = r.Qc.ToString().ToLower(), Status = r.Status.ToString().ToLower(),
-                r.WarehouseId, r.HolderUserId, Location = Location(r),
+                r.WarehouseId, r.HolderUserId, Location = Location(r), LastTransfer = lastMoves.GetValueOrDefault(r.Id),
                 r.ReceivedAt,
                 Installs = counts.GetValueOrDefault(r.Id, 0),
-                Cards = cards.GetValueOrDefault(r.Id, 0)
+                Cards = cards.GetValueOrDefault(r.Id, 0),
+                RemainingM = RemainingM(r),
+                UsedM = usedMeters.GetValueOrDefault(r.Id, 0)
             }),
             total = result.Total, page = result.Page, pageSize = result.PageSize
         });
@@ -368,6 +390,64 @@ public class AdminController(AppDbContext db, IConfiguration cfg, Microsoft.AspN
         return Ok(rolls.Select(r => new { r.Id, r.Number, r.RollNo, r.ModelCode, r.Type, r.Batch }));
     }
 
+    /// <summary>A location's display name for transfer records: the user holding the roll wins over its warehouse.</summary>
+    async Task<string> LocationName(int? warehouseId, int? holderUserId)
+    {
+        if (holderUserId is { } u)
+            return await db.AdminUsers.Where(x => x.Id == u)
+                .Select(x => string.IsNullOrWhiteSpace(x.DisplayName) ? x.Username : x.DisplayName!).FirstOrDefaultAsync() ?? "?";
+        if (warehouseId is { } w) return await db.Warehouses.Where(x => x.Id == w).Select(x => x.Name).FirstOrDefaultAsync() ?? "?";
+        return "";
+    }
+
+    /// <summary>
+    /// The whole journey of a roll, newest first: receipt, moves between warehouses / users, warranty cards issued for its
+    /// carton, hand-overs of the carton to representatives or installers, installations on vehicles and notes.
+    /// A null <c>From</c>/<c>To</c> on a hand-over means the warehouse.
+    /// </summary>
+    [HttpGet("rolls/{id}/history")]
+    [Authorize(Policy = "AdminPolicy")]
+    public async Task<IActionResult> RollHistory(string id, CancellationToken ct)
+    {
+        var roll = int.TryParse(id, out var number)
+            ? await db.Rolls.AsNoTracking().FirstOrDefaultAsync(r => r.Number == number, ct)
+            : await db.Rolls.AsNoTracking().FirstOrDefaultAsync(r => r.Id == id, ct);
+        if (roll == null) return NotFound();
+        static string? Party(string? name, string? phone) =>
+            name == null && phone == null ? null : name == null ? phone : phone == null || name == phone ? name : $"{name} ({phone})";
+
+        var events = new List<RollHistoryEvent>();
+        var moves = await db.RollTransfers.AsNoTracking().Where(t => t.RollId == roll.Id).OrderBy(t => t.At).ToListAsync(ct);
+        events.Add(new(roll.ReceivedAt, "received", null,
+            moves.Count > 0 ? moves[0].From : await LocationName(roll.WarehouseId, roll.HolderUserId), roll.Batch, null, null));
+        events.AddRange(moves.Select(t => new RollHistoryEvent(t.At, "moved", t.From, t.To, t.Info, t.DeliveredAt, t.By)));
+
+        var labels = await db.BoxLabels.AsNoTracking().Where(b => b.RollId == roll.Id)
+            .Select(b => new { b.Id, b.CreatedAt, b.CardCode }).ToListAsync(ct);
+        events.AddRange(labels.Select(b => new RollHistoryEvent(b.CreatedAt, "card", null, null,
+            SeesCodes && b.CardCode != null ? $"{b.Id} · {b.CardCode}" : b.Id, null, null)));
+        var labelIds = labels.Select(b => b.Id).ToList();
+        // Activation also writes a hand-over row; the installation event below tells that part with more detail.
+        events.AddRange((await db.BoxTransfers.AsNoTracking().Where(t => labelIds.Contains(t.LabelId) && !t.BatchId.StartsWith("ACT-")).ToListAsync(ct))
+            .Select(t => new RollHistoryEvent(t.At, "handover", Party(t.FromHolder, t.FromPhone), Party(t.ToHolder, t.ToPhone),
+                labels.Count > 1 ? $"{t.LabelId}{(t.Note is { } n ? " · " + n : "")}" : t.Note, null, t.Actor)));
+
+        events.AddRange((await db.WarrantyRegistrations.AsNoTracking().Where(w => w.RollId == roll.Id).ToListAsync(ct))
+            .Select(w => new RollHistoryEvent(w.CreatedAt, "install", Party(w.SellerName, w.SellerPhone), Party(w.Installer, w.InstallerPhone),
+                string.Join(" · ", new[] {
+                    $"{w.Make} {w.Model}".Trim(), w.Plate, w.UsedLengthM is { } m ? $"{m:0.##} m" : null, SeesCodes ? w.Code : null,
+                }.Where(s => !string.IsNullOrWhiteSpace(s))), null, null, w.Installed, w.Status.ToString().ToLowerInvariant())));
+
+        // Free-text notes typed when the roll was edited (automatic "status=… qc=…" lines add nothing here).
+        foreach (var h in JsonSerializer.Deserialize<List<JsonElement>>(roll.HistoryJson) ?? [])
+            if (h.TryGetProperty("action", out var a) && a.GetString() == "updated"
+                && h.TryGetProperty("note", out var n) && n.GetString() is { Length: > 0 } note && !note.StartsWith("status=")
+                && h.TryGetProperty("at", out var at) && at.TryGetDateTime(out var when))
+                events.Add(new(DateTime.SpecifyKind(when, DateTimeKind.Utc), "note", null, null, note, null, null));
+
+        return Ok(new { items = events.OrderByDescending(e => e.At).ToList() });
+    }
+
     record LocationRef(string Kind, int Id);
     static LocationRef? ParseLocation(string? raw)
     {
@@ -407,6 +487,7 @@ public class AdminController(AppDbContext db, IConfiguration cfg, Microsoft.AspN
         if ((st == RollStatus.Shipped || st == RollStatus.Consumed) && qc != RollQc.Approved)
             return BadRequest(new { error = "QC approval is required before release." });
         if ((req.Note?.Length ?? 0) > 1000) return BadRequest(new { error = "Note is too long." });
+        if ((req.TransferInfo?.Trim().Length ?? 0) > 500) return BadRequest(new { error = "Transfer details are limited to 500 characters." });
         if (req.Batch is { Length: > 32 }) return BadRequest(new { error = "Batch is limited to 32 characters." });
         var supplier = RollService.SupplierCode(req.Supplier);
         if (req.Supplier != null && supplier == null && req.Supplier != roll.Supplier)
@@ -440,6 +521,21 @@ public class AdminController(AppDbContext db, IConfiguration cfg, Microsoft.AspN
             else if (loc == null) warehouseId = null;
         }
 
+        // A move between locations is recorded with how it travelled and when it was delivered.
+        RollTransfer? transfer = null;
+        if (warehouseId != roll.WarehouseId || holderUserId != roll.HolderUserId)
+        {
+            if (req.DeliveredAt is { } d && (d < new DateTime(2000, 1, 1) || d > DateTime.UtcNow.AddYears(1)))
+                return BadRequest(new { error = "Invalid delivery time." });
+            transfer = new RollTransfer
+            {
+                RollId = roll.Id, From = await LocationName(roll.WarehouseId, roll.HolderUserId), To = await LocationName(warehouseId, holderUserId),
+                Info = string.IsNullOrWhiteSpace(req.TransferInfo) ? null : req.TransferInfo.Trim(),
+                DeliveredAt = req.DeliveredAt?.ToUniversalTime(), By = Actor,
+            };
+            db.RollTransfers.Add(transfer);
+        }
+
         var before = new { roll.Status, roll.Qc, roll.Batch, roll.Supplier, roll.WidthCm, roll.LengthM, roll.RollNo };
         AuditLog.Add(db, Actor, "roll", roll.Id, "updated", AuditLog.Diff(
             ("status", before.Status, st), ("qc", before.Qc, qc), ("rollNo", before.RollNo, rollNo),
@@ -464,6 +560,13 @@ public class AdminController(AppDbContext db, IConfiguration cfg, Microsoft.AspN
             at = DateTime.UtcNow, action = "updated",
             note = req.Note ?? $"status={req.Status} qc={req.Qc}"
         })).RootElement);
+        if (transfer != null)
+            history.Add(JsonDocument.Parse(JsonSerializer.Serialize(new
+            {
+                at = transfer.At, action = "moved",
+                note = $"{transfer.From} → {transfer.To}" + (transfer.Info is { } info ? $" · {info}" : "")
+                    + (transfer.DeliveredAt is { } at ? $" · delivered {at:yyyy-MM-dd HH:mm} UTC" : "")
+            })).RootElement);
         roll.HistoryJson = JsonSerializer.Serialize(history);
 
         await db.SaveChangesAsync();
@@ -614,8 +717,11 @@ public class RollSearch
     public string? Dir { get; set; }
 }
 public record DecisionRequest(string Status, string? Note);
-public record UpdateRollRequest(string? Status, string? Qc, string? Note, string? Batch = null, string? Supplier = null, decimal? WidthCm = null, decimal? LengthM = null, string? RollNo = null, string? Location = null);
+public record UpdateRollRequest(string? Status, string? Qc, string? Note, string? Batch = null, string? Supplier = null, decimal? WidthCm = null, decimal? LengthM = null, string? RollNo = null, string? Location = null,
+    string? TransferInfo = null, DateTime? DeliveredAt = null);
 public record RollLocation(string Kind, int Id, string Name, string? Phone);
+public record RollHistoryEvent(DateTime At, string Kind, string? From, string? To, string? Detail, DateTime? DeliveredAt, string? By,
+    DateOnly? Installed = null, string? Status = null);
 public record SettingsRequest(DurationsDto? Durations, int? WarrantyCodeLength);
 public record DurationsDto(PeriodDto? Tint, PeriodDto? Ppf);
 public record PeriodDto(int? Film, int? Install);

@@ -743,3 +743,32 @@
 .wSeg .wSegOn[data-tone="active"]   { color: var(--sz-green); border-color: var(--sz-green); }
 .wSeg .wSegOn[data-tone="rejected"] { color: var(--sz-red);   border-color: var(--sz-red); }
 .wSeg .wSegOn[data-tone="pending"]  { color: var(--sz-amber); border-color: var(--sz-amber); }
+
+/* ── Roll history timeline ───────────────────────────────────────────────────── */
+
+.timeline { list-style: none; margin: 0; padding: 4px 0 0; max-height: min(60vh, 520px); overflow: auto; }
+.timelineItem {
+  position: relative;
+  margin-inline-start: 6px;
+  padding: 0 0 16px;
+  padding-inline-start: 18px;
+  border-inline-start: 2px solid rgb(var(--sz-tint) / 0.12);
+  font-size: 13px;
+}
+.timelineItem:last-child { border-inline-start-color: transparent; padding-bottom: 0; }
+.timelineItem::before {
+  content: "";
+  position: absolute;
+  inset-inline-start: -7px;
+  top: 3px;
+  width: 12px;
+  height: 12px;
+  border-radius: 50%;
+  background: var(--sz-teal);
+}
+.timelineItem[data-kind="install"]::before { background: #d4a017; }
+.timelineItem[data-kind="note"]::before { background: rgb(var(--sz-tint) / 0.35); }
+.timelineItem p { margin: 4px 0 0; line-height: 1.6; }
+.timelineHead { display: flex; flex-wrap: wrap; justify-content: space-between; gap: 4px 12px; }
+.timelineHead time { font-size: 12px; color: var(--sz-fg-3); }
+.timelineDetail { font-size: 12px; color: var(--sz-fg-3); overflow-wrap: anywhere; }
