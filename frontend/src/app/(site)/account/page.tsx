@@ -76,7 +76,7 @@ export default function AccountPage() {
   const [menuOpen, setMenuOpen] = useState(false);
   // Customers activate an older card right inside the Warranties section.
   const [activating, setActivating] = useState(false);
-  // The ROLL NO an installer scanned before landing here (/account#register:CPT…).
+  // The Serial Number an installer scanned before landing here (/account#register:SZ-…).
   const [registerCode, setRegisterCode] = useState("");
   const [registerKey, setRegisterKey] = useState(0);
 
@@ -173,7 +173,7 @@ export default function AccountPage() {
   }
 
   useEffect(() => {
-    // An installer scanning a card from a phone lands on /account#register:ROLLNO and stays in the dashboard.
+    // An installer scanning a card from a phone lands on /account#register:SERIAL and stays in the dashboard.
     const h = decodeURIComponent(window.location.hash.slice(1));
     portalMe().then(r => {
       if (h.startsWith("register:")) { setRegisterCode(h.slice(9).trim().toUpperCase()); history.replaceState(null, "", "#register"); setTab("register"); }
@@ -355,7 +355,7 @@ export default function AccountPage() {
           <section>
             <h2>Quick actions</h2>
             <div className={own.actions}>
-              {installer && <button type="button" className={own.action} onClick={() => go("register")}><Icon name="register" /><b>Register an installation</b><small>Scan the ROLL NO on the card</small></button>}
+              {installer && <button type="button" className={own.action} onClick={() => go("register")}><Icon name="register" /><b>Register an installation</b><small>Scan the Serial Number on the card</small></button>}
               {!installer && <button type="button" className={own.action} onClick={() => { setActivating(true); go("warranty"); }}><Icon name="warranty" /><b>Activate a warranty card</b><small>Type or scan the ROLL NO</small></button>}
               {boxes.length > 0 && <button type="button" className={own.action} onClick={() => go("transfer")}><Icon name="transfer" /><b>Transfer rolls</b><small>Send rolls to another mobile</small></button>}
               <button type="button" className={own.action} onClick={() => { go("tickets"); setOpenTicket(null); setNewTicket(true); }}><Icon name="tickets" /><b>Ask support</b><small>Open a new ticket</small></button>
