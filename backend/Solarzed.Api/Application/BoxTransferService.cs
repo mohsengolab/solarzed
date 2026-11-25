@@ -17,7 +17,8 @@ public record TransferRequest(string[] Serials, string? ToHolder, string? ToPhon
     int? WarehouseId = null);
 public record PortalTransferRequest(string[] Serials, string? ToPhone, string? ToName, string? Note);
 public record TransferView(long Id, string LabelId, string BatchId, string? FromHolder, string? FromPhone, string? ToHolder, string? ToPhone, string? Note, string Actor, DateTime At);
-public record TransferResult(string BatchId, string? ToHolder, string? ToPhone, TransferView[] Transfers);
+/// <param name="Sms">What happened to the receiver's SMS: "sent", "off" (no pattern / sending paused) or the failure.</param>
+public record TransferResult(string BatchId, string? ToHolder, string? ToPhone, TransferView[] Transfers, string? Sms = null);
 public record BoxHistory(string Id, string Product, string? RollId, bool Activated, string? Holder, string? HolderPhone, DateTime? HeldSince, TransferView[] Transfers);
 public record HolderSummary(string? Holder, string? Phone, int Boxes);
 public record HeldBox(string Id, string Product, string Type, string? RollId, DateTime? HeldSince);

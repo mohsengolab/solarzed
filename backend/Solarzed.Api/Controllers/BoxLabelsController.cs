@@ -8,7 +8,7 @@ using Solarzed.Api.Domain;
 namespace Solarzed.Api.Controllers;
 
 [ApiController, Route("api/admin/box-labels"), Authorize(Policy = "StaffPolicy")]
-public class BoxLabelsController(AppDbContext db, BoxLabelService labels, BoxTransferService transfers, IActivationSmsSender sms) : ControllerBase
+public class BoxLabelsController(AppDbContext db, BoxLabelService labels, BoxTransferService transfers, IActivationSmsSender sms, TransferSms transferSms) : ControllerBase
 {
     // Full label details (activation links, card codes) go with the permission to issue cards.
     bool IsAdmin => Permissions.Has(User, "labels.edit");
@@ -30,7 +30,7 @@ public class BoxLabelsController(AppDbContext db, BoxLabelService labels, BoxTra
                     .Select(r => r.Id).ToListAsync();
                 if (rolls.Count > 0) await labels.IssueForRolls(rolls);
             }
-            return Ok(await transfers.Transfer(request, AuditLog.Actor(User)));
+            return Ok(await transferSms.Notify(await transfers.Transfer(request, AuditLog.Actor(User)), HttpContext.RequestAborted));
         }
         catch (ActivationError ex) { return StatusCode(ex.Status, new { error = ex.Message }); }
     }

@@ -24,6 +24,18 @@ public class BoxTransferTests
         public bool Configured => false;
         public Task Send(string phone, string code, string reference, CancellationToken cancellationToken) => Task.CompletedTask;
     }
+    sealed class RecordingSms(bool fail = false) : IActivationSmsSender
+    {
+        public List<(string Phone, int Count, string Link)> Sent { get; } = [];
+        public bool Configured => true;
+        public bool TransferConfigured => true;
+        public Task Send(string phone, string code, string reference, CancellationToken cancellationToken) => Task.CompletedTask;
+        public Task SendTransfer(string phone, int count, string link, CancellationToken cancellationToken)
+        {
+            if (fail) throw new ActivationError(503, "Faraz did not accept the roll transfer message.");
+            Sent.Add((phone, count, link)); return Task.CompletedTask;
+        }
+    }
     sealed class Fixture : IDisposable
     {
         readonly SqliteConnection connection = new("Data Source=:memory:");
@@ -153,6 +165,46 @@ public class BoxTransferTests
     }
 
     [Fact]
+    public async Task ReceiverGetsAnSmsWithTheRollCountAndSignInLink()
+    {
+        using var f = new Fixture();
+        var ids = await f.Issue(2);
+        var sms = new RecordingSms();
+        var log = new SmsLog();
+        var result = await new TransferSms(f.Labels, sms, log).Notify(await f.Transfers.Transfer(To(RepA, ids), "admin"));
+        Assert.Equal(TransferSms.Sent, result.Sms);
+        var (phone, count, link) = Assert.Single(sms.Sent);
+        Assert.Equal(RepA, phone);
+        Assert.Equal(2, count);
+        Assert.EndsWith("/account", link);
+        Assert.True(Assert.Single(log.Recent()).Ok);
+
+        // A seller passing rolls on to an installer notifies the installer too.
+        var passed = await new TransferSms(f.Labels, sms).Notify(
+            await f.Transfers.TransferAsHolder(new([ids[0]], RepB, null, null), RepA));
+        Assert.Equal(RepB, sms.Sent[^1].Phone);
+        Assert.Equal(1, sms.Sent[^1].Count);
+        Assert.Equal(TransferSms.Sent, passed.Sms);
+    }
+
+    [Fact]
+    public async Task TransferStandsWhenTheSmsIsOffOrFails()
+    {
+        using var f = new Fixture();
+        var ids = await f.Issue(2);
+        var off = await new TransferSms(f.Labels, new NoSms()).Notify(await f.Transfers.Transfer(To(RepA, ids[0]), "admin"));
+        Assert.Equal(TransferSms.Off, off.Sms);
+        var failed = await new TransferSms(f.Labels, new RecordingSms(fail: true)).Notify(await f.Transfers.Transfer(To(RepA, ids[1]), "admin"));
+        Assert.Contains("did not accept", failed.Sms);
+        Assert.Equal(2, (await f.Transfers.Mine(RepA)).Boxes.Length);
+
+        // Returning to the warehouse has no receiver mobile, so nothing is sent.
+        var back = await new TransferSms(f.Labels, new RecordingSms()).Notify(
+            await f.Transfers.Transfer(new(ids, null, null, null, null, ToWarehouse: true), "admin"));
+        Assert.Null(back.Sms);
+    }
+
+    [Fact]
     public async Task ReturnPutsRollBackInChosenWarehouse()
     {
         using var f = new Fixture();
@@ -187,7 +239,7 @@ public class BoxTransferTests
             Batch = "TEST", Supplier = "ABC", LengthM = 30, Qc = RollQc.Approved, Status = RollStatus.InStock, HolderUserId = 7 });
         f.Db.AdminUsers.Add(new AdminUser { Id = 7, Username = "store", PasswordHash = "x" });
         await f.Db.SaveChangesAsync();
-        var api = new Solarzed.Api.Controllers.BoxLabelsController(f.Db, f.Labels, f.Transfers, new NoSms())
+        var api = new Solarzed.Api.Controllers.BoxLabelsController(f.Db, f.Labels, f.Transfers, new NoSms(), new TransferSms(f.Labels))
             { ControllerContext = new() { HttpContext = new Microsoft.AspNetCore.Http.DefaultHttpContext() } };
 
         // A bad mobile is refused before any warranty card is issued.

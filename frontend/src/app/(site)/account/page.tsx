@@ -134,7 +134,7 @@ export default function AccountPage() {
     event.preventDefault(); setBusy(true); setError(""); setDone("");
     try {
       const result = await portalTransfer({ serials: list, toPhone, toName: toName || null, note: note || null });
-      setDone(`${result.transfers.length} roll(s) transferred to ${who(result.toHolder, result.toPhone)} · Transfer ${result.batchId}`);
+      setDone(`${result.transfers.length} roll(s) transferred to ${who(result.toHolder, result.toPhone)} · Transfer ${result.batchId}${result.sms === "sent" ? " · The receiver was notified by SMS." : ""}`);
       setSerials([]); setNote(""); setSelected([]);
       await load();
     } catch (ex) { setError(ex instanceof Error ? ex.message : "Transfer failed."); }
