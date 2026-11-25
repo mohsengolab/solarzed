@@ -463,7 +463,7 @@ public class AdminController(AppDbContext db, IConfiguration cfg, Microsoft.AspN
 
     /// <summary>Choices for a roll's location: active warehouses and active system users (names only).</summary>
     [HttpGet("locations")]
-    [Perm("rolls.view")]
+    [Perm("rolls.view", "rolls.transfer", "labels.transfer")]
     public async Task<IActionResult> Locations(CancellationToken ct) => Ok(new
     {
         warehouses = await db.Warehouses.AsNoTracking().Where(w => !w.Archived).OrderBy(w => w.Name)

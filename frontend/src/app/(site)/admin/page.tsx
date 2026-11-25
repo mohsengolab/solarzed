@@ -12,7 +12,7 @@ import styles from "./admin.module.css";
 import { backdropProps } from "@/components/backdrop";
 import labelsStyle from "./labels.module.css";
 import BoxLabelsPanel from "./BoxLabelsPanel";
-import BoxTransfers from "./BoxTransfers";
+import BoxTransfers, { queueTransfer } from "./BoxTransfers";
 import { printQrLabels, printQrImage } from "./qrPrint";
 import { ProductsPanel, CustomersPanel, AccountPanel, UsersPanel } from "./ManagementPanels";
 import { WarehousesPanel, WarehouseIcon, PersonIcon } from "./WarehousesPanel";
@@ -25,10 +25,10 @@ import { RolesPanel, PermsProvider, useCan } from "./RolesPanel";
 import { usePaged, SortTh, Pager, FilterBar, countActive, downloadCsv, errorText } from "./AdminKit";
 
 type Role = "superadmin" | "admin" | "counter";
-const VIEWS = ["overview", "reports", "warranties", "review", "partners", "claims", "rolls", "warehouses", "products", "customers", "tickets", "labels", "history", "sms", "settings", "account", "users", "roles"] as const;
+const VIEWS = ["overview", "reports", "warranties", "review", "partners", "claims", "rolls", "transfers", "warehouses", "products", "customers", "tickets", "labels", "history", "sms", "settings", "account", "users", "roles"] as const;
 type View = typeof VIEWS[number];
 const LABELS: Record<View, string> = {
-  overview: "نمای کلی", reports: "گزارش‌ها", warranties: "گارانتی‌ها", review: "بررسی عکس‌ها (کانتر)", partners: "همکاران", claims: "ادعاها", history: "سابقه تغییرات", rolls: "رول‌ها", warehouses: "انبارها", products: "محصولات",
+  overview: "نمای کلی", reports: "گزارش‌ها", warranties: "گارانتی‌ها", review: "بررسی عکس‌ها (کانتر)", partners: "همکاران", claims: "ادعاها", history: "سابقه تغییرات", rolls: "رول‌ها", transfers: "انتقال رول", warehouses: "انبارها", products: "محصولات",
   labels: "برچسب‌ها", customers: "مشتریان", tickets: "تیکت‌ها", sms: "پیامک", settings: "تنظیمات", account: "حساب کاربری", users: "کاربران", roles: "دسترسی نقش‌ها",
 };
 // Which pages a role sees is chosen by the super administrator («دسترسی نقش‌ها»); the API sends the role's permissions
@@ -40,6 +40,8 @@ function allowedViews({ role, perms }: Session): View[] {
     if (v === "users" || v === "roles") return role === "superadmin";
     // The super administrator decides warranties (with their photos) from «گارانتی‌ها».
     if (v === "review" && role === "superadmin") return false;
+    // Sending rolls is its own page; the super administrator gives it to roles with «انتقال رول».
+    if (v === "transfers") return perms.has("rolls.transfer") || perms.has("labels.transfer");
     return perms.has(`${v}.view`);
   });
 }
@@ -57,6 +59,7 @@ const NavIcons: Record<View, JSX.Element> = {
   review:   <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><rect x="3" y="5" width="18" height="14" rx="2"/><circle cx="12" cy="12" r="3"/><path d="M8 5l1.5-2h5L16 5"/></svg>,
   partners: <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>,
   rolls:    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><ellipse cx="12" cy="12" rx="10" ry="4"/><path d="M2 12v6c0 2.2 4.5 4 10 4s10-1.8 10-4v-6"/><path d="M2 6v6c0 2.2 4.5 4 10 4s10-1.8 10-4V6"/></svg>,
+  transfers:<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M17 3l4 4-4 4"/><path d="M21 7H9"/><path d="M7 21l-4-4 4-4"/><path d="M3 17h12"/></svg>,
   products: <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"/></svg>,
   labels:   <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M20.59 13.41l-7.17 7.17a2 2 0 0 1-2.83 0L2 12V2h10l8.59 8.59a2 2 0 0 1 0 2.82z"/><line x1="7" y1="7" x2="7.01" y2="7"/></svg>,
   customers:<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>,
@@ -178,7 +181,7 @@ function LoginView({ onLogin }: { onLogin: (session: Session) => void }) {
 
 const NAV_GROUPS: { label?: string; views: View[] }[] = [
   { views: ["overview", "reports"] },
-  { label: "مدیریت", views: ["warranties", "review", "partners", "claims", "tickets", "rolls", "warehouses", "products", "customers", "labels", "history"] },
+  { label: "مدیریت", views: ["warranties", "review", "partners", "claims", "tickets", "rolls", "transfers", "warehouses", "products", "customers", "labels", "history"] },
   { label: "پیکربندی", views: ["sms", "settings"] },
   { label: "حساب", views: ["account", "users", "roles"] },
 ];
@@ -243,6 +246,7 @@ function AdminApp({ view: wanted, role, allowed, onNav, onLogout }: { view: View
         {view === "tickets"   && <TicketsPanel />}
         {view === "history"   && <HistoryPanel />}
         {view === "rolls"     && <RollsPanel />}
+        {view === "transfers" && <BoxTransfers />}
         {view === "warehouses"&& <WarehousesPanel />}
         {view === "labels"    && <BoxLabelsPanel onSettings={() => onNav("settings")} />}
         {view === "sms"       && <SmsSettingsPanel />}
@@ -951,13 +955,7 @@ function RollsPanel() {
   const inventoryRef = useRef<HTMLDivElement>(null);
   const list = usePaged<RollRow>(adminRollsSearch<RollRow>, f, { sort: "receivedAt" });
   // ROLL NOs queued for transfer to a seller's / installer's mobile (company → seller → installer).
-  const [transferList, setTransferList] = useState<string[]>([]);
-  const transferRef = useRef<HTMLDivElement>(null);
   const canTransfer = can("rolls.transfer");
-  function queueTransfer(rollNo: string) {
-    setTransferList(items => items.includes(rollNo) ? items : [...items, rollNo]);
-    setTimeout(() => transferRef.current?.scrollIntoView({ behavior: "smooth", block: "start" }), 50);
-  }
   const set = (k: keyof typeof R_EMPTY) => (e: { target: { value: string } }) => setF(p => ({ ...p, [k]: e.target.value }));
   // A QR of the roll ID for every listed roll, drawn right in the registry.
   const [qrs, setQrs] = useState<Record<string, string>>({});
@@ -1176,7 +1174,7 @@ function RollsPanel() {
                     <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><path d="M3 12a9 9 0 1 0 3-6.7L3 8"/><path d="M3 3v5h5"/><path d="M12 7v5l3 2"/></svg>
                   </button>
                   {canTransfer && r.rollNo && r.qc === "approved" && r.status !== "void" && r.status !== "consumed" &&
-                    <button type="button" className={`${styles.ghost} ${styles.iconBtn}`} title="انتقال به فروشنده / نصاب" aria-label={`انتقال ROLL NO ${r.rollNo}`} onClick={() => queueTransfer(r.rollNo!)}>
+                    <button type="button" className={`${styles.ghost} ${styles.iconBtn}`} title="انتقال به فروشنده / نصاب" aria-label={`انتقال ROLL NO ${r.rollNo}`} onClick={() => queueTransfer([r.rollNo!])}>
                       <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><path d="M5 12h14"/><path d="M13 6l6 6-6 6"/></svg>
                     </button>}
                   {can("rolls.edit") && <button type="button" className={`${styles.ghost} ${styles.iconBtn}`} title="مدیریت" aria-label={`مدیریت رول ${r.number}`} onClick={() => openEdit(r)}>
@@ -1193,10 +1191,6 @@ function RollsPanel() {
         {!list.loading && !list.items.length && <p className={styles.empty}>رولی با این فیلترها یافت نشد.</p>}
         <Pager page={list.page} pageSize={list.pageSize} total={list.total} loading={list.loading} onPage={list.setPage} />
       </div>
-      {canTransfer && <div ref={transferRef} style={{ marginTop: 24, scrollMarginTop: 16 }}>
-        <p style={{ margin: "0 0 8px", fontSize: 13, opacity: .8 }}>رول با موبایل و ROLL NO منتقل می‌شود: مدیر ← فروشنده ← نصاب (یا مستقیم به نصاب). فروشنده در حساب خود رول را به نصاب منتقل می‌کند و فقط نصابی که رول دستش است می‌تواند گارانتی را فعال کند. کارت گارانتی رولی که هنوز صادر نشده، هنگام انتقال صادر می‌شود.</p>
-        <BoxTransfers title="انتقال رول به فروشنده / نصاب با ROLL NO" list={transferList} onList={setTransferList} onChanged={list.reload} />
-      </div>}
       {edit && <div className={styles.dialog} role="dialog" aria-modal="true" aria-label="مدیریت موجودی" {...backdropProps(() => setEdit(null))}><form className={`${styles.dialogInner} ${styles.adminForm}`} onSubmit={updateRoll}>
         <h2 dir="ltr">#{edit.number}{seesCodes && ` · ${edit.id}`}</h2><button type="button" className={styles.dialogClose} aria-label="بستن موجودی" onClick={() => setEdit(null)}>×</button>
         <label>کنترل کیفیت<select disabled={!seesCodes} value={edit.qc} onChange={e => setEdit({ ...edit, qc: e.target.value })}>{["pending", "approved", "rejected"].map(v => <option key={v} value={v}>{fa(v)}</option>)}</select></label>

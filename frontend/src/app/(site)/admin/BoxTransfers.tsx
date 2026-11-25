@@ -1,10 +1,11 @@
 "use client";
 
 import { useEffect, useState, FormEvent } from "react";
-import { boxHistory, boxHolders, transferBoxes, BoxHistory, HolderSummary, fa, FA_DATE } from "@/lib/api";
+import { boxHistory, boxHolders, transferBoxes, managementFetch, BoxHistory, HolderSummary, fa, FA_DATE } from "@/lib/api";
 import styles from "./admin.module.css";
 import labelsStyle from "./labels.module.css";
 import SerialInput from "@/components/SerialInput";
+import { backdropProps } from "@/components/backdrop";
 
 // Server messages for a rejected batch embed serials and names, so translate the fixed fragments only.
 const FRAGMENTS: [string, string][] = [
@@ -22,22 +23,36 @@ const message = (error: unknown) => {
 const holderName = (holder: string | null, phone?: string | null) =>
   holder && phone && holder !== phone ? `${holder} (${phone})` : holder ?? phone ?? fa("Central warehouse");
 const date = (value: string) => new Date(value).toLocaleString(FA_DATE);
-const ANY = "__any__", WAREHOUSE = "__warehouse__";
+const n = (value: number) => value.toLocaleString("fa-IR");
+
+/** ROLL NOs queued from the roll list («رول‌ها») for the transfer page. */
+export const TRANSFER_QUEUE = "sz-transfer-queue";
+
+/** Adds ROLL NOs to the transfer page's list and opens it («انتقال رول» in the menu). */
+export function queueTransfer(rollNos: string[]) {
+  try {
+    const queued: string[] = JSON.parse(sessionStorage.getItem(TRANSFER_QUEUE) ?? "[]");
+    sessionStorage.setItem(TRANSFER_QUEUE, JSON.stringify([...new Set([...queued, ...rollNos])]));
+  } catch { /* storage unavailable */ }
+  window.location.hash = "transfers";
+}
 
 /**
- * Moves rolls to a seller's or installer's mobile by ROLL NO (company → seller → installer). The list can be owned by
- * the caller (the roll list adds a row's ROLL NO with its transfer button).
+ * Sends rolls by ROLL NO to a seller's or installer's mobile (company → seller → installer). Rolls that come back
+ * are returned with a separate action that asks which warehouse they go to.
  */
-export default function BoxTransfers({ selected = [], onChanged, list: outerList, onList, title }:
-  { selected?: string[]; onChanged: () => void; list?: string[]; onList?: (next: string[]) => void; title?: string }) {
-  const [innerList, setInnerList] = useState<string[]>([]);
-  const list = outerList ?? innerList, setSerials = onList ?? setInnerList;
-  const [from, setFrom] = useState(ANY);
+export default function BoxTransfers({ onChanged }: { onChanged?: () => void }) {
+  // Rolls picked with «انتقال» in the roll list or the label page.
+  const [list, setList] = useState<string[]>(() => {
+    try { return typeof window === "undefined" ? [] : JSON.parse(sessionStorage.getItem(TRANSFER_QUEUE) ?? "[]"); } catch { return []; }
+  });
   const [to, setTo] = useState("");
   const [phone, setPhone] = useState("");
   const [note, setNote] = useState("");
-  const [toWarehouse, setToWarehouse] = useState(false);
   const [holders, setHolders] = useState<HolderSummary[]>([]);
+  const [warehouses, setWarehouses] = useState<{ id: number; name: string }[]>([]);
+  const [returning, setReturning] = useState(false);
+  const [warehouseId, setWarehouseId] = useState("");
   const [lookup, setLookup] = useState("");
   const [history, setHistory] = useState<BoxHistory | null>(null);
   const [busy, setBusy] = useState(false);
@@ -45,21 +60,30 @@ export default function BoxTransfers({ selected = [], onChanged, list: outerList
   const [done, setDone] = useState("");
 
   const loadHolders = () => boxHolders().then(result => setHolders(result.holders)).catch(ex => setError(message(ex)));
-  useEffect(() => { loadHolders(); }, []);
+  useEffect(() => {
+    loadHolders();
+    managementFetch<{ warehouses: { id: number; name: string }[] }>("locations").then(r => setWarehouses(r.warehouses)).catch(() => {});
+    try { sessionStorage.removeItem(TRANSFER_QUEUE); } catch { /* storage unavailable */ }
+  }, []);
 
-
-  async function submit(event: FormEvent) {
-    event.preventDefault(); setError(""); setDone(""); setBusy(true);
+  async function run(toWarehouse: boolean) {
+    setError(""); setDone(""); setBusy(true);
     try {
       const result = await transferBoxes({
-        serials: list, toHolder: toWarehouse ? null : to || null, toWarehouse, toPhone: toWarehouse ? null : phone, note: note || null,
-        expectedFrom: from === ANY ? null : from === WAREHOUSE ? "" : from,
+        serials: list, toWarehouse, toHolder: toWarehouse ? null : to || null, toPhone: toWarehouse ? null : phone, note: note || null,
+        warehouseId: toWarehouse && warehouseId ? Number(warehouseId) : null,
       });
-      setDone(`${result.transfers.length.toLocaleString("fa-IR")} ${fa("boxes transferred")} → ${holderName(result.toHolder, result.toPhone)} · ${fa("Transfer number")}: ${result.batchId}`);
-      setSerials([]); setNote(""); setTo(""); setPhone("");
-      await loadHolders(); onChanged();
+      setDone(`${n(result.transfers.length)} رول ${toWarehouse ? "به انبار برگشت" : "ارسال شد"} → ${holderName(result.toHolder, result.toPhone)} · ${fa("Transfer number")}: ${result.batchId}`);
+      setList([]); setNote(""); setTo(""); setPhone(""); setReturning(false);
+      await loadHolders(); onChanged?.();
       if (history && result.transfers.some(t => t.labelId === history.id)) setHistory(await boxHistory(history.id));
-    } catch (ex) { setError(message(ex)); } finally { setBusy(false); }
+    } catch (ex) { setError(message(ex)); setReturning(false); } finally { setBusy(false); }
+  }
+
+  function send(event: FormEvent) { event.preventDefault(); run(false); }
+
+  function openReturn() {
+    setError(""); setWarehouseId(String(warehouses[0]?.id ?? "")); setReturning(true);
   }
 
   async function showHistory(serial: string) {
@@ -70,42 +94,41 @@ export default function BoxTransfers({ selected = [], onChanged, list: outerList
   const named = holders.filter(h => h.holder !== null || h.phone !== null);
 
   return (
-    <div className={labelsStyle.list}>
-      <header className={styles.panelHead}><div><span className={styles.eyebrow}>{fa("BOX TRANSFERS")}</span><h2>{title ?? fa("Move boxes by carton serial")}</h2></div></header>
+    <div>
+      <header className={styles.panelHead}><div><span className={styles.eyebrow}>انتقال رول</span><h2>ارسال رول به فروشنده / نصاب</h2></div></header>
+      <p className={labelsStyle.help} style={{ marginTop: 0 }}>رول با ROLL NO و موبایل گیرنده ارسال می‌شود: شرکت ← فروشنده ← نصاب (یا مستقیم به نصاب). فقط نصابی که رول دستش است می‌تواند گارانتی را فعال کند. رولی که برگردد با «بازگشت به انبار» دوباره موجود می‌شود.</p>
       {error && <p role="alert" className={labelsStyle.error}>{error}</p>}
       {done && <p role="status" className={labelsStyle.notice}>{done}</p>}
       <div className={labelsStyle.columns}>
-        <form className={`${styles.card} ${styles.adminForm}`} onSubmit={submit}>
-          <SerialInput label="ROLL NO رول‌ها (با بارکدخوان، تایپ یا فایل اکسل)" value={list} onChange={setSerials} />
-          {selected.length > 0 && <button type="button" className={styles.ghost} onClick={() => setSerials([...new Set([...list, ...selected])])}>{fa("Use selected boxes")} ({selected.length.toLocaleString("fa-IR")})</button>}
-          <label>{fa("Current holder (safety check)")}
-            <select value={from} onChange={e => setFrom(e.target.value)}>
-              <option value={ANY}>{fa("Any holder — no check")}</option>
-              <option value={WAREHOUSE}>{fa("Central warehouse")}</option>
-              {named.map(h => <option key={`${h.phone}|${h.holder}`} value={h.phone ?? h.holder ?? ""}>{holderName(h.holder, h.phone)}</option>)}
-            </select>
-          </label>
-          <label><input type="checkbox" checked={toWarehouse} onChange={e => setToWarehouse(e.target.checked)} /> {fa("Return to central warehouse")}</label>
-          {!toWarehouse && <label>موبایل فروشنده / نصاب گیرنده (با همین موبایل وارد سایت می‌شود و رول‌ها را می‌بیند)<input dir="ltr" required inputMode="tel" maxLength={20} list="box-holder-phones" value={phone} onChange={e => setPhone(e.target.value)} placeholder="09…" /></label>}
+        <form className={`${styles.card} ${styles.adminForm}`} onSubmit={send}>
+          <SerialInput label="رول‌ها" value={list} onChange={setList} />
+          <div className={styles.row2}>
+            <label>موبایل گیرنده<input dir="ltr" required inputMode="tel" maxLength={20} list="box-holder-phones" value={phone} onChange={e => setPhone(e.target.value)} placeholder="09…" /></label>
+            <label>نام گیرنده (اختیاری)<input maxLength={200} value={to} onChange={e => setTo(e.target.value)} /></label>
+          </div>
           <datalist id="box-holder-phones">{named.filter(h => h.phone).map(h => <option key={h.phone!} value={h.phone!}>{h.holder ?? ""}</option>)}</datalist>
-          {!toWarehouse && <label>نام فروشنده / نصاب (اختیاری)<input maxLength={200} value={to} onChange={e => setTo(e.target.value)} /></label>}
+          <small style={{ opacity: .7, marginTop: -6 }}>گیرنده با همین موبایل وارد سایت می‌شود و رول‌ها را در حساب خود می‌بیند.</small>
           <label>{fa("Note (optional)")}<input maxLength={500} value={note} onChange={e => setNote(e.target.value)} /></label>
-          <button className={styles.btnPrimary} disabled={busy || !list.length || (!toWarehouse && !phone.trim())}>{busy ? fa("Working…") : `${fa("Record transfer")} (${list.length.toLocaleString("fa-IR")})`}</button>
+          <div style={{ display: "flex", gap: 10, flexWrap: "wrap" }}>
+            <button className={styles.btnPrimary} style={{ flex: 1 }} disabled={busy || !list.length || !phone.trim()}>
+              {busy && !returning ? fa("Working…") : list.length ? `ارسال ${n(list.length)} رول` : "ارسال"}
+            </button>
+            <button type="button" className={styles.ghost} disabled={busy || !list.length} onClick={openReturn}>بازگشت به انبار…</button>
+          </div>
         </form>
         <div className={styles.card}>
-          <h2>{fa("Who holds the boxes")}</h2>
-          <table className={styles.table}><thead><tr><th>{fa("Holder")}</th><th>{fa("Boxes")}</th></tr></thead>
+          <h2>رول‌ها دست چه کسانی است</h2>
+          <table className={styles.table}><thead><tr><th>{fa("Holder")}</th><th>تعداد رول</th></tr></thead>
             <tbody>{holders.map(h => <tr key={`${h.phone}|${h.holder}`}>
-              <td><button type="button" className={styles.ghost} onClick={() => setFrom(h.phone ?? h.holder ?? WAREHOUSE)}>{holderName(h.holder, h.phone)}</button></td>
-              <td>{h.boxes.toLocaleString("fa-IR")}</td>
+              <td>{holderName(h.holder, h.phone)}</td><td>{n(h.boxes)}</td>
             </tr>)}</tbody>
           </table>
         </div>
       </div>
       <div className={`${styles.card} ${labelsStyle.list}`}>
-        <h2>{fa("Box history")}</h2>
+        <h2>تاریخچه یک رول</h2>
         <form className={labelsStyle.sizes} onSubmit={e => { e.preventDefault(); showHistory(lookup); }}>
-          <input dir="ltr" required placeholder="CPT30614374" value={lookup} onChange={e => setLookup(e.target.value)} />
+          <input dir="ltr" required placeholder="ROLL NO" value={lookup} onChange={e => setLookup(e.target.value)} />
           <button className={styles.ghost}>{fa("Show history")}</button>
         </form>
         {history && <>
@@ -119,6 +142,21 @@ export default function BoxTransfers({ selected = [], onChanged, list: outerList
           </table></div> : <p className={styles.empty}>{fa("No transfers recorded for this box.")}</p>}
         </>}
       </div>
+      {returning && <div className={styles.dialog} role="dialog" aria-modal="true" aria-label="بازگشت به انبار" {...backdropProps(() => !busy && setReturning(false))}>
+        <form className={`${styles.dialogInner} ${styles.adminForm}`} style={{ maxWidth: 440 }} onSubmit={e => { e.preventDefault(); run(true); }}>
+          <h2>بازگشت {n(list.length)} رول به انبار</h2>
+          <button type="button" className={styles.dialogClose} aria-label="بستن" onClick={() => setReturning(false)}>×</button>
+          <label>به کدام انبار برگردد؟
+            {warehouses.length
+              ? <select required value={warehouseId} onChange={e => setWarehouseId(e.target.value)}>
+                  {warehouses.map(w => <option key={w.id} value={w.id}>{w.name}</option>)}
+                </select>
+              : <input disabled value={fa("Central warehouse")} />}
+          </label>
+          <label>{fa("Note (optional)")}<input maxLength={500} value={note} onChange={e => setNote(e.target.value)} placeholder="مثلاً مرجوعی فروشنده" /></label>
+          <button className={styles.btnPrimary} disabled={busy}>{busy ? fa("Working…") : "ثبت بازگشت به انبار"}</button>
+        </form>
+      </div>}
     </div>
   );
 }

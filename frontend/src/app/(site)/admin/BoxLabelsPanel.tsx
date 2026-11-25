@@ -5,7 +5,7 @@ import QRCode from "qrcode";
 import { adminBoxLabels, adminRolls, adminGetSettings, issueBoxLabels, releaseRoll, saveLabelSite, BoxLabel, fa } from "@/lib/api";
 import styles from "./admin.module.css";
 import labelsStyle from "./labels.module.css";
-import BoxTransfers, { holderName } from "./BoxTransfers";
+import { holderName, queueTransfer } from "./BoxTransfers";
 import { useCan } from "./RolesPanel";
 import { printQrLabels } from "./qrPrint";
 import { printBarcodeLabels } from "./barcode";
@@ -130,7 +130,7 @@ export default function BoxLabelsPanel({ onSettings }: { onSettings: () => void 
           </table></div>
           {loaded && !labels.length && <p className={styles.empty}>{fa("No box labels issued yet.")}</p>}
         </div>
-        {canTransfer && <BoxTransfers selected={validSelection.map(label => label.id)} onChanged={() => { load().catch(ex => setError(message(ex))); }} />}
+        {canTransfer && <div style={{ marginTop: 16 }}><button type="button" className={styles.btnPrimary} disabled={!validSelection.length} onClick={() => queueTransfer(validSelection.map(label => label.id))}>ارسال رول‌های انتخاب‌شده ({validSelection.length.toLocaleString("fa-IR")}) ←</button></div>}
       </section>
     );
   }
@@ -168,7 +168,7 @@ export default function BoxLabelsPanel({ onSettings }: { onSettings: () => void 
         </tr>)}</tbody></table></div>
         {loaded && !labels.length && <p className={styles.empty}>{fa("No box labels issued yet.")}</p>}
       </div>
-      {canTransfer && <BoxTransfers selected={validSelection.map(label => label.id)} onChanged={() => { load().catch(ex => setError(message(ex))); }} />}
+      {canTransfer && <div style={{ marginTop: 16 }}><button type="button" className={styles.btnPrimary} disabled={!validSelection.length} onClick={() => queueTransfer(validSelection.map(label => label.id))}>ارسال رول‌های انتخاب‌شده ({validSelection.length.toLocaleString("fa-IR")}) ←</button></div>}
       <div className={labelsStyle.previews}>{validSelection.map(label => <article key={label.id} className={labelsStyle.preview}>
         {/* eslint-disable-next-line @next/next/no-img-element */}
         {previews[label.id] && <img src={previews[label.id]} alt={`QR ${label.id}`} width={150} height={150} />}
