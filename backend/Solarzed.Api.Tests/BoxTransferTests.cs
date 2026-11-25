@@ -153,6 +153,25 @@ public class BoxTransferTests
     }
 
     [Fact]
+    public async Task ReturnPutsRollBackInChosenWarehouse()
+    {
+        using var f = new Fixture();
+        var store = new Warehouse { Name = "انبار شرق" };
+        f.Db.Warehouses.Add(store); await f.Db.SaveChangesAsync();
+        var ids = await f.Issue(1);
+        var roll = await f.Db.Rolls.SingleAsync(); roll.Qc = RollQc.Approved; await f.Db.SaveChangesAsync();
+        await f.Transfers.Transfer(To(RepA, ids), "admin");
+        Assert.Equal(RollStatus.Shipped, (await f.Db.Rolls.SingleAsync()).Status);
+
+        var back = await f.Transfers.Transfer(new(ids, null, null, null, null, ToWarehouse: true, WarehouseId: store.Id), "admin");
+        Assert.Equal("انبار شرق", back.ToHolder);
+        roll = await f.Db.Rolls.SingleAsync();
+        Assert.Equal(RollStatus.InStock, roll.Status);
+        Assert.Equal(store.Id, roll.WarehouseId);
+        await Error(400, () => f.Transfers.Transfer(new(ids, null, null, null, null, ToWarehouse: true, WarehouseId: 9999), "admin"));
+    }
+
+    [Fact]
     public async Task BatchSizeIsLimited()
     {
         using var f = new Fixture();

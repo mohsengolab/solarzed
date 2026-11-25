@@ -180,7 +180,7 @@ const FarsiStrings = {
   "Box serials (scan or type, one per line)": "ROLL NOها (اسکن یا تایپ، هر خط یکی)",
   "Current holder (safety check)": "دارنده فعلی (برای کنترل)", "Any holder — no check": "هر دارنده‌ای — بدون کنترل",
   "Central warehouse": "انبار مرکزی", "Recipient": "تحویل‌گیرنده", "Recipient mobile (optional)": "موبایل تحویل‌گیرنده (اختیاری)",
-  "Note (optional)": "توضیح (اختیاری)", "Return to central warehouse": "بازگشت به انبار مرکزی", "Record transfer": "ثبت انتقال",
+  "Note (optional)": "توضیح (اختیاری)", "Return to central warehouse": "بازگشت به انبار مرکزی", "Record transfer": "ثبت انتقال", "Choose a warehouse.": "انبار را انتخاب کنید.",
   "Use selected boxes": "استفاده از رول‌های انتخاب‌شده", "boxes transferred": "رول منتقل شد", "Transfer number": "شماره حواله",
   "Who holds the boxes": "رول‌ها دست چه کسی است", "Holder": "دارنده", "Boxes": "تعداد رول",
   "Box history": "تاریخچه انتقال‌های ROLL NO", "Show history": "نمایش تاریخچه", "From": "از", "To": "به", "By": "ثبت‌کننده", "Date": "تاریخ",
@@ -485,7 +485,7 @@ export function issueCardsForRolls(rollIds: string[]) {
 // ── Box transfers: the roll number printed on the carton (e.g. CPT30614374) moves boxes from mobile to mobile ──
 export interface BoxTransfer { id: number; labelId: string; batchId: string; fromHolder: string | null; fromPhone: string | null; toHolder: string | null; toPhone: string | null; note: string | null; actor: string; at: string }
 export interface BoxHistory { id: string; product: string; rollId: string; activated: boolean; holder: string | null; holderPhone: string | null; heldSince: string | null; transfers: BoxTransfer[] }
-export interface TransferInput { serials: string[]; toHolder?: string | null; toPhone?: string | null; note?: string | null; expectedFrom?: string | null; toWarehouse?: boolean }
+export interface TransferInput { serials: string[]; toHolder?: string | null; toPhone?: string | null; note?: string | null; expectedFrom?: string | null; toWarehouse?: boolean; warehouseId?: number | null }
 export interface TransferResult { batchId: string; toHolder: string | null; toPhone: string | null; transfers: BoxTransfer[] }
 export function transferBoxes(data: TransferInput) {
   return apiFetch<TransferResult>("/api/admin/box-labels/transfers", { method: "POST", body: JSON.stringify(data) });

@@ -12,7 +12,9 @@ namespace Solarzed.Api.Application;
 /// signs in with this mobile to see and pass on the boxes.</param>
 /// <param name="ExpectedFrom">Optional safety check: null skips it, "" means the boxes must be in the central warehouse,
 /// any other value must match every box's current holder mobile or name.</param>
-public record TransferRequest(string[] Serials, string? ToHolder, string? ToPhone, string? Note, string? ExpectedFrom, bool ToWarehouse = false);
+/// <param name="WarehouseId">With <paramref name="ToWarehouse"/>: the warehouse («انبارها») the rolls go back to.</param>
+public record TransferRequest(string[] Serials, string? ToHolder, string? ToPhone, string? Note, string? ExpectedFrom, bool ToWarehouse = false,
+    int? WarehouseId = null);
 public record PortalTransferRequest(string[] Serials, string? ToPhone, string? ToName, string? Note);
 public record TransferView(long Id, string LabelId, string BatchId, string? FromHolder, string? FromPhone, string? ToHolder, string? ToPhone, string? Note, string Actor, DateTime At);
 public record TransferResult(string BatchId, string? ToHolder, string? ToPhone, TransferView[] Transfers);
@@ -56,19 +58,23 @@ public class BoxTransferService(AppDbContext db)
     }
 
     /// <summary>Company hand-over from the admin panel (manager or carton operator).</summary>
-    public Task<TransferResult> Transfer(TransferRequest req, string actor)
+    public async Task<TransferResult> Transfer(TransferRequest req, string actor)
     {
         string? phone = null;
+        Warehouse? warehouse = null;
         if (!req.ToWarehouse)
         {
             if (string.IsNullOrWhiteSpace(req.ToPhone)) throw new ActivationError(400, "Enter the receiver's mobile number.");
             phone = PortalService.CanonicalPhone(req.ToPhone);
         }
-        return Move(Serials(req.Serials), phone, req.ToWarehouse ? null : NormalizeHolder(req.ToHolder), req.Note, actor,
+        else if (req.WarehouseId is { } wid)
+            warehouse = await db.Warehouses.SingleOrDefaultAsync(w => w.Id == wid && !w.Archived)
+                ?? throw new ActivationError(400, "Choose a warehouse.");
+        return await Move(Serials(req.Serials), phone, req.ToWarehouse ? null : NormalizeHolder(req.ToHolder), req.Note, actor,
             label => req.ExpectedFrom == null ? null
                 : req.ExpectedFrom == "" ? (label.Holder == null && label.HolderPhone == null ? null : $"held by {label.Holder ?? label.HolderPhone}")
                 : Same(label.HolderPhone, req.ExpectedFrom) || Same(label.Holder, req.ExpectedFrom) ? null
-                : $"held by {label.Holder ?? label.HolderPhone ?? Warehouse}");
+                : $"held by {label.Holder ?? label.HolderPhone ?? Warehouse}", warehouse: warehouse);
     }
 
     /// <summary>A signed-in representative passes boxes they hold to the next mobile.</summary>
@@ -84,7 +90,7 @@ public class BoxTransferService(AppDbContext db)
     }
 
     async Task<TransferResult> Move(string[] serials, string? toPhone, string? toName, string? rawNote, string actor,
-        Func<BoxLabel, string?> check, bool hideMissing = false)
+        Func<BoxLabel, string?> check, bool hideMissing = false, Warehouse? warehouse = null)
     {
         if (toName is { Length: > 200 }) throw new ActivationError(400, "Recipient name is too long.");
         var note = string.IsNullOrWhiteSpace(rawNote) ? null : rawNote.Trim();
@@ -125,7 +131,7 @@ public class BoxTransferService(AppDbContext db)
         var rows = labels.Select(label => new BoxTransfer
         {
             LabelId = label.Id, BatchId = batch, FromHolder = label.Holder, FromPhone = label.HolderPhone,
-            ToHolder = to, ToPhone = toPhone, Note = note, Actor = actor, At = now,
+            ToHolder = to ?? warehouse?.Name, ToPhone = toPhone, Note = note, Actor = actor, At = now,
         }).ToArray();
         var sources = labels.Select(x => x.Holder ?? x.HolderPhone ?? Warehouse).Distinct().ToArray();
         // A roll handed out of the company to a seller or installer is released for distribution, so the installer who
@@ -143,6 +149,20 @@ public class BoxTransferService(AppDbContext db)
                 roll.HolderUserId = null;
             }
         }
+        // Back to the company: the rolls are in stock again, in the chosen warehouse, ready to be sent out once more.
+        else
+        {
+            var rolls = await db.Rolls.Where(r => rollIds.Contains(r.Id)).ToListAsync();
+            foreach (var roll in rolls)
+            {
+                if (roll.Status == RollStatus.Shipped)
+                {
+                    AuditLog.Add(db, actor, "roll", roll.Id, "updated", AuditLog.Diff(("status", roll.Status, RollStatus.InStock)), $"transfer {batch}");
+                    roll.Status = RollStatus.InStock;
+                }
+                if (warehouse != null) { roll.WarehouseId = warehouse.Id; roll.HolderUserId = null; }
+            }
+        }
         foreach (var label in labels)
         {
             label.Holder = to;
@@ -152,11 +172,11 @@ public class BoxTransferService(AppDbContext db)
         }
         db.BoxTransfers.AddRange(rows);
         AuditLog.Add(db, actor, "box-transfer", batch, "transferred", AuditLog.Diff(
-            ("holder", string.Join(" | ", sources), to ?? Warehouse), ("phone", null, toPhone), ("boxes", null, labels.Count)), note);
+            ("holder", string.Join(" | ", sources), to ?? warehouse?.Name ?? Warehouse), ("phone", null, toPhone), ("boxes", null, labels.Count)), note);
         try { await db.SaveChangesAsync(); }
         catch (DbUpdateConcurrencyException) { throw new ActivationError(409, "One of these boxes was changed by someone else. Refresh and try again."); }
         catch (DbUpdateException) when (toPhone != null) { throw new ActivationError(409, "The receiver account was just created by another request. Please retry."); }
-        return new(batch, to, toPhone, rows.Select(View).ToArray());
+        return new(batch, to ?? warehouse?.Name, toPhone, rows.Select(View).ToArray());
     }
 
     public async Task<BoxHistory> History(string serial)
