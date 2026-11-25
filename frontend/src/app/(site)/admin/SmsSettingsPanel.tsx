@@ -8,7 +8,8 @@ import { useCan } from "./RolesPanel";
 type Policy = { enabled: boolean; otpMinutes: number; resendSeconds: number; dailyLimit: number };
 type EmailStatus = { configured: boolean; host: string; port: number; from: string; senderName: string; user: string; passwordStored: boolean };
 type Status = { configured: boolean; connected: boolean; keyStored: boolean; mode: string; pattern: string; codeVariable: string; line: string; endpoint: string | null; updatedAt: string | null; policy: Policy; email: EmailStatus;
-  warranty: { pattern: string; codeVariable: string; linkVariable: string; configured: boolean } };
+  warranty: { pattern: string; codeVariable: string; linkVariable: string; configured: boolean };
+  transfer?: { pattern: string; countVariable: string; linkVariable: string; configured: boolean } };
 type LogEntry = { at: string; phone: string; purpose: string; ok: boolean; error: string | null };
 type Note = { ok: boolean; text: string } | null;
 
@@ -23,6 +24,7 @@ export default function SmsSettingsPanel() {
   const [policy, setPolicy] = useState<Policy>({ enabled: true, otpMinutes: 5, resendSeconds: 60, dailyLimit: 10 });
   const [phone, setPhone] = useState("");
   const [warranty, setWarranty] = useState({ pattern: "", codeVariable: "code", linkVariable: "link" });
+  const [transfer, setTransfer] = useState({ pattern: "", countVariable: "count", linkVariable: "link" });
   const [emailForm, setEmailForm] = useState({ host: "", port: "587", from: "", name: "", user: "", password: "", enableSsl: true });
   const [testEmail, setTestEmail] = useState("");
   const [log, setLog] = useState<LogEntry[]>([]);
@@ -33,6 +35,7 @@ export default function SmsSettingsPanel() {
   const apply = useCallback(([r, entries]: [Status, LogEntry[]]) => {
     setStatus(r); setLog(entries); setPolicy(r.policy);
     if (r.warranty) setWarranty({ pattern: r.warranty.pattern, codeVariable: r.warranty.codeVariable, linkVariable: r.warranty.linkVariable });
+    if (r.transfer) setTransfer({ pattern: r.transfer.pattern, countVariable: r.transfer.countVariable, linkVariable: r.transfer.linkVariable });
     setForm(f => ({ ...f, pattern: r.pattern, line: r.line || f.line, codeVariable: r.codeVariable,
       ...(r.mode === "rest" || r.mode === "soap" ? { mode: r.mode } : {}), ...(r.endpoint ? { endpoint: r.endpoint } : {}) }));
     setEmailForm(e => ({ ...e, host: r.email.host || e.host, port: String(r.email.port || 587), from: r.email.from || e.from,
@@ -59,6 +62,7 @@ export default function SmsSettingsPanel() {
   }
   function savePolicy(e: FormEvent) { e.preventDefault(); run("policy", () => managementFetch<{ message: string }>("sms/policy", policy)); }
   function saveWarranty(e: FormEvent) { e.preventDefault(); run("warranty", () => managementFetch<{ message: string }>("sms/warranty", { ...warranty, pattern: warranty.pattern.trim() })); }
+  function saveTransfer(e: FormEvent) { e.preventDefault(); run("transfer", () => managementFetch<{ message: string }>("sms/transfer", { ...transfer, pattern: transfer.pattern.trim() })); }
   function sendUnsentCards() {
     if (!window.confirm("پیامک کارت طلایی برای همه گارانتی‌های فعالی که تاکنون پیامک نگرفته‌اند (حداکثر ۲۰۰ مورد) ارسال شود؟")) return;
     run("warrantyUnsent", () => managementFetch<{ message: string }>("sms/warranty/send-unsent", {}));
@@ -135,6 +139,17 @@ export default function SmsSettingsPanel() {
           <Msg note={notes.warranty ?? null} />
           <button type="button" disabled={!!busy || !status?.warranty?.configured} className={s.ghost} onClick={sendUnsentCards}>{busy === "warrantyUnsent" ? "در حال ارسال…" : "ارسال برای گارانتی‌های فعالِ بدون پیامک"}</button>
           <Msg note={notes.warrantyUnsent ?? null} />
+        </form>
+
+        <form onSubmit={saveTransfer} className={`${s.card} ${s.adminForm}`}>
+          <h2>پیامک انتقال رول</h2>
+          <p className={s.empty}>وقتی رول به موبایل فروشنده یا نصاب ارسال می‌شود (از «انتقال رول» یا وقتی فروشنده رول را به نصاب می‌دهد)، یک پیامک با تعداد رول‌ها و لینک ورود به سایت برای گیرنده می‌رود. یک الگوی جدا در پنل فراز بسازید با دو متغیر: تعداد رول و لینک؛ مثلاً «%count% رول سولارزد برای شما ارسال شد. مشاهده: %link%».
+            {status && <> وضعیت: <b>{status.transfer?.configured ? "فعال" : "تنظیم نشده"}</b></>}</p>
+          <label>شناسه الگوی انتقال رول<input maxLength={100} pattern="[A-Za-z0-9_\-]+" value={transfer.pattern} onChange={e => setTransfer({ ...transfer, pattern: e.target.value })} dir="ltr" placeholder="خالی = ارسال نشود" /></label>
+          <label>متغیر تعداد رول<input required maxLength={50} pattern="[A-Za-z][A-Za-z0-9_]*" value={transfer.countVariable} onChange={e => setTransfer({ ...transfer, countVariable: e.target.value })} dir="ltr" /></label>
+          <label>متغیر لینک<input required maxLength={50} pattern="[A-Za-z][A-Za-z0-9_]*" value={transfer.linkVariable} onChange={e => setTransfer({ ...transfer, linkVariable: e.target.value })} dir="ltr" /></label>
+          <button disabled={!!busy} className={s.btnPrimary}>{busy === "transfer" ? "در حال ذخیره…" : "ذخیره الگوی انتقال رول"}</button>
+          <Msg note={notes.transfer ?? null} />
         </form>
 
         <form onSubmit={sendTest} className={`${s.card} ${s.adminForm}`}>

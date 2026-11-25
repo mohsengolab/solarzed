@@ -181,6 +181,9 @@ const FarsiStrings = {
   "Current holder (safety check)": "دارنده فعلی (برای کنترل)", "Any holder — no check": "هر دارنده‌ای — بدون کنترل",
   "Central warehouse": "انبار مرکزی", "Recipient": "تحویل‌گیرنده", "Recipient mobile (optional)": "موبایل تحویل‌گیرنده (اختیاری)",
   "Note (optional)": "توضیح (اختیاری)", "Return to central warehouse": "بازگشت به انبار مرکزی", "Record transfer": "ثبت انتقال", "Choose a warehouse.": "انبار را انتخاب کنید.",
+  "Roll transfer SMS pattern saved.": "الگوی پیامک انتقال رول ذخیره شد.", "Roll transfer SMS pattern removed; receivers will not get an SMS.": "الگوی پیامک انتقال رول حذف شد؛ به گیرنده پیامک نمی‌رود.",
+  "Faraz did not accept the roll transfer message.": "فراز پیامک انتقال رول را نپذیرفت.", "The roll transfer message could not be submitted.": "پیامک انتقال رول ارسال نشد.",
+  "The SMS provider could not be reached.": "سرویس پیامک در دسترس نبود.", "An Iranian mobile number is required.": "شماره موبایل ایرانی لازم است.", "roll-transfer": "انتقال رول",
   "Use selected boxes": "استفاده از رول‌های انتخاب‌شده", "boxes transferred": "رول منتقل شد", "Transfer number": "شماره حواله",
   "Who holds the boxes": "رول‌ها دست چه کسی است", "Holder": "دارنده", "Boxes": "تعداد رول",
   "Box history": "تاریخچه انتقال‌های ROLL NO", "Show history": "نمایش تاریخچه", "From": "از", "To": "به", "By": "ثبت‌کننده", "Date": "تاریخ",
@@ -486,7 +489,8 @@ export function issueCardsForRolls(rollIds: string[]) {
 export interface BoxTransfer { id: number; labelId: string; batchId: string; fromHolder: string | null; fromPhone: string | null; toHolder: string | null; toPhone: string | null; note: string | null; actor: string; at: string }
 export interface BoxHistory { id: string; product: string; rollId: string; activated: boolean; holder: string | null; holderPhone: string | null; heldSince: string | null; transfers: BoxTransfer[] }
 export interface TransferInput { serials: string[]; toHolder?: string | null; toPhone?: string | null; note?: string | null; expectedFrom?: string | null; toWarehouse?: boolean; warehouseId?: number | null }
-export interface TransferResult { batchId: string; toHolder: string | null; toPhone: string | null; transfers: BoxTransfer[] }
+/** sms: "sent", "off" (no pattern / sending paused) or why the receiver's SMS failed; absent for a return to the warehouse. */
+export interface TransferResult { batchId: string; toHolder: string | null; toPhone: string | null; transfers: BoxTransfer[]; sms?: string | null }
 export function transferBoxes(data: TransferInput) {
   return apiFetch<TransferResult>("/api/admin/box-labels/transfers", { method: "POST", body: JSON.stringify(data) });
 }

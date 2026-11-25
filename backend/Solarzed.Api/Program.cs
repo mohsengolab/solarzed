@@ -38,6 +38,7 @@ builder.Services.AddSingleton<Microsoft.AspNetCore.Authorization.IAuthorizationP
 builder.Services.AddSingleton<SmsLog>();
 builder.Services.AddScoped<BoxLabelService>();
 builder.Services.AddScoped<BoxTransferService>();
+builder.Services.AddScoped<TransferSms>();
 builder.Services.AddScoped<PortalService>();
 builder.Services.AddScoped<WarrantyCards>();
 builder.Services.AddHttpClient<IActivationSmsSender, ActivationSmsSender>(client => client.Timeout = TimeSpan.FromSeconds(15));

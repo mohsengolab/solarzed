@@ -15,6 +15,9 @@ public interface IActivationSmsSender
     /// <summary>True when the "warranty active" pattern (warranty number + gold card link) is set and sending is on.</summary>
     bool WarrantyConfigured => false;
     Task SendWarranty(string phone, string warrantyCode, string link, CancellationToken cancellationToken) => Task.CompletedTask;
+    /// <summary>True when the "rolls received" pattern (roll count + sign-in link) is set and sending is on.</summary>
+    bool TransferConfigured => false;
+    Task SendTransfer(string phone, int count, string link, CancellationToken cancellationToken) => Task.CompletedTask;
 }
 
 // The existing HTTPS webhook contract is shared with the legacy SMS adapter.
@@ -112,14 +115,36 @@ public class ActivationSmsSender(HttpClient http, IConfiguration configuration, 
     public bool WarrantyConfigured => Configured && (!(Rest || FarazConfigured) || !string.IsNullOrWhiteSpace(WarrantyPattern));
 
     /// <summary>"Warranty active" message: the warranty number and the link to its gold card, through its own approved pattern.</summary>
-    public async Task SendWarranty(string phone, string warrantyCode, string link, CancellationToken cancellationToken)
+    public Task SendWarranty(string phone, string warrantyCode, string link, CancellationToken cancellationToken)
     {
         if (!WarrantyConfigured) throw new ActivationError(503, "The warranty SMS pattern is not set.");
-        var values = new Dictionary<string, string>
+        return SendPattern(phone, WarrantyPattern, new Dictionary<string, string>
         {
             [configuration["Faraz:WarrantyCodeVariable"] ?? "code"] = warrantyCode,
             [configuration["Faraz:WarrantyLinkVariable"] ?? "link"] = link,
-        };
+        }, $"Your Solarzed warranty {warrantyCode} is active. Your warranty card: {link}", "warranty-" + warrantyCode,
+            "Faraz did not accept the warranty message.", "The warranty message could not be submitted.", cancellationToken);
+    }
+
+    string? TransferPattern => configuration["Faraz:TransferPattern"];
+    public bool TransferConfigured => Configured && (!(Rest || FarazConfigured) || !string.IsNullOrWhiteSpace(TransferPattern));
+
+    /// <summary>"Rolls received" message to a seller or installer: how many rolls were sent to them and where to sign in.</summary>
+    public Task SendTransfer(string phone, int count, string link, CancellationToken cancellationToken)
+    {
+        if (!TransferConfigured) throw new ActivationError(503, "The roll transfer SMS pattern is not set.");
+        return SendPattern(phone, TransferPattern, new Dictionary<string, string>
+        {
+            [configuration["Faraz:TransferCountVariable"] ?? "count"] = count.ToString(),
+            [configuration["Faraz:TransferLinkVariable"] ?? "link"] = link,
+        }, $"Solarzed: {count} roll(s) were sent to you. Sign in to see them: {link}", "transfer",
+            "Faraz did not accept the roll transfer message.", "The roll transfer message could not be submitted.", cancellationToken);
+    }
+
+    /// <summary>One message through an approved pattern (REST or SOAP), or as plain text through the HTTPS webhook.</summary>
+    async Task SendPattern(string phone, string? pattern, Dictionary<string, string> values, string webhookText, string reference,
+        string rejected, string unsent, CancellationToken cancellationToken)
+    {
         if (Rest)
         {
             if (!Regex.IsMatch(phone, @"^(?:09\d{9}|\+?989\d{9})$")) throw new ActivationError(400, "An Iranian mobile number is required.");
@@ -127,11 +152,11 @@ public class ActivationSmsSender(HttpClient http, IConfiguration configuration, 
             using var rest = new HttpRequestMessage(HttpMethod.Post, "https://api.iranpayamak.com/ws/v1/sms/pattern");
             rest.Headers.Add("Api-Key", FarazToken);
             rest.Headers.Accept.Add(new MediaTypeWithQualityHeaderValue("application/json"));
-            rest.Content = JsonContent.Create(new { code = WarrantyPattern, attributes = values, recipient = mobile,
+            rest.Content = JsonContent.Create(new { code = pattern, attributes = values, recipient = mobile,
                 line_number = configuration["Faraz:Sender"], number_format = "english" });
             using var result = await http.SendAsync(rest, cancellationToken);
             if (!result.IsSuccessStatusCode || !RestAccepted(await result.Content.ReadAsStringAsync(cancellationToken)))
-                throw new ActivationError(503, "Faraz did not accept the warranty message.");
+                throw new ActivationError(503, rejected);
             return;
         }
         if (FarazConfigured)
@@ -139,18 +164,18 @@ public class ActivationSmsSender(HttpClient http, IConfiguration configuration, 
             if (!Regex.IsMatch(phone, @"^(?:09\d{9}|\+?989\d{9})$")) throw new ActivationError(400, "An Iranian mobile number is required.");
             using var faraz = new HttpRequestMessage(HttpMethod.Post, FarazEndpoint);
             faraz.Headers.Add("SOAPAction", "\"SendSMSByPattern\"");
-            faraz.Content = new StringContent(FarazEnvelope(configuration["Faraz:Sender"]!, phone, WarrantyPattern!, FarazToken!, values), Encoding.UTF8, "text/xml");
+            faraz.Content = new StringContent(FarazEnvelope(configuration["Faraz:Sender"]!, phone, pattern!, FarazToken!, values), Encoding.UTF8, "text/xml");
             using var reply = await http.SendAsync(faraz, cancellationToken);
             if (!reply.IsSuccessStatusCode || !FarazAccepted(await reply.Content.ReadAsStringAsync(cancellationToken)))
-                throw new ActivationError(503, "Faraz did not accept the warranty message.");
+                throw new ActivationError(503, rejected);
             return;
         }
         using var request = new HttpRequestMessage(HttpMethod.Post, Endpoint);
-        request.Content = JsonContent.Create(new { to = phone, message = $"Your Solarzed warranty {warrantyCode} is active. Your warranty card: {link}", reference = "warranty-" + warrantyCode });
+        request.Content = JsonContent.Create(new { to = phone, message = webhookText, reference });
         var token = configuration["ActivationSms:Token"] ?? configuration["SOLARZED_SMS_TOKEN"];
         if (!string.IsNullOrEmpty(token)) request.Headers.Authorization = new AuthenticationHeaderValue("Bearer", token);
         using var response = await http.SendAsync(request, cancellationToken);
-        if (!response.IsSuccessStatusCode) throw new ActivationError(503, "The warranty message could not be submitted.");
+        if (!response.IsSuccessStatusCode) throw new ActivationError(503, unsent);
     }
 
     public static bool RestAccepted(string json) {

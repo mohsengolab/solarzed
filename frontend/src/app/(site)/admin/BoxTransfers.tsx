@@ -73,7 +73,10 @@ export default function BoxTransfers({ onChanged }: { onChanged?: () => void }) 
         serials: list, toWarehouse, toHolder: toWarehouse ? null : to || null, toPhone: toWarehouse ? null : phone, note: note || null,
         warehouseId: toWarehouse && warehouseId ? Number(warehouseId) : null,
       });
-      setDone(`${n(result.transfers.length)} رول ${toWarehouse ? "به انبار برگشت" : "ارسال شد"} → ${holderName(result.toHolder, result.toPhone)} · ${fa("Transfer number")}: ${result.batchId}`);
+      const sms = result.sms === "sent" ? "پیامک برای گیرنده ارسال شد."
+        : result.sms === "off" ? "پیامک ارسال نشد: الگوی «پیامک انتقال رول» در «پیامک» تنظیم نشده یا ارسال متوقف است."
+        : result.sms ? `پیامک ارسال نشد: ${fa(result.sms)}` : "";
+      setDone(`${n(result.transfers.length)} رول ${toWarehouse ? "به انبار برگشت" : "ارسال شد"} → ${holderName(result.toHolder, result.toPhone)} · ${fa("Transfer number")}: ${result.batchId}${sms && ` · ${sms}`}`);
       setList([]); setNote(""); setTo(""); setPhone(""); setReturning(false);
       await loadHolders(); onChanged?.();
       if (history && result.transfers.some(t => t.labelId === history.id)) setHistory(await boxHistory(history.id));

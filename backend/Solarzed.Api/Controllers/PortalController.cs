@@ -15,7 +15,7 @@ namespace Solarzed.Api.Controllers;
 /// see your warranties, and open support tickets.
 /// </summary>
 [ApiController, Route("api/portal"), Authorize(Policy = "PortalPolicy"), RequestSizeLimit(65536)]
-public class PortalController(PortalService portal, BoxTransferService transfers, AppDbContext db, IConfiguration cfg) : ControllerBase
+public class PortalController(PortalService portal, BoxTransferService transfers, TransferSms transferSms, AppDbContext db, IConfiguration cfg) : ControllerBase
 {
     /// <summary>The signed-in account, resolved from the token's stable id claim.</summary>
     async Task<PortalUser> Me()
@@ -222,7 +222,7 @@ public class PortalController(PortalService portal, BoxTransferService transfers
         var me = await Me();
         if (me.Phone is not { } phone)
             return BadRequest(new { error = "Add and verify your mobile number first; cartons are handed over by mobile number." });
-        try { return Ok(await transfers.TransferAsHolder(request, phone)); }
+        try { return Ok(await transferSms.Notify(await transfers.TransferAsHolder(request, phone), HttpContext.RequestAborted)); }
         catch (ActivationError ex) { return StatusCode(ex.Status, new { error = ex.Message }); }
     }
 

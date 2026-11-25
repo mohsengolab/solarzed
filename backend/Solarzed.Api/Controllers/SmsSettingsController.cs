@@ -50,6 +50,8 @@ public class SmsSettingsController(IConfiguration config, IWebHostEnvironment en
             line = config["Faraz:Sender"] ?? "",
             warranty = new { pattern = config["Faraz:WarrantyPattern"] ?? "", codeVariable = config["Faraz:WarrantyCodeVariable"] ?? "code",
                 linkVariable = config["Faraz:WarrantyLinkVariable"] ?? "link", configured = sender.WarrantyConfigured },
+            transfer = new { pattern = config["Faraz:TransferPattern"] ?? "", countVariable = config["Faraz:TransferCountVariable"] ?? "count",
+                linkVariable = config["Faraz:TransferLinkVariable"] ?? "link", configured = sender.TransferConfigured },
             endpoint = config["Faraz:Mode"] == "soap" ? config["Faraz:Endpoint"] : null, updatedAt = config["Faraz:UpdatedAt"],
             policy = new { policy.Enabled, policy.OtpMinutes, policy.ResendSeconds, policy.DailyLimit },
             email = new
@@ -85,7 +87,7 @@ public class SmsSettingsController(IConfiguration config, IWebHostEnvironment en
             await Update(root => root["Faraz"] = new JsonObject { ["Mode"] = "soap", ["Endpoint"] = endpoint,
                 ["ProtectedToken"] = protection.CreateProtector(Protector).Protect(key),
                 ["OtpPattern"] = req.Pattern, ["Sender"] = req.Line, ["CodeVariable"] = req.CodeVariable,
-                ["UpdatedAt"] = DateTime.UtcNow.ToString("O") }.Keep(root, "WarrantyPattern", "WarrantyCodeVariable", "WarrantyLinkVariable"), ct);
+                ["UpdatedAt"] = DateTime.UtcNow.ToString("O") }.Keep(root, "WarrantyPattern", "WarrantyCodeVariable", "WarrantyLinkVariable", "TransferPattern", "TransferCountVariable", "TransferLinkVariable"), ct);
             return Ok(new { ok = true, message = "SOAP settings saved. Send a test message to confirm the token and pattern." });
         }
         // Read-only provider checks: do not send messages, display balances or expose provider bodies.
@@ -104,7 +106,7 @@ public class SmsSettingsController(IConfiguration config, IWebHostEnvironment en
         await Update(root => root["Faraz"] = new JsonObject { ["Mode"] = "rest", ["Endpoint"] = ProviderBase + "sms/pattern",
             ["ProtectedToken"] = protection.CreateProtector(Protector).Protect(key),
             ["OtpPattern"] = req.Pattern, ["Sender"] = req.Line, ["CodeVariable"] = req.CodeVariable,
-            ["UpdatedAt"] = DateTime.UtcNow.ToString("O") }.Keep(root, "WarrantyPattern", "WarrantyCodeVariable", "WarrantyLinkVariable"), ct);
+            ["UpdatedAt"] = DateTime.UtcNow.ToString("O") }.Keep(root, "WarrantyPattern", "WarrantyCodeVariable", "WarrantyLinkVariable", "TransferPattern", "TransferCountVariable", "TransferLinkVariable"), ct);
         return Ok(new { ok = true, message = "Faraz account and pattern verified. Settings saved. No SMS was sent." });
     }
 
@@ -127,6 +129,27 @@ public class SmsSettingsController(IConfiguration config, IWebHostEnvironment en
             root["Faraz"] = faraz;
         }, ct);
         return Ok(new { ok = true, message = pattern.Length > 0 ? "Warranty SMS pattern saved." : "Warranty SMS pattern removed; owners will not get the card SMS." });
+    }
+
+    // The "rolls received" pattern: the SMS a seller or installer gets when rolls are sent to their mobile.
+    [HttpPost("transfer"), Perm("sms.edit")]
+    [RequestSizeLimit(2048)]
+    public async Task<IActionResult> SaveTransfer(SmsTransferRequest req, CancellationToken ct)
+    {
+        var pattern = (req.Pattern ?? "").Trim();
+        if (pattern.Length > 0 && !Regex.IsMatch(pattern, "^[a-zA-Z0-9_-]{1,100}$") ||
+            !Regex.IsMatch(req.CountVariable ?? "", "^[a-zA-Z][a-zA-Z0-9_]{0,49}$") ||
+            !Regex.IsMatch(req.LinkVariable ?? "", "^[a-zA-Z][a-zA-Z0-9_]{0,49}$") || req.CountVariable == req.LinkVariable)
+            return BadRequest(new { error = "Enter the pattern ID and two different variable names (English letters, digits, _)." });
+        await Update(root =>
+        {
+            var faraz = root["Faraz"] as JsonObject ?? new JsonObject();
+            if (pattern.Length > 0) faraz["TransferPattern"] = pattern; else faraz.Remove("TransferPattern");
+            faraz["TransferCountVariable"] = req.CountVariable;
+            faraz["TransferLinkVariable"] = req.LinkVariable;
+            root["Faraz"] = faraz;
+        }, ct);
+        return Ok(new { ok = true, message = pattern.Length > 0 ? "Roll transfer SMS pattern saved." : "Roll transfer SMS pattern removed; receivers will not get an SMS." });
     }
 
     /// <summary>Sends the gold card SMS to active warranties that never got it, for example those approved before the pattern was set.</summary>
@@ -255,6 +278,7 @@ static class FarazSection
     }
 }
 public record SmsWarrantyRequest(string? Pattern, string? CodeVariable, string? LinkVariable);
+public record SmsTransferRequest(string? Pattern, string? CountVariable, string? LinkVariable);
 public record SmsPolicyRequest(bool Enabled, int OtpMinutes, int ResendSeconds, int DailyLimit);
 public record SmsTestRequest(string Phone);
 public record EmailRequest(string? Host, int? Port, string? From, string? Name, string? User, string? Password, bool EnableSsl = true);

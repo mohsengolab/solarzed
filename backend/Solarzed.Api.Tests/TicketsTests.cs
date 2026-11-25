@@ -22,7 +22,8 @@ public class TicketsTests
     static AppDbContext Database() => new(new DbContextOptionsBuilder<AppDbContext>().UseInMemoryDatabase(Guid.NewGuid().ToString()).Options);
 
     static PortalController Portal(AppDbContext db, PortalUser me) => new(
-        new PortalService(db, new FakeSms()), new BoxTransferService(db), db, new ConfigurationBuilder().Build())
+        new PortalService(db, new FakeSms()), new BoxTransferService(db),
+        new TransferSms(new BoxLabelService(db, new Microsoft.AspNetCore.DataProtection.EphemeralDataProtectionProvider(), new FakeSms())), db, new ConfigurationBuilder().Build())
     {
         ControllerContext = new ControllerContext
         {
