@@ -1,31 +1,61 @@
 "use client";
 
-import { useEffect, useState, FormEvent } from "react";
+import { useCallback, useEffect, useState, FormEvent, type ReactNode } from "react";
 import Link from "next/link";
 import {
-  portalBoxes, portalLogout, portalMe, portalTransfer, portalWarranties,
+  portalBoxes, portalLogout, portalMe, portalTransfer, portalWarranties, portalInstallerWarranties,
   portalProfile, portalBind, portalBindVerify, portalTickets, portalCreateTicket, portalTicketDetail, portalTicketReply,
-  BoxTransfer, HeldBox, PortalUser, PortalChannel, PortalTicket, WarrantyPublic, type AdminTicketReply,
+  BoxTransfer, HeldBox, InstallerWarranty, PortalUser, PortalChannel, PortalTicket, WarrantyPublic, type AdminTicketReply,
 } from "@/lib/api";
 import PortalSignIn, { EMAIL_VERIFICATION } from "@/components/PortalSignIn";
 import SerialInput from "@/components/SerialInput";
+import ActivationFlow from "../activate/ActivationFlow";
 import InstallerSection from "./InstallerSection";
+import { Empty, ListToolbar, Pager, useListView } from "./ListTools";
 import styles from "../activate/activate.module.css";
 import own from "./account.module.css";
 
 const date = (value: string | null) => value ? new Date(value).toLocaleDateString(undefined, { calendar: "gregory" }) : "—";
-const stamp = (value: string) => new Date(value).toLocaleString(undefined, { calendar: "gregory" });
+const stamp = (value: string) => new Date(value).toLocaleString(undefined, { calendar: "gregory", dateStyle: "medium", timeStyle: "short" });
 const who = (name: string | null, phone: string | null) => name && phone && name !== phone ? `${name} (${phone})` : name ?? phone ?? "Central warehouse";
-const display = (user: PortalUser) => user.phone ?? user.email ?? "your account";
+const fullName = (user: PortalUser) => [user.firstName, user.lastName].filter(Boolean).join(" ") || user.name || null;
+const initials = (user: PortalUser) => {
+  const name = fullName(user);
+  if (name) return name.split(/\s+/).slice(0, 2).map(p => p[0]).join("").toUpperCase();
+  return (user.phone ?? user.email ?? "?").slice(-2);
+};
 
-const TABS = [["profile", "Profile"], ["transfer", "Carton transfer"], ["warranty", "Warranty"], ["tickets", "Support tickets"]] as const;
-type Tab = typeof TABS[number][0];
-const tabFromHash = (): Tab => { const h = typeof window === "undefined" ? "" : window.location.hash.slice(1); return TABS.some(([id]) => id === h) ? h as Tab : "profile"; };
+const ICONS: Record<string, string> = {
+  overview: "M4 13h6V4H4v9Zm0 7h6v-5H4v5Zm10 0h6v-9h-6v9Zm0-16v5h6V4h-6Z",
+  profile: "M12 12a4 4 0 1 0 0-8 4 4 0 0 0 0 8Zm-7 8a7 7 0 0 1 14 0",
+  transfer: "M4 8h13l-3-3m6 11H7l3 3",
+  warranty: "M12 3 5 6v5c0 4.5 3 8 7 10 4-2 7-5.5 7-10V6l-7-3Zm-3 9 2 2 4-4",
+  register: "M4 7V5a1 1 0 0 1 1-1h2m10 0h2a1 1 0 0 1 1 1v2m0 10v2a1 1 0 0 1-1 1h-2M7 20H5a1 1 0 0 1-1-1v-2m4-5h8",
+  installations: "M5 16l1.5-5A2 2 0 0 1 8.4 9.5h7.2a2 2 0 0 1 1.9 1.5L19 16M4 16h16v3H4zM7 19v1m10-1v1",
+  tickets: "M4 5h16v11H8l-4 4V5Zm4 5h8m-8 3h5",
+};
+const Icon = ({ name }: { name: string }) => <svg aria-hidden="true" viewBox="0 0 24 24" width="18" height="18"><path fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" d={ICONS[name]} /></svg>;
+
+type Tab = "overview" | "profile" | "transfer" | "warranty" | "register" | "installations" | "tickets";
+const ALL_TABS: Tab[] = ["overview", "profile", "transfer", "warranty", "register", "installations", "tickets"];
+const tabFromHash = (): Tab => { const h = typeof window === "undefined" ? "" : window.location.hash.slice(1); return (ALL_TABS as string[]).includes(h) ? h as Tab : "overview"; };
 
 const SEEN_KEY = "sz-ticket-seen";
 const TICKET_POLL_MS = 15_000;
+const TICKET_STATUS = { open: "Waiting for support", answered: "Answered", closed: "Closed" } as const;
+const TICKET_FILTERS = [["open", "Waiting"], ["answered", "Answered"], ["closed", "Closed"]] as const;
+const WARRANTY_FILTERS = [["active", "Active"], ["pending", "In review"], ["rejected", "Sent back"]] as const;
 
-const emptyProfile ={ firstName: "", lastName: "", country: "", city: "", job: "" };
+const emptyProfile = { firstName: "", lastName: "", country: "", city: "", job: "" };
+
+const warrantyText = (w: WarrantyPublic) => [w.code, w.make, w.model, w.plate, w.filmSerial, w.invoiceNumber].join(" ");
+const warrantyStatus = (w: WarrantyPublic) => w.status;
+const ticketText = (t: PortalTicket) => `${t.code} ${t.subject}`;
+const ticketStatus = (t: PortalTicket) => t.status;
+const boxText = (b: HeldBox) => `${b.id} ${b.product} ${b.type}`;
+const boxType = (b: HeldBox) => b.type;
+const outText = (t: BoxTransfer) => `${t.labelId} ${t.toHolder ?? ""} ${t.toPhone ?? ""} ${t.note ?? ""}`;
+const none = () => null;
 
 export default function AccountPage() {
   const [user, setUser] = useState<PortalUser | null>(null);
@@ -33,6 +63,7 @@ export default function AccountPage() {
   const [boxes, setBoxes] = useState<HeldBox[]>([]);
   const [outgoing, setOutgoing] = useState<BoxTransfer[]>([]);
   const [warranties, setWarranties] = useState<WarrantyPublic[]>([]);
+  const [installs, setInstalls] = useState<InstallerWarranty[]>([]);
   const [selected, setSelected] = useState<string[]>([]);
   const [list, setSerials] = useState<string[]>([]);
   const [toPhone, setToPhone] = useState("");
@@ -41,13 +72,24 @@ export default function AccountPage() {
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
   const [done, setDone] = useState("");
-  const [tab, setTab] = useState<Tab>("profile");
+  const [tab, setTab] = useState<Tab>("overview");
+  const [menuOpen, setMenuOpen] = useState(false);
+  // Customers activate an older card right inside the Warranties section.
+  const [activating, setActivating] = useState(false);
+  // The ROLL NO an installer scanned before landing here (/account#register:CPT…).
+  const [registerCode, setRegisterCode] = useState("");
+  const [registerKey, setRegisterKey] = useState(0);
+
   useEffect(() => {
     const sync = () => setTab(tabFromHash());
     sync(); window.addEventListener("hashchange", sync);
     return () => window.removeEventListener("hashchange", sync);
   }, []);
-  const go = (next: Tab) => { setTab(next); history.replaceState(null, "", `#${next}`); };
+  const go = (next: Tab) => {
+    setTab(next); setMenuOpen(false); history.replaceState(null, "", `#${next}`);
+    if (next === "register") { setRegisterCode(""); setRegisterKey(k => k + 1); }
+    window.scrollTo({ top: 0, behavior: "smooth" });
+  };
 
   // Profile (first/last name, country, city, job)
   const [profile, setProfile] = useState(emptyProfile);
@@ -65,9 +107,10 @@ export default function AccountPage() {
   // Support tickets
   const [tickets, setTickets] = useState<PortalTicket[]>([]);
   const [ticketForm, setTicketForm] = useState({ subject: "", message: "" });
+  const [newTicket, setNewTicket] = useState(false);
   const [ticketBusy, setTicketBusy] = useState(false);
   const [ticketMsg, setTicketMsg] = useState("");
-  const [openTicket, setOpenTicket] = useState<{ id: number; code: string; subject: string; status: string; replies: AdminTicketReply[] } | null>(null);
+  const [openTicket, setOpenTicket] = useState<{ id: number; code: string; subject: string; status: string; createdAt: string; replies: AdminTicketReply[] } | null>(null);
   const [replyText, setReplyText] = useState("");
   // How many messages of each ticket this browser has already shown, so new staff replies stand out.
   // Read lazily: the tickets tab renders only after sign-in is checked, so the server never renders this.
@@ -87,6 +130,13 @@ export default function AccountPage() {
     return Math.max(0, t.replies - last);
   };
   const unreadTotal = tickets.reduce((sum, t) => sum + (unread(t) > 0 ? 1 : 0), 0);
+
+  // Lists: search, filter chips and pages, so long lists stay easy to use.
+  const sortedTickets = [...tickets].sort((a, b) => (unread(b) > 0 ? 1 : 0) - (unread(a) > 0 ? 1 : 0) || b.updatedAt.localeCompare(a.updatedAt));
+  const ticketList = useListView(sortedTickets, ticketText, ticketStatus);
+  const warrantyList = useListView(warranties, warrantyText, warrantyStatus);
+  const boxList = useListView(boxes, boxText, boxType);
+  const outList = useListView(outgoing, outText, none);
 
   // Keep the ticket list and the open conversation live: a staff reply shows up without a page reload.
   useEffect(() => {
@@ -110,6 +160,12 @@ export default function AccountPage() {
     return () => { live = false; window.clearInterval(timer); document.removeEventListener("visibilitychange", tick); };
   }, [user, openTicket?.id]); // eslint-disable-line react-hooks/exhaustive-deps
 
+  const installer = user?.partner === "approved";
+  const loadInstalls = useCallback(async () => {
+    const r = await portalInstallerWarranties();
+    setInstalls(r.warranties);
+  }, []);
+
   async function load() {
     const [b, w, t] = await Promise.all([portalBoxes(), portalWarranties(), portalTickets()]);
     setBoxes(b.boxes); setOutgoing(b.outgoing); setWarranties(w.warranties); setTickets(t.tickets);
@@ -117,7 +173,10 @@ export default function AccountPage() {
   }
 
   useEffect(() => {
+    // An installer scanning a card from a phone lands on /account#register:ROLLNO and stays in the dashboard.
+    const h = decodeURIComponent(window.location.hash.slice(1));
     portalMe().then(r => {
+      if (h.startsWith("register:")) { setRegisterCode(h.slice(9).trim().toUpperCase()); history.replaceState(null, "", "#register"); setTab("register"); }
       setUser(r.user);
       if (r.user) setProfile({
         firstName: r.user.firstName ?? "", lastName: r.user.lastName ?? "",
@@ -128,7 +187,9 @@ export default function AccountPage() {
   useEffect(() => {
     if (user) Promise.resolve().then(load).catch(ex => setError(ex instanceof Error ? ex.message : "Could not load your account."));
   }, [user]);
-
+  useEffect(() => {
+    if (installer) void Promise.resolve().then(loadInstalls).catch(() => undefined);
+  }, [installer, loadInstalls]);
 
   async function transfer(event: FormEvent) {
     event.preventDefault(); setBusy(true); setError(""); setDone("");
@@ -173,27 +234,25 @@ export default function AccountPage() {
     finally { setBindBusy(false); }
   }
 
+  async function showTicket(id: number) {
+    setTicketMsg(""); setReplyText(""); setNewTicket(false);
+    try {
+      const d = await portalTicketDetail(id);
+      setOpenTicket({ id: d.ticket.id, code: d.ticket.code, subject: d.ticket.subject, status: d.ticket.status, createdAt: d.ticket.createdAt, replies: d.replies });
+      markSeen(d.ticket.id, d.replies.length);
+    } catch (ex) { setTicketMsg(ex instanceof Error ? ex.message : "Could not load the ticket."); }
+  }
+
   async function createTicket(event: FormEvent) {
     event.preventDefault(); setTicketBusy(true); setTicketMsg("");
     try {
       const r = await portalCreateTicket(ticketForm.subject.trim(), ticketForm.message.trim());
       setTicketForm({ subject: "", message: "" });
-      setTicketMsg(`Ticket ${r.ticket.code} was created. Our staff will reply here.`);
       await load();
-      const d = await portalTicketDetail(r.ticket.id);
-      setOpenTicket({ id: d.ticket.id, code: d.ticket.code, subject: d.ticket.subject, status: d.ticket.status, replies: d.replies });
-      markSeen(d.ticket.id, d.replies.length);
+      await showTicket(r.ticket.id);
+      setTicketMsg(`Ticket ${r.ticket.code} was created. Our staff will reply here.`);
     } catch (ex) { setTicketMsg(ex instanceof Error ? ex.message : "Could not create the ticket."); }
     finally { setTicketBusy(false); }
-  }
-
-  async function showTicket(id: number) {
-    setTicketMsg(""); setReplyText("");
-    try {
-      const d = await portalTicketDetail(id);
-      setOpenTicket({ id: d.ticket.id, code: d.ticket.code, subject: d.ticket.subject, status: d.ticket.status, replies: d.replies });
-      markSeen(d.ticket.id, d.replies.length);
-    } catch (ex) { setTicketMsg(ex instanceof Error ? ex.message : "Could not load the ticket."); }
   }
 
   async function sendReply(event: FormEvent) {
@@ -211,172 +270,295 @@ export default function AccountPage() {
 
   async function logout() {
     await portalLogout().catch(() => undefined);
-    setUser(null); setBoxes([]); setOutgoing([]); setWarranties([]); setTickets([]); setOpenTicket(null);
+    setUser(null); setBoxes([]); setOutgoing([]); setWarranties([]); setTickets([]); setInstalls([]); setOpenTicket(null);
   }
 
-  return <div className={styles.page}>
+  if (!checked || !user) return <div className={styles.page}>
     <header><Link href="/">SOLAR<span>ZED</span></Link><small>MY ACCOUNT</small></header>
     <main className={`${styles.card} ${own.stack}`}>
       <span className={styles.eyebrow}>PARTNER &amp; CUSTOMER ACCOUNT</span>
-      {!checked ? <p>Loading…</p> : !user ? <>
+      {!checked ? <p>Loading…</p> : <>
         <h1>Sign in</h1>
         <PortalSignIn onSignedIn={setUser} intro={`Representatives and shops: sign in with the mobile number Solarzed sent your cartons to${EMAIL_VERIFICATION ? ", or with your email address" : ""}. Customers: sign in to see your warranties.`} />
-      </> : <>
-        <div className={own.head}><h1>Signed in as <span dir="ltr">{display(user)}</span></h1><button type="button" className={own.ghost} onClick={logout}>Sign out</button></div>
+      </>}
+    </main><footer>© SOLARZED · <Link href="/warranty">Warranty lookup</Link> · <Link href="/coverage">Warranty policy</Link></footer>
+  </div>;
+
+  const pendingInstalls = installs.filter(i => i.warranty.status !== "active").length;
+  const rejectedInstalls = installs.filter(i => i.warranty.status === "rejected").length;
+  const openTickets = tickets.filter(t => t.status !== "closed").length;
+  const name = fullName(user);
+
+  const menu: { id: Tab; label: string; count?: ReactNode; hot?: boolean }[] = [
+    { id: "overview", label: "Overview" },
+    ...(installer ? [
+      { id: "register" as Tab, label: "Register installation" },
+      { id: "installations" as Tab, label: "Installations", count: installs.length || undefined, hot: rejectedInstalls > 0 },
+    ] : []),
+    { id: "warranty", label: "Warranties", count: warranties.length || undefined },
+    { id: "transfer", label: "Rolls", count: boxes.length || undefined },
+    { id: "tickets", label: "Support", count: unreadTotal ? `${unreadTotal} new` : openTickets || undefined, hot: unreadTotal > 0 },
+    { id: "profile", label: "Profile" },
+  ];
+  const current = menu.find(m => m.id === tab) ?? menu[0];
+  const view: Tab = current.id;
+
+  const stat = (id: Tab, label: string, value: number, hint: string, hot = false) =>
+    <button type="button" className={`${own.stat} ${hot ? own.statHot : ""}`} onClick={() => go(id)}>
+      <span className={own.statIcon}><Icon name={id} /></span>
+      <b>{value}</b><span>{label}</span><small>{hint}</small>
+    </button>;
+
+  return <div className={`${styles.page} ${own.wide}`}>
+    <header><Link href="/">SOLAR<span>ZED</span></Link><small>MY ACCOUNT</small></header>
+    <div className={own.shell}>
+      <aside className={own.side}>
+        <div className={own.me}>
+          <span className={own.avatar} aria-hidden="true">{initials(user)}</span>
+          <div>
+            <b>{name ?? "Welcome"}</b>
+            <small dir="ltr">{user.phone ?? user.email}</small>
+            {installer ? <span className={own.badge}>Installer · {user.shopName}</span>
+              : user.partner === "pending" ? <span className={own.badge}>Installer application pending</span> : null}
+          </div>
+          <button type="button" className={own.menuToggle} aria-expanded={menuOpen} aria-controls="account-menu" onClick={() => setMenuOpen(o => !o)}>
+            {current.label} <span aria-hidden="true">▾</span>
+          </button>
+        </div>
+        <nav id="account-menu" className={`${own.nav} ${menuOpen ? own.navOpen : ""}`} aria-label="Account menu">
+          {menu.map(m => <button key={m.id} type="button" className={own.navItem} aria-current={view === m.id ? "page" : undefined} onClick={() => go(m.id)}>
+            <Icon name={m.id} /><span>{m.label}</span>{m.count != null && <em className={m.hot ? own.hot : undefined}>{m.count}</em>}
+          </button>)}
+          <button type="button" className={`${own.navItem} ${own.signOut}`} onClick={logout}>
+            <svg aria-hidden="true" viewBox="0 0 24 24" width="18" height="18"><path fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" d="M15 4h4v16h-4M10 8l-4 4 4 4M6 12h10" /></svg>
+            <span>Sign out</span>
+          </button>
+        </nav>
+      </aside>
+
+      <main className={`${styles.card} ${own.content}`}>
         {error && <p role="alert" className={styles.error}>{error}</p>}
 
-        <nav className={own.tabs} role="tablist" aria-label="Account sections">
-          {TABS.map(([id, label]) => <button key={id} type="button" role="tab" id={`tab-${id}`} aria-controls={`panel-${id}`} aria-selected={tab === id} className={own.tab} onClick={() => go(id)}>
-            {label}{id === "transfer" && boxes.length > 0 && ` (${boxes.length})`}{id === "tickets" && (unreadTotal > 0 ? ` (${unreadTotal} new)` : tickets.length > 0 && ` (${tickets.length})`)}
-          </button>)}
-        </nav>
-
-        {tab === "profile" && <div role="tabpanel" id="panel-profile" aria-labelledby="tab-profile">
-        <section>
-          <h2>Your profile</h2>
-          <p>Tell us who you are. Support sees your name and mobile with every ticket, and your country and city help us serve you better.</p>
-          <form onSubmit={saveProfile} className={own.form}>
-            <div className={styles.grid}>
-              <label>First name<input maxLength={100} value={profile.firstName} onChange={e => setProfile({ ...profile, firstName: e.target.value })} /></label>
-              <label>Last name<input maxLength={100} value={profile.lastName} onChange={e => setProfile({ ...profile, lastName: e.target.value })} /></label>
-              <label>Country<input maxLength={100} value={profile.country} onChange={e => setProfile({ ...profile, country: e.target.value })} /></label>
-              <label>City<input maxLength={100} value={profile.city} onChange={e => setProfile({ ...profile, city: e.target.value })} /></label>
-              <label>Job / business<input maxLength={100} placeholder="e.g. shop, installer, driver" value={profile.job} onChange={e => setProfile({ ...profile, job: e.target.value })} /></label>
+        {view === "overview" && <>
+          <section>
+            <span className={styles.eyebrow}>DASHBOARD</span>
+            <h1 className={own.title}>Hello{name ? `, ${name}` : ""}</h1>
+            <p>{installer ? "Register installations, follow the counter's review and pass rolls on — all from here." : "Your warranties, rolls and support conversations in one place."}</p>
+            {!user.phone && <p role="status" className={own.notice}>Add and verify your mobile in <button type="button" className={styles.linkButton} onClick={() => go("profile")}>your profile</button>: rolls and warranty cards are registered to mobile numbers.</p>}
+            <div className={own.stats}>
+              {installer && stat("installations", "Installations", installs.length, pendingInstalls ? `${pendingInstalls} waiting or sent back` : "all approved", rejectedInstalls > 0)}
+              {stat("warranty", "Warranties", warranties.length, `${warranties.filter(w => w.status === "active").length} active`)}
+              {stat("transfer", "Rolls in account", boxes.length, outgoing.length ? `${outgoing.length} transferred out` : "ready to transfer")}
+              {stat("tickets", "Support tickets", tickets.length, unreadTotal ? `${unreadTotal} with a new reply` : `${openTickets} open`, unreadTotal > 0)}
             </div>
-            <button className={styles.button} disabled={profileBusy}>{profileBusy ? "Saving…" : "Save profile"}</button>
-            {profileMsg && <p role="status" className={own.notice}>{profileMsg}</p>}
-          </form>
-          <p className={own.notice}>
-            Mobile (rolls are transferred to this number): <b dir="ltr">{user.phone ?? "not set"}</b> · Email: <b dir="ltr">{user.email ?? "not set"}</b>
-          </p>
-          {(!user.phone || (EMAIL_VERIFICATION && !user.email)) && <div className={own.form}>
-            {user.phone
-              ? <p>Add your email to sign in without SMS.</p>
-              : <p>Add your verified mobile to receive cartons and activate warranty cards: carton hand-over and card activation work with mobile numbers.</p>}
-            {!bindChallenge && <>
-              <div className={styles.grid}>
-                {!user.phone && <label>Mobile number<input type="tel" dir="ltr" maxLength={20} placeholder="09…" value={bindChannel === "sms" ? bindIdentifier : ""} onChange={e => { setBindChannel("sms"); setBindIdentifier(e.target.value); }} /></label>}
-                {EMAIL_VERIFICATION && !user.email && <label>Email address<input type="email" dir="ltr" maxLength={254} placeholder="you@example.com" value={bindChannel === "email" ? bindIdentifier : ""} onChange={e => { setBindChannel("email"); setBindIdentifier(e.target.value); }} /></label>}
-              </div>
-              {!user.phone && <button type="button" className={styles.button} disabled={bindBusy || !bindIdentifier.trim() || bindChannel !== "sms"} onClick={() => startBind("sms")}>Verify mobile</button>}
-              {EMAIL_VERIFICATION && !user.email && <button type="button" className={own.ghost} disabled={bindBusy || !bindIdentifier.trim() || bindChannel !== "email"} onClick={() => startBind("email")}>Verify email</button>}
-            </>}
-            {bindMsg && <p role={bindChallenge ? "status" : "alert"} className={own.notice}>{bindMsg}</p>}
-            {bindChallenge && <form onSubmit={verifyBind} className={own.form}>
-              <label>Verification code<input dir="ltr" inputMode="numeric" maxLength={6} pattern="[0-9]{6}" required value={bindCode} onChange={e => setBindCode(e.target.value.replace(/\D/g, "").slice(0, 6))} /></label>
-              <button className={styles.button} disabled={bindBusy || bindCode.length !== 6}>{bindBusy ? "Verifying…" : "Confirm"}</button>
-            </form>}
-          </div>}
-        </section>
-
-        <InstallerSection user={user} onUser={setUser} view="profile" />
-        </div>}
-
-        {tab === "transfer" && <div role="tabpanel" id="panel-transfer" aria-labelledby="tab-transfer">
-        {done && <p role="status" className={own.notice}>{done}</p>}
-        {!user.phone ? <section>
-          <h2>Carton transfer</h2>
-          <p role="status" className={own.notice}>Rolls are transferred by <b>ROLL NO</b> to a mobile number. Add and verify your mobile in your profile first: the company and other sellers send rolls to that number, and you receive them here.</p>
-          <button type="button" className={styles.button} onClick={() => go("profile")}>Go to profile</button>
-        </section> : <>
-        <section>
-          <h2>Rolls in your account ({boxes.length})</h2>
-          <p>Rolls transferred to your mobile <b dir="ltr">{user.phone}</b> appear here.</p>
-          {boxes.length ? <div className={own.scroll}><table className={own.table}>
-            <thead><tr><th>Select</th><th>ROLL NO</th><th>Product</th><th>Since</th></tr></thead>
-            <tbody>{boxes.map(box => <tr key={box.id}>
-              <td><input type="checkbox" aria-label={`Select ${box.id}`} checked={selected.includes(box.id)} onChange={event => setSelected(items => event.target.checked ? [...items, box.id] : items.filter(id => id !== box.id))} /></td>
-              <td><code dir="ltr">{box.id}</code></td><td>{box.product} · {box.type.toUpperCase()}</td><td>{date(box.heldSince)}</td>
-            </tr>)}</tbody>
-          </table></div> : <p>No rolls are in your account. When Solarzed or a seller transfers rolls to your mobile, they appear here.</p>}
-        </section>
-
-        {boxes.length > 0 && <section>
-          <h2>Transfer rolls</h2>
-          <p>Scan or type the <b>ROLL NO</b> of each carton and enter the receiver&apos;s mobile — the number they registered in their Solarzed profile. The rolls then appear in their account.</p>
-          <form onSubmit={transfer} className={own.form}>
-            <SerialInput lang="en" label="ROLL NOs (scan, type or upload Excel)" value={list} onChange={setSerials} />
-            {selected.length > 0 && <button type="button" className={own.ghost} onClick={() => setSerials([...new Set([...list, ...selected])])}>Use selected rolls ({selected.length})</button>}
-            <div className={styles.grid}>
-              <label>Receiver mobile<input type="tel" dir="ltr" required maxLength={20} value={toPhone} onChange={event => setToPhone(event.target.value)} placeholder="09…" /></label>
-              <label>Receiver name (optional)<input maxLength={200} value={toName} onChange={event => setToName(event.target.value)} /></label>
+          </section>
+          <section>
+            <h2>Quick actions</h2>
+            <div className={own.actions}>
+              {installer && <button type="button" className={own.action} onClick={() => go("register")}><Icon name="register" /><b>Register an installation</b><small>Scan the ROLL NO on the card</small></button>}
+              {!installer && <button type="button" className={own.action} onClick={() => { setActivating(true); go("warranty"); }}><Icon name="warranty" /><b>Activate a warranty card</b><small>Type or scan the ROLL NO</small></button>}
+              {boxes.length > 0 && <button type="button" className={own.action} onClick={() => go("transfer")}><Icon name="transfer" /><b>Transfer rolls</b><small>Send rolls to another mobile</small></button>}
+              <button type="button" className={own.action} onClick={() => { go("tickets"); setOpenTicket(null); setNewTicket(true); }}><Icon name="tickets" /><b>Ask support</b><small>Open a new ticket</small></button>
             </div>
-            <label>Note (optional)<input maxLength={500} value={note} onChange={event => setNote(event.target.value)} /></label>
-            <button className={styles.button} disabled={busy || !list.length || !toPhone.trim()}>{busy ? "Working…" : `Transfer ${list.length} roll(s)`}</button>
-          </form>
-        </section>}
-
-        {outgoing.length > 0 && <section>
-          <h2>Rolls you transferred</h2>
-          <div className={own.scroll}><table className={own.table}>
-            <thead><tr><th>Date</th><th>ROLL NO</th><th>To</th><th>Note</th></tr></thead>
-            <tbody>{outgoing.map(t => <tr key={t.id}><td>{date(t.at)}</td><td><code dir="ltr">{t.labelId}</code></td><td>{who(t.toHolder, t.toPhone)}</td><td>{t.note ?? "—"}</td></tr>)}</tbody>
-          </table></div>
-        </section>}
+          </section>
+          {unreadTotal > 0 && <section>
+            <h2>New replies from support</h2>
+            <ul className={own.cards}>{sortedTickets.filter(t => unread(t) > 0).slice(0, 3).map(t => <li key={t.id} className={own.item}>
+              <div className={own.itemMain}><b>{t.subject}</b><small><code dir="ltr">{t.code}</code> · {stamp(t.updatedAt)}</small></div>
+              <div className={own.itemSide}><button type="button" className={own.ghost} onClick={() => { go("tickets"); void showTicket(t.id); }}>Read reply</button></div>
+            </li>)}</ul>
+          </section>}
         </>}
-        </div>}
 
-        {tab === "warranty" && <div role="tabpanel" id="panel-warranty" aria-labelledby="tab-warranty">
-        <InstallerSection user={user} onUser={setUser} view="warranty" />
+        {view === "register" && installer && <section>
+          <span className={styles.eyebrow}>REGISTER INSTALLATION</span>
+          <h1 className={own.title}>Register a vehicle</h1>
+          <ActivationFlow key={registerKey} user={user} checked onUser={setUser} initialCode={registerCode} embedded onDone={() => { void loadInstalls().catch(() => undefined); }} />
+          <p className={own.muted}>Follow the counter&apos;s review under <button type="button" className={styles.linkButton} onClick={() => go("installations")}>Installations</button>.</p>
+        </section>}
 
-        <section>
-          <h2>My warranties ({warranties.length})</h2>
-          {warranties.length ? <div className={own.scroll}><table className={own.table}>
-            <thead><tr><th>Warranty code</th><th>Vehicle</th><th>Status</th><th>Film warranty ends</th></tr></thead>
-            <tbody>{warranties.map(w => <tr key={w.code}>
-              <td><Link href={`/warranty?code=${encodeURIComponent(w.code)}`}><code dir="ltr">{w.code}</code></Link></td>
-              <td>{w.make} {w.model} · {w.plate}{w.usedLengthM != null && <small> · {w.usedLengthM} m</small>}</td><td>{w.statusLabel}</td><td>{w.coverage?.filmEnds ?? "—"}</td>
-            </tr>)}</tbody>
-          </table></div> : <p>{user.phone ? "No warranties yet. Scan the QR code on the warranty card inside your Solarzed box to activate one." : "No warranties yet. Add your verified mobile in your profile, then scan the QR code on the warranty card inside your Solarzed box."}</p>}
-          {user.phone
-            ? <Link className={styles.button} href="/activate">Activate a warranty card</Link>
-            : <p role="status" className={own.notice}>Warranty card activation needs a verified mobile number — add one in your profile first.</p>}
-        </section>
-        </div>}
+        {view === "installations" && <InstallerSection user={user} onUser={setUser} view="installations" rows={installs} reload={loadInstalls} onRegister={() => go("register")} />}
 
-        {tab === "tickets" && <div role="tabpanel" id="panel-tickets" aria-labelledby="tab-tickets">
-        <section>
-          <h2>Support tickets</h2>
-          <p>Open a ticket and our staff replies here. Every reply notification shows your mobile and name, so we always know who is asking.</p>
-          <form onSubmit={createTicket} className={own.form}>
-            <label>Subject<input maxLength={200} required value={ticketForm.subject} onChange={e => setTicketForm({ ...ticketForm, subject: e.target.value })} /></label>
-            <label>Your question<textarea rows={3} maxLength={4000} required value={ticketForm.message} onChange={e => setTicketForm({ ...ticketForm, message: e.target.value })} /></label>
-            <button className={styles.button} disabled={ticketBusy}>{ticketBusy ? "Sending…" : "Create ticket"}</button>
-            {ticketMsg && <p role="status" className={own.notice}>{ticketMsg}</p>}
-          </form>
-          {tickets.length > 0 && <div className={own.scroll}><table className={own.table}>
-            <thead><tr><th>Code</th><th>Subject</th><th>Status</th><th>Replies</th><th>Updated</th><th></th></tr></thead>
-            <tbody>{tickets.map(t => <tr key={t.id}>
-              <td><code dir="ltr">{t.code}</code></td><td>{t.subject}{unread(t) > 0 && <b className={own.newBadge}> New reply</b>}</td><td>{t.status}</td><td>{t.replies}</td><td>{stamp(t.updatedAt)}</td>
-              <td><button type="button" className={own.ghost} onClick={() => showTicket(t.id)}>Open</button></td>
-            </tr>)}</tbody>
-          </table></div>}
-          {openTicket && <article className={own.form} style={{ marginTop: 12 }}>
-            <div className={own.head}>
-              <h3>{openTicket.subject} · <code dir="ltr">{openTicket.code}</code></h3>
-              <button type="button" className={own.ghost} onClick={() => setOpenTicket(null)}>Close conversation</button>
-            </div>
-            <div style={{ display: "grid", gap: 10, margin: "12px 0" }}>
-              {openTicket.replies.map(r => (
-                <div key={r.id} style={{
-                  maxWidth: 620, padding: "10px 14px", borderRadius: 12,
-                  background: r.author === "staff" ? "rgba(31,195,207,.08)" : "rgb(var(--sz-tint) / .04)",
-                  border: `1px solid ${r.author === "staff" ? "rgba(31,195,207,.35)" : "rgb(var(--sz-tint) / .12)"}`,
-                }}>
-                  <b style={{ fontSize: 12 }}>{r.author === "staff" ? "Solarzed support" : "You"}</b>
-                  <p style={{ margin: "6px 0", whiteSpace: "pre-wrap" }}>{r.message}</p>
-                  <span style={{ fontSize: 11, opacity: .6 }}>{stamp(r.createdAt)}</span>
+        {view === "warranty" && <section>
+          <div className={own.sectionHead}>
+            <div><h2>My warranties</h2><p>Warranties registered to your mobile. Open one to see its gold card and coverage.</p></div>
+            {user.phone && !installer && <button type="button" className={activating ? own.ghost : styles.button} onClick={() => setActivating(a => !a)}>{activating ? "Close" : "+ Activate a card"}</button>}
+          </div>
+          {activating && !installer && <div className={own.panel}><ActivationFlow user={user} checked onUser={setUser} embedded onDone={() => { void load().catch(() => undefined); }} /></div>}
+          {!user.phone && <p role="status" className={own.notice}>Warranty card activation needs a verified mobile number — add one in <button type="button" className={styles.linkButton} onClick={() => go("profile")}>your profile</button> first.</p>}
+          {warranties.length > 0 && <ListToolbar view={warrantyList} placeholder="Search plate, vehicle, ROLL NO, warranty code…" filters={WARRANTY_FILTERS} />}
+          {!warranties.length ? <Empty title="No warranties yet">
+            <span>{installer ? "Warranties you register for customers are listed under Installations." : "Your installer registers the warranty for your mobile and you receive your gold card by SMS."}</span>
+          </Empty> : !warrantyList.matches.length ? <Empty title="Nothing matches your search" /> : <>
+            <ul className={own.cards}>{warrantyList.rows.map(w => <li key={w.code} className={own.item}>
+              <div className={own.itemMain}>
+                <b>{w.make} {w.model} <span className={own.plate} dir="ltr">{w.plate}</span></b>
+                <small><code dir="ltr">{w.code}</code> · ROLL NO <code dir="ltr">{w.filmSerial}</code>{w.usedLengthM != null && ` · ${w.usedLengthM} m`}</small>
+              </div>
+              <div className={own.itemSide}>
+                <span className={`${own.status} ${own[`s_${w.status}`]}`}>{w.statusLabel}</span>
+                <small>Film warranty until {w.coverage?.filmEnds ?? "—"}</small>
+                <Link className={own.ghost} href={`/warranty?code=${encodeURIComponent(w.code)}`}>View card</Link>
+              </div>
+            </li>)}</ul>
+            <Pager page={warrantyList.page} pages={warrantyList.pages} setPage={warrantyList.setPage} shown={warrantyList.rows.length} matched={warrantyList.matches.length} />
+          </>}
+        </section>}
+
+        {view === "transfer" && <>
+          {done && <p role="status" className={own.notice}>{done}</p>}
+          {!user.phone ? <section>
+            <h2>Rolls</h2>
+            <p role="status" className={own.notice}>Rolls are transferred by <b>ROLL NO</b> to a mobile number. Add and verify your mobile in your profile first: the company and other sellers send rolls to that number, and you receive them here.</p>
+            <button type="button" className={styles.button} onClick={() => go("profile")}>Go to profile</button>
+          </section> : <>
+            <section>
+              <h2>Rolls in your account</h2>
+              <p>Rolls transferred to your mobile <b dir="ltr">{user.phone}</b> appear here. Tick rolls to transfer them.</p>
+              {boxes.length > 0 && <ListToolbar view={boxList} placeholder="Search ROLL NO or product…" filters={[["tint", "Window film"], ["ppf", "PPF"]] as const} />}
+              {!boxes.length ? <Empty title="No rolls in your account"><span>When Solarzed or a seller transfers rolls to your mobile, they appear here.</span></Empty>
+                : !boxList.matches.length ? <Empty title="Nothing matches your search" /> : <>
+                <div className={own.scroll}><table className={own.table}>
+                  <thead><tr>
+                    <th><input type="checkbox" aria-label="Select all rolls on this page" checked={boxList.rows.every(b => selected.includes(b.id))}
+                      onChange={e => setSelected(items => e.target.checked ? [...new Set([...items, ...boxList.rows.map(b => b.id)])] : items.filter(id => !boxList.rows.some(b => b.id === id)))} /></th>
+                    <th>ROLL NO</th><th>Product</th><th>Since</th></tr></thead>
+                  <tbody>{boxList.rows.map(box => <tr key={box.id}>
+                    <td><input type="checkbox" aria-label={`Select ${box.id}`} checked={selected.includes(box.id)} onChange={event => setSelected(items => event.target.checked ? [...items, box.id] : items.filter(id => id !== box.id))} /></td>
+                    <td><code dir="ltr">{box.id}</code></td><td>{box.product} · {box.type.toUpperCase()}</td><td>{date(box.heldSince)}</td>
+                  </tr>)}</tbody>
+                </table></div>
+                <Pager page={boxList.page} pages={boxList.pages} setPage={boxList.setPage} shown={boxList.rows.length} matched={boxList.matches.length} />
+              </>}
+            </section>
+
+            {boxes.length > 0 && <section>
+              <h2>Transfer rolls</h2>
+              <p>Scan or type the <b>ROLL NO</b> of each carton and enter the receiver&apos;s mobile — the number they registered in their Solarzed profile. The rolls then appear in their account.</p>
+              <form onSubmit={transfer} className={own.form}>
+                <SerialInput lang="en" label="ROLL NOs (scan, type or upload Excel)" value={list} onChange={setSerials} />
+                {selected.length > 0 && <button type="button" className={own.ghost} onClick={() => setSerials([...new Set([...list, ...selected])])}>Use selected rolls ({selected.length})</button>}
+                <div className={styles.grid}>
+                  <label>Receiver mobile<input type="tel" dir="ltr" required maxLength={20} value={toPhone} onChange={event => setToPhone(event.target.value)} placeholder="09…" /></label>
+                  <label>Receiver name (optional)<input maxLength={200} value={toName} onChange={event => setToName(event.target.value)} /></label>
                 </div>
-              ))}
+                <label>Note (optional)<input maxLength={500} value={note} onChange={event => setNote(event.target.value)} /></label>
+                <button className={styles.button} disabled={busy || !list.length || !toPhone.trim()}>{busy ? "Working…" : `Transfer ${list.length} roll(s)`}</button>
+              </form>
+            </section>}
+
+            {outgoing.length > 0 && <section>
+              <h2>Rolls you transferred</h2>
+              <ListToolbar view={outList} placeholder="Search ROLL NO, receiver, note…" />
+              {!outList.matches.length ? <Empty title="Nothing matches your search" /> : <>
+                <div className={own.scroll}><table className={own.table}>
+                  <thead><tr><th>Date</th><th>ROLL NO</th><th>To</th><th>Note</th></tr></thead>
+                  <tbody>{outList.rows.map(t => <tr key={t.id}><td>{date(t.at)}</td><td><code dir="ltr">{t.labelId}</code></td><td>{who(t.toHolder, t.toPhone)}</td><td>{t.note ?? "—"}</td></tr>)}</tbody>
+                </table></div>
+                <Pager page={outList.page} pages={outList.pages} setPage={outList.setPage} shown={outList.rows.length} matched={outList.matches.length} />
+              </>}
+            </section>}
+          </>}
+        </>}
+
+        {view === "tickets" && <section>
+          {openTicket ? <div className={own.thread}>
+            <button type="button" className={styles.linkButton} onClick={() => { setOpenTicket(null); setTicketMsg(""); }}>← All tickets</button>
+            <div className={own.threadHead}>
+              <div><h2>{openTicket.subject}</h2><small><code dir="ltr">{openTicket.code}</code> · opened {stamp(openTicket.createdAt)}</small></div>
+              <span className={`${own.status} ${own[`t_${openTicket.status}`]}`}>{TICKET_STATUS[openTicket.status as keyof typeof TICKET_STATUS] ?? openTicket.status}</span>
             </div>
-            <form onSubmit={sendReply}>
+            {ticketMsg && <p role="status" className={own.notice}>{ticketMsg}</p>}
+            <ol className={own.messages}>
+              {openTicket.replies.map(r => <li key={r.id} className={r.author === "staff" ? own.staff : own.mine}>
+                <b>{r.author === "staff" ? "Solarzed support" : "You"}</b>
+                <p>{r.message}</p>
+                <time>{stamp(r.createdAt)}</time>
+              </li>)}
+            </ol>
+            {openTicket.status === "closed"
+              ? <p className={own.muted}>This ticket is closed. Writing a reply opens it again.</p> : null}
+            <form onSubmit={sendReply} className={own.form}>
               <label>Your reply<textarea rows={3} maxLength={4000} required value={replyText} onChange={e => setReplyText(e.target.value)} /></label>
               <button className={styles.button} disabled={ticketBusy || !replyText.trim()}>{ticketBusy ? "Sending…" : "Send reply"}</button>
             </form>
-          </article>}
-        </section>
-        </div>}
-      </>}
-    </main><footer>© SOLARZED · <Link href="/warranty">Warranty lookup</Link> · <Link href="/coverage">Warranty policy</Link></footer>
+          </div> : <>
+            <div className={own.sectionHead}>
+              <div><h2>Support tickets</h2><p>Ask us anything — our staff replies here and you see new replies straight away.</p></div>
+              <button type="button" className={newTicket ? own.ghost : styles.button} onClick={() => { setNewTicket(n => !n); setTicketMsg(""); }}>{newTicket ? "Cancel" : "+ New ticket"}</button>
+            </div>
+            {ticketMsg && <p role="status" className={own.notice}>{ticketMsg}</p>}
+            {newTicket && <form onSubmit={createTicket} className={`${own.form} ${own.panel}`}>
+              <label>Subject<input maxLength={200} required value={ticketForm.subject} onChange={e => setTicketForm({ ...ticketForm, subject: e.target.value })} /></label>
+              <label>Your question<textarea rows={4} maxLength={4000} required value={ticketForm.message} onChange={e => setTicketForm({ ...ticketForm, message: e.target.value })} /></label>
+              <button className={styles.button} disabled={ticketBusy}>{ticketBusy ? "Sending…" : "Create ticket"}</button>
+            </form>}
+            {tickets.length > 0 && <ListToolbar view={ticketList} placeholder="Search ticket code or subject…" filters={TICKET_FILTERS} />}
+            {!tickets.length ? <Empty title="No tickets yet"><span>Open a ticket whenever you need help — with a roll, a card or an installation.</span></Empty>
+              : !ticketList.matches.length ? <Empty title="Nothing matches your search" /> : <>
+              <ul className={own.cards}>{ticketList.rows.map(t => <li key={t.id}>
+                <button type="button" className={`${own.item} ${own.itemButton}`} onClick={() => showTicket(t.id)}>
+                  <div className={own.itemMain}>
+                    <b>{t.subject}{unread(t) > 0 && <span className={own.newBadge}>New reply</span>}</b>
+                    <small><code dir="ltr">{t.code}</code> · {t.replies} message{t.replies === 1 ? "" : "s"}</small>
+                  </div>
+                  <div className={own.itemSide}>
+                    <span className={`${own.status} ${own[`t_${t.status}`]}`}>{TICKET_STATUS[t.status]}</span>
+                    <small>{stamp(t.updatedAt)}</small>
+                  </div>
+                </button>
+              </li>)}</ul>
+              <Pager page={ticketList.page} pages={ticketList.pages} setPage={ticketList.setPage} shown={ticketList.rows.length} matched={ticketList.matches.length} />
+            </>}
+          </>}
+        </section>}
+
+        {view === "profile" && <>
+          <section>
+            <h2>Your profile</h2>
+            <p>Tell us who you are. Support sees your name and mobile with every ticket, and your country and city help us serve you better.</p>
+            <form onSubmit={saveProfile} className={own.form}>
+              <div className={styles.grid}>
+                <label>First name<input maxLength={100} value={profile.firstName} onChange={e => setProfile({ ...profile, firstName: e.target.value })} /></label>
+                <label>Last name<input maxLength={100} value={profile.lastName} onChange={e => setProfile({ ...profile, lastName: e.target.value })} /></label>
+                <label>Country<input maxLength={100} value={profile.country} onChange={e => setProfile({ ...profile, country: e.target.value })} /></label>
+                <label>City<input maxLength={100} value={profile.city} onChange={e => setProfile({ ...profile, city: e.target.value })} /></label>
+                <label>Job / business<input maxLength={100} placeholder="e.g. shop, installer, driver" value={profile.job} onChange={e => setProfile({ ...profile, job: e.target.value })} /></label>
+              </div>
+              <button className={styles.button} disabled={profileBusy}>{profileBusy ? "Saving…" : "Save profile"}</button>
+              {profileMsg && <p role="status" className={own.notice}>{profileMsg}</p>}
+            </form>
+          </section>
+          <section>
+            <h2>Sign-in &amp; contact</h2>
+            <dl className={own.facts}>
+              <dt>Mobile</dt><dd dir="ltr">{user.phone ?? "not set"}</dd>
+              <dt>Email</dt><dd dir="ltr">{user.email ?? "not set"}</dd>
+            </dl>
+            <p className={own.muted}>Rolls are transferred to your mobile and warranty cards are registered to it.</p>
+            {(!user.phone || (EMAIL_VERIFICATION && !user.email)) && <div className={own.form}>
+              {user.phone
+                ? <p>Add your email to sign in without SMS.</p>
+                : <p>Add your verified mobile to receive cartons and activate warranty cards: carton hand-over and card activation work with mobile numbers.</p>}
+              {!bindChallenge && <>
+                <div className={styles.grid}>
+                  {!user.phone && <label>Mobile number<input type="tel" dir="ltr" maxLength={20} placeholder="09…" value={bindChannel === "sms" ? bindIdentifier : ""} onChange={e => { setBindChannel("sms"); setBindIdentifier(e.target.value); }} /></label>}
+                  {EMAIL_VERIFICATION && !user.email && <label>Email address<input type="email" dir="ltr" maxLength={254} placeholder="you@example.com" value={bindChannel === "email" ? bindIdentifier : ""} onChange={e => { setBindChannel("email"); setBindIdentifier(e.target.value); }} /></label>}
+                </div>
+                {!user.phone && <button type="button" className={styles.button} disabled={bindBusy || !bindIdentifier.trim() || bindChannel !== "sms"} onClick={() => startBind("sms")}>Verify mobile</button>}
+                {EMAIL_VERIFICATION && !user.email && <button type="button" className={own.ghost} disabled={bindBusy || !bindIdentifier.trim() || bindChannel !== "email"} onClick={() => startBind("email")}>Verify email</button>}
+              </>}
+              {bindMsg && <p role={bindChallenge ? "status" : "alert"} className={own.notice}>{bindMsg}</p>}
+              {bindChallenge && <form onSubmit={verifyBind} className={own.form}>
+                <label>Verification code<input dir="ltr" inputMode="numeric" maxLength={6} pattern="[0-9]{6}" required value={bindCode} onChange={e => setBindCode(e.target.value.replace(/\D/g, "").slice(0, 6))} /></label>
+                <button className={styles.button} disabled={bindBusy || bindCode.length !== 6}>{bindBusy ? "Verifying…" : "Confirm"}</button>
+              </form>}
+            </div>}
+          </section>
+          <InstallerSection user={user} onUser={setUser} view="profile" />
+        </>}
+      </main>
+    </div>
+    <footer>© SOLARZED · <Link href="/warranty">Warranty lookup</Link> · <Link href="/coverage">Warranty policy</Link></footer>
   </div>;
 }
