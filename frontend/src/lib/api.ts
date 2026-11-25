@@ -318,9 +318,22 @@ export interface LookupResult {
 export interface RollVerification {
   genuine: boolean;
   rollNo: string;
+  productCode?: string;
   product?: string;
   series?: string | null;
+  description?: string | null;
   type?: "tint" | "ppf";
+  thicknessMil?: number | null;
+  vlt?: number | null;
+  irr?: number | null;
+  uv?: number | null;
+  tser?: number | null;
+  widthCm?: number | null;
+  lengthM?: number | null;
+  batch?: string | null;
+  receivedOn?: string | null;
+  filmYears?: number | null;
+  installYears?: number | null;
   activated?: boolean;
   activatedOn?: string | null;
 }
