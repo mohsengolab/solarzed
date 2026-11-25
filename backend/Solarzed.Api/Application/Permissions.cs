@@ -44,7 +44,8 @@ public static class Permissions
             new("tickets.edit", "پاسخ، بستن و بازکردن تیکت")]),
         new("rolls", "رول‌ها", [
             new("rolls.view", "دیدن لیست و تاریخچه رول‌ها"),
-            new("rolls.edit", "ویرایش موجودی، وضعیت و انتقال رول"),
+            new("rolls.edit", "ویرایش موجودی، وضعیت و جابه‌جایی بین انبارها"),
+            new("rolls.transfer", "انتقال رول به فروشنده / نصاب با موبایل و ROLL NO"),
             new("rolls.create", "دریافت (ثبت) رول جدید"),
             new("rolls.delete", "حذف رول")]),
         new("warehouses", "انبارها", [
@@ -55,9 +56,9 @@ public static class Permissions
             new("products.edit", "افزودن، ویرایش و حذف محصول")]),
         new("customers", "مشتریان (محرمانه)", [new("customers.view", "دیدن لیست مشتریان")]),
         new("labels", "برچسب‌ها و کارتن‌ها", [
-            new("labels.view", "دیدن سریال کارتن‌ها"),
+            new("labels.view", "دیدن ROLL NO کارتن‌ها"),
             new("labels.edit", "صدور کارت گارانتی و دیدن جزئیات کامل"),
-            new("labels.transfer", "انتقال کارتن به نماینده / نصاب")]),
+            new("labels.transfer", "انتقال کارتن به فروشنده / نصاب با ROLL NO")]),
         new("history", "سابقه تغییرات", [new("history.view", "دیدن سابقه تغییرات")]),
         new("sms", "پیامک", [
             new("sms.view", "دیدن تنظیمات و گزارش پیامک"),

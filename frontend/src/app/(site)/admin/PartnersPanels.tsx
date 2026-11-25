@@ -213,6 +213,9 @@ export function ReviewPanel() {
           <dt>کد گارانتی</dt><dd dir="ltr">{item.code}</dd>
         </dl>
         {item.flags.includes("vin_repeat") && <p className={s.errorText}>این VIN قبلاً گارانتی هم‌نوع داشته است.</p>}
+        {item.flags.includes("roll_high_count") && <p className={s.errorText}>تعداد خودروهای ثبت‌شده از این رول بیش از حد معمول است.</p>}
+        {item.flags.includes("roll_burst") && <p className={s.errorText}>از این رول در ۲۴ ساعت گذشته ثبت‌های زیادی انجام شده است.</p>}
+        {item.flags.includes("roll_overuse") && <p className={s.errorText}>متراژ اعلام‌شده بیش از باقی‌ماندهٔ رول است.</p>}
         <div className={own.photos}>{item.photos.map(p => <Photo key={p.id} id={p.id} alt={KIND_FA[p.kind] ?? p.kind} onOpen={setZoom} />)}
           {item.photos.length === 0 && <p className={s.empty}>عکسی ارسال نشده است.</p>}</div>
         {item.status === "pending" ? canDecide && <div className={own.decide}>

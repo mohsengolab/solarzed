@@ -13,22 +13,36 @@ public class BoxLabelsController(AppDbContext db, BoxLabelService labels, BoxTra
     // Full label details (activation links, card codes) go with the permission to issue cards.
     bool IsAdmin => Permissions.Has(User, "labels.edit");
 
-    // Both managers and carton operators move boxes; the box serial is the only identifier used.
-    [HttpPost("transfers"), Perm("labels.transfer")]
+    // Staff move rolls to a seller's or installer's mobile by ROLL NO only. A roll whose warranty card was not issued
+    // yet gets it here, so the company can hand rolls straight from the roll list.
+    [HttpPost("transfers"), Perm("labels.transfer", "rolls.transfer")]
     public async Task<IActionResult> Transfer(TransferRequest request)
     {
-        try { return Ok(await transfers.Transfer(request, AuditLog.Actor(User))); }
+        try
+        {
+            if (!request.ToWarehouse)
+            {
+                if (string.IsNullOrWhiteSpace(request.ToPhone)) throw new ActivationError(400, "Enter the receiver's mobile number.");
+                PortalService.CanonicalPhone(request.ToPhone);   // reject a bad mobile before issuing any card
+                var serials = (request.Serials ?? []).Select(BoxLabelService.NormalizeSerial).Where(x => x.Length > 0).Distinct().ToArray();
+                var issued = await db.BoxLabels.Where(b => serials.Contains(b.Id)).Select(b => b.Id).ToListAsync();
+                var rolls = await db.Rolls.Where(r => r.RollNo != null && serials.Contains(r.RollNo) && !issued.Contains(r.RollNo))
+                    .Select(r => r.Id).ToListAsync();
+                if (rolls.Count > 0) await labels.IssueForRolls(rolls);
+            }
+            return Ok(await transfers.Transfer(request, AuditLog.Actor(User)));
+        }
         catch (ActivationError ex) { return StatusCode(ex.Status, new { error = ex.Message }); }
     }
 
-    [HttpGet("{serial}/transfers"), Perm("labels.view", "labels.transfer")]
+    [HttpGet("{serial}/transfers"), Perm("labels.view", "labels.transfer", "rolls.transfer")]
     public async Task<IActionResult> History(string serial)
     {
         try { return Ok(await transfers.History(serial)); }
         catch (ActivationError ex) { return StatusCode(ex.Status, new { error = ex.Message }); }
     }
 
-    [HttpGet("holders"), Perm("labels.view", "labels.transfer")]
+    [HttpGet("holders"), Perm("labels.view", "labels.transfer", "rolls.transfer")]
     public async Task<IActionResult> Holders() => Ok(new { holders = await transfers.Holders() });
 
     [HttpGet, Perm("labels.view", "warranties.view")]

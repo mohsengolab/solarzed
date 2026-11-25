@@ -41,12 +41,17 @@ invalidating printed stock. Keep the domain and `/activate` route reachable.
 ## Customer workflow
 
 Scan the card, sign in with a verified mobile, and enter the vehicle details (make,
-model, VIN, plate), installation date, invoice, installer/seller, covered areas and
-meters used. The successful page shows the vehicle's warranty number, end dates and
-the remaining length. For example, using 30 m from a 150 m roll leaves 120 m.
-The mobile that registered the first vehicle can reuse the same card for other
-vehicles, including vehicles on the same invoice, until the roll is exhausted.
-Each vehicle receives a separate warranty. The first warranty uses the printed code.
+model, VIN, plate), installation date, invoice, installer/seller and covered areas.
+Meters used are optional: nobody measures the film at installation, and a 30 m roll
+may cover 4 cars or 6. The successful page shows the vehicle's warranty number and end dates.
+The mobile that holds the card can register any number of vehicles on it, including
+vehicles on the same invoice. Each vehicle gets its own warranty; the first one uses the printed code.
+
+A roll is never "used up". Unusual use is flagged for the counter instead of blocked:
+`roll_high_count` (more vehicles than roll length / 4 m, or more than 10 when the length
+is unknown), `roll_burst` (more than 6 vehicles from one roll in 24 hours), `roll_overuse`
+(entered meters exceed the remaining balance) and `vin_repeat`. To stop a roll, the admin
+sets it to Void; no further warranty can be registered on it.
 
 Codes expire after five minutes. Wrong codes are limited to five attempts;
 resends require 60 seconds and daily phone/box limits also apply. An OTP is bound
@@ -56,9 +61,7 @@ The provider accepting a message does not itself prove delivery; only entering
 the correct code completes mobile verification.
 
 The warranty and updated roll balance are committed in one EF database transaction
-with optimistic concurrency. Over-allocation and repeat registration of the same
-VIN on the same roll are rejected. Old unused cards can track usage once a roll
-length is entered; old activated cards have no recorded balance and stay closed.
+with optimistic concurrency. Registering the same VIN twice on the same roll is rejected.
 Public rescan metadata contains no owner/mobile or private seller information.
 
 ## Faraz configuration
