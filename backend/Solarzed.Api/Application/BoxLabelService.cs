@@ -224,65 +224,24 @@ public class BoxLabelService(AppDbContext db, IDataProtectionProvider protection
     }
 
     /// <summary>
-    /// The inventory QR holds the roll ID (SZ-{RollNo}-{yyMM}-{7 digits}-{factory}), which looks like a card code.
-    /// When it names a roll with exactly one carton, it stands for that carton's Serial Number (installer only).
+    /// Activation goes by the roll's Serial Number only (SZ-{RollNo}-{yyMM}-{7 digits}-{factory}), printed as the QR on
+    /// the warranty card. The ROLL NO is for the authenticity check and carton transfers and never opens activation;
+    /// neither do older card codes (RollNo-1234567[-ABC], Factory-SZB-…-SZ-…) or 64-hex label tokens.
+    /// Only an approved installer, signed in and reviewed by the counter, registers from a Serial Number.
     /// </summary>
-    async Task<string> FromRollId(string? token)
+    async Task<BoxLabel> FromSerial(string? token, bool installer)
     {
-        var value = Regex.Replace(token ?? "", @"\s+", "").ToUpperInvariant();
-        if (!value.StartsWith("SZ-", StringComparison.Ordinal) || !await db.Rolls.AnyAsync(r => r.Id == value)) return token ?? "";
-        var ids = await db.BoxLabels.Where(x => x.RollId == value).Select(x => x.Id).Take(2).ToListAsync();
-        if (ids.Count == 1) return ids[0];
-        throw new ActivationError(404, ids.Count == 0
-            ? "This is a roll ID and its warranty card has not been issued yet."
-            : "This roll has several cartons. Scan the ROLL NO on the warranty card.");
-    }
-
-    /// <summary>
-    /// Accepts the card code (RollNo-1234567-ABC or RollNo-1234567, scanned or typed), a legacy Factory-Serial-Warranty card code,
-    /// or a legacy 64-hex label token.
-    /// </summary>
-    async Task<BoxLabel> Find(string token, bool serialAllowed = false)
-    {
-        var value = Regex.Replace(token ?? "", @"\s+", "");
-        // New cards carry only the Serial Number (the carton Roll No). Only an approved installer, who is signed in
-        // and whose photos the counter reviews, may register a warranty from it.
-        var plain = value.ToUpperInvariant();
-        if (SerialPattern.IsMatch(plain) && !TokenPattern.IsMatch(value) && !CardPattern.IsMatch(plain) && !LegacyCardPattern.IsMatch(plain))
-        {
-            var bySerial = await db.BoxLabels.SingleOrDefaultAsync(x => x.Id == plain);
-            if (bySerial == null || !serialAllowed)
-                throw new ActivationError(serialAllowed ? 404 : 403, serialAllowed
-                    ? "No Solarzed roll has this ROLL NO. Check the number on the card."
-                    : "Your installer registers this warranty with the ROLL NO. Ask your Solarzed installer to register it for your mobile.");
-            return bySerial;
-        }
-        if (serialAllowed && SerialPattern.IsMatch(plain) && await db.BoxLabels.SingleOrDefaultAsync(x => x.Id == plain) is { } exact) return exact;
-        if (TokenPattern.IsMatch(value))
-        {
-            var hash = Hash(value);
-            return await db.BoxLabels.SingleOrDefaultAsync(x => x.TokenHash == hash)
-                ?? throw new ActivationError(404, "This activation label is invalid.");
-        }
-        value = value.ToUpperInvariant();
-        string serial, secret; string? factory = null; var old = false;
-        var legacy = LegacyCardPattern.Match(value);
-        if (legacy.Success) { old = true; factory = legacy.Groups[1].Value; serial = legacy.Groups[2].Value; secret = legacy.Groups[3].Value; }
-        else
-        {
-            var card = CardPattern.Match(value);
-            if (!card.Success || !SerialPattern.IsMatch(card.Groups[1].Value)) throw new ActivationError(404, "This activation label is invalid.");
-            serial = card.Groups[1].Value; secret = card.Groups[2].Value;
-            factory = card.Groups[3].Success ? card.Groups[3].Value : null;
-        }
-        var label = await db.BoxLabels.SingleOrDefaultAsync(x => x.Id == serial);
-        // The warranty part is the secret printed only inside the box; compare it in constant time.
-        // A legacy SZ- card must name its factory. A 7-digit card may omit it (printed before it was added),
-        // but if it names one, it must be the carton's.
-        if (label?.CardCode == null || Legacy(label.CardCode) != old || (factory != null && label.FactoryCode != factory) ||
-            !CryptographicOperations.FixedTimeEquals(Encoding.UTF8.GetBytes(label.CardCode), Encoding.UTF8.GetBytes(secret)))
-            throw new ActivationError(404, "This activation label is invalid.");
-        return label;
+        var serial = Regex.Replace(token ?? "", @"\s+", "").ToUpperInvariant();
+        if (!serial.StartsWith("SZ-", StringComparison.Ordinal) || serial.Length > 60)
+            throw new ActivationError(400, "Enter the Serial Number from the warranty card (it starts with SZ-).");
+        if (!installer)
+            throw new ActivationError(403, "Your installer registers this warranty with the Serial Number. Ask your Solarzed installer to register it for your mobile.");
+        if (!await db.Rolls.AnyAsync(r => r.Id == serial))
+            throw new ActivationError(404, "No Solarzed roll has this Serial Number. Check the number on the warranty card.");
+        var labels = await db.BoxLabels.Where(x => x.RollId == serial).Take(2).ToListAsync();
+        return labels.Count == 1 ? labels[0] : throw new ActivationError(404, labels.Count == 0
+            ? "The warranty card for this Serial Number has not been issued yet."
+            : "This Serial Number belongs to several cartons. Contact Solarzed support.");
     }
 
     // Unused older cards can start tracking if their roll has a known length. Previously activated cards
@@ -292,10 +251,7 @@ public class BoxLabelService(AppDbContext db, IDataProtectionProvider protection
 
     public async Task<ActivationInfo> Info(string token, string? phone = null, bool installer = false)
     {
-        token = await FromRollId(token);
-        var label = await Find(token, installer);
-        // The warranty number is shown only to someone holding the full card code.
-        var bySerial = installer && label.Id == Regex.Replace(token ?? "", @"\s+", "").ToUpperInvariant();
+        var label = await FromSerial(token, installer);
         var roll = label.RollId is { } rollId ? await db.Rolls.FindAsync(rollId) : null;
         // A carton whose roll was deleted after activation was released when it was first used.
         var released = roll == null ? label.ActivatedAt.HasValue
@@ -307,8 +263,9 @@ public class BoxLabelService(AppDbContext db, IDataProtectionProvider protection
         // One roll covers an unknown number of vehicles (a 30 m roll may fit 4 cars or 6), so it is never "used up":
         // the holder keeps registering vehicles and unusual patterns are flagged for review instead.
         var canRegister = started ? holds : !installer || holds;
-        return new(label.Id, label.Product, label.Type.ToString().ToLowerInvariant(), started,
-            label.FilmYears, label.InstallYears, sms.Configured, released, null, bySerial ? null : label.CardCode,
+        // The Serial Number is what the installer sees; the warranty number stays hidden until registration.
+        return new(label.RollId ?? label.Id, label.Product, label.Type.ToString().ToLowerInvariant(), started,
+            label.FilmYears, label.InstallYears, sms.Configured, released, null, null,
             canRegister, !started || canRegister ? remaining : null);
     }
 
@@ -363,12 +320,12 @@ public class BoxLabelService(AppDbContext db, IDataProtectionProvider protection
             if (ownerPhone == phone) throw new ActivationError(400, "Enter the customer's own mobile number, not yours.");
             if (photos.Length == 0) throw new ActivationError(400, "Add the installation photos.");
         }
-        var label = await Find(await FromRollId(req.Token), partner != null);
+        var label = await FromSerial(req.Token, partner != null);
         var first = !label.ActivatedAt.HasValue;
         // The roll reaches the installer by transfer (company → seller → installer, by mobile and ROLL NO); only the
         // installer holding it may register the warranty.
         if (first && partner != null && label.HolderPhone != phone)
-            throw new ActivationError(403, "This ROLL NO is not in your account. Ask your seller to transfer it to your mobile first.");
+            throw new ActivationError(403, "This roll is not in your account. Ask your seller to transfer its ROLL NO to your mobile first.");
         if (!first && label.HolderPhone != phone)
             throw new ActivationError(409, "This card has already been activated. Sign in with the mobile used for the first activation.");
         var roll = label.RollId is { } rollId ? await db.Rolls.FindAsync(rollId) : null;

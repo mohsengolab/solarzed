@@ -63,6 +63,8 @@ public class BoxLabelTests
         public void Dispose() { Db.Dispose(); Connection.Dispose(); }
     }
     const string Customer = "09121111111";
+    /// <summary>Serial Number of the fixture roll: the only code that opens activation.</summary>
+    const string Serial = "SZ-TEST-26-000001";
     static RegisterRequest Registration(string phone = "09121111111") => new("ppf", "Toyota", "Camry", "Test Customer", phone,
         "TEST123", "JTDBE32K123456789", "FORGED", "INV-TEST", "2026-01-15", "Test Seller", "09122222222", "Test Shop", ["rear"], ["hood"]);
     static async Task Error(int status, Func<Task> action) => Assert.Equal(status, (await Assert.ThrowsAsync<ActivationError>(action)).Status);
@@ -90,27 +92,22 @@ public class BoxLabelTests
     }
 
     [Fact]
-    public async Task OnlyTheExactCardCodeOpensTheCardAndLegacyTokensStillWork()
+    public async Task OnlyTheSerialNumberOpensActivation()
     {
         using var f = new Fixture();
         var (label, code) = await f.Issue();
-        Assert.Equal(label.Id, (await f.Service.Info(code.ToLowerInvariant())).Id);
-        Assert.Equal(label.CardCode, (await f.Service.Info($" {code} ")).WarrantyCode);
-        Assert.Null((await f.Service.Info(code)).FactoryCode);
-        // Cards printed before the factory was added (RollNo-1234567) still open.
-        Assert.Equal(label.Id, (await f.Service.Info($"{label.Id}-{label.CardCode}")).Id);
-        await Error(404, () => f.Service.Info($"{label.Id}-{label.CardCode}-XYZ"));   // wrong factory
-        await Error(404, () => f.Service.Info($"{label.Id}-{(label.CardCode == "1234567" ? "7654321" : "1234567")}-ABC"));
-        await Error(404, () => f.Service.Info($"SA-{label.Id}-SZ-AAAAAAAAAAAAAAAA"));
-        await Error(403, () => f.Service.Info(label.Id));   // a bare Serial Number opens only for an approved installer
-
-        // Labels issued before warranty cards keep their random 64-hex token.
-        var legacy = await f.Db.BoxLabels.SingleAsync();
-        legacy.FactoryCode = null; legacy.CardCode = null; await f.Db.SaveChangesAsync();
-        var token = new Uri(f.Service.View(legacy, "https://solarzed.com").ActivationUrl).Fragment[1..];
-        Assert.Matches("^[a-f0-9]{64}$", token);
-        Assert.Equal(label.Id, (await f.Service.Info(token)).Id);
-        await Error(404, () => f.Service.Info(code));
+        await Partner(f);
+        await f.GiveTo(label.Id, Installer);
+        Assert.Equal(Serial, (await f.Service.Info($" {Serial.ToLowerInvariant()} ", Installer, installer: true)).Id);
+        // The ROLL NO is for authenticity and transfers only; older card codes and label tokens no longer open activation.
+        await Error(400, () => f.Service.Info(label.Id, Installer, installer: true));
+        await Error(400, () => f.Service.Info(code, Installer, installer: true));
+        await Error(400, () => f.Service.Info($"{label.Id}-{label.CardCode}", Installer, installer: true));
+        await Error(400, () => f.Service.Info(new string('a', 64), Installer, installer: true));
+        await Error(404, () => f.Service.Info("SZ-TEST-26-999999", Installer, installer: true));
+        // Only an approved installer opens a Serial Number.
+        await Error(403, () => f.Service.Info(Serial));
+        await Error(403, () => f.Service.Info(Serial, Customer));
     }
 
     [Fact]
@@ -121,9 +118,10 @@ public class BoxLabelTests
         Assert.Equal(["CPT30614374", "CPT30614375"], labels.Select(x => x.Id).ToArray());
         var first = labels[0];
         Assert.Equal($"CPT30614374-{first.CardCode}-ABC", first.FullCode);
-        Assert.Equal("CPT30614374", (await f.Service.Info($"cpt30614374-{first.CardCode}-abc")).Id);
-        // Another carton's warranty number does not open this carton.
-        await Error(404, () => f.Service.Info($"CPT30614374-{labels[1].CardCode}"));
+        // Neither the ROLL NO nor the old card code opens activation; a serial shared by several cartons is refused.
+        await Error(400, () => f.Service.Info("CPT30614374", Installer, installer: true));
+        await Error(400, () => f.Service.Info($"cpt30614374-{first.CardCode}-abc", Installer, installer: true));
+        await Error(404, () => f.Service.Info(Serial, Installer, installer: true));
         // A carton gets one card only; duplicates and malformed numbers are refused.
         await Error(409, () => f.Service.Issue("SZ-TEST-26-000001", ["CPT30614374"]));
         await Error(400, () => f.Service.Issue("SZ-TEST-26-000001", ["CPT1", "cpt1"]));
@@ -132,7 +130,7 @@ public class BoxLabelTests
     }
 
     [Fact]
-    public async Task LegacyFactorySerialWarrantyCardsStillOpen()
+    public async Task LegacyFactorySerialWarrantyCardsNoLongerOpenActivation()
     {
         using var f = new Fixture();
         var (label, _) = await f.Issue();
@@ -140,8 +138,7 @@ public class BoxLabelTests
         stored.CardCode = "SZ-ABCDEFGHJKLMNPQR"; stored.FactoryCode = "SA"; await f.Db.SaveChangesAsync();
         var legacy = $"SA-{label.Id}-SZ-ABCDEFGHJKLMNPQR";
         Assert.Equal(legacy, BoxLabelService.FullCode(stored));
-        Assert.Equal(label.Id, (await f.Service.Info(legacy)).Id);
-        await Error(404, () => f.Service.Info($"BF-{label.Id}-SZ-ABCDEFGHJKLMNPQR"));
+        await Error(400, () => f.Service.Info(legacy, Installer, installer: true));
     }
 
     [Theory]
@@ -159,27 +156,32 @@ public class BoxLabelTests
         roll.Qc = RollQc.Pending; await f.Db.SaveChangesAsync();
         await Error(409, () => f.Issue());
         roll.Qc = RollQc.Approved; roll.Status = RollStatus.InStock; await f.Db.SaveChangesAsync();
-        var (_, code) = await f.Issue();
-        Assert.False((await f.Service.Info(code)).Released);
-        await Error(409, () => f.Service.Activate(new(code, Registration()), Customer));
+        var (label, _) = await f.Issue();
+        var partner = await Partner(f);
+        await f.GiveTo(label.Id, Installer);
+        roll.Status = RollStatus.InStock; await f.Db.SaveChangesAsync();   // still awaiting release
+        Assert.False((await f.Service.Info(Serial, Installer, installer: true)).Released);
+        await Error(409, () => f.Service.Activate(new(Serial, Registration(), null, Customer), Installer, partner, Photos()));
         roll.Status = RollStatus.Shipped;
         await f.Db.SaveChangesAsync();
-        Assert.True((await f.Service.Info(code)).Released);
+        Assert.True((await f.Service.Info(Serial, Installer, installer: true)).Released);
         (await f.Db.CoverageSettings.SingleAsync()).TintFilmYears = null; await f.Db.SaveChangesAsync();
         await Error(400, () => f.Issue());
         Assert.Single(await f.Db.BoxLabels.ToListAsync());
     }
 
     [Fact]
-    public async Task DeletingARollAlwaysWorksAndKeepsActivatedCartonsUsable()
+    public async Task DeletingARollAlwaysWorksAndKeepsActivatedCartonsAndWarranties()
     {
         using var f = new Fixture();
-        var (label, code) = await f.Issue();
+        var (label, _) = await f.Issue();
+        var partner = await Partner(f);
+        await f.GiveTo(label.Id, Installer);
+        await f.Service.Activate(new ActivateBoxRequest(Serial, Registration(), 30m, Customer), Installer, partner, Photos());
         var (unused, _) = await f.Issue();
-        await new BoxTransferService(f.Db).Transfer(new([label.Id, unused.Id], "Rep", "09125555555", null, null), "admin");
-        await f.Service.Activate(new ActivateBoxRequest(code, Registration(), 30m), Customer);
+        await f.GiveTo(unused.Id, Installer);
         var admin = new Solarzed.Api.Controllers.AdminController(f.Db, new ConfigurationBuilder().Build());
-        Assert.IsType<Microsoft.AspNetCore.Mvc.OkObjectResult>(await admin.DeleteRoll("SZ-TEST-26-000001"));
+        Assert.IsType<Microsoft.AspNetCore.Mvc.OkObjectResult>(await admin.DeleteRoll(Serial));
 
         using (var check = new SqliteDb(f.Options))
         {
@@ -196,16 +198,11 @@ public class BoxLabelTests
             Assert.Equal(30m, warranty.UsedLengthM);
         }
 
-        // The customer's card still works for the next vehicle, but only for the first customer.
+        // The deleted roll's Serial Number no longer opens activation.
         using var after = new SqliteDb(f.Options);
         var service = new BoxLabelService(after, f.Protection, f.Sms);
-        Assert.True((await service.Info(code, Customer)).CanRegister);
-        var next = new ActivateBoxRequest(code, Registration() with { Vin = "JTDBE32K123456780", InvoiceNumber = "INV-2" }, 20m);
-        await Error(409, () => service.Activate(next, "09124444444"));
-        var second = await service.Activate(next, Customer);
-        Assert.Equal(100m, second.RemainingLengthM);
-        Assert.Equal(label.Id, second.Warranty.FilmSerial);
-        // The serial of the activated carton cannot be given to a new carton.
+        await Error(404, () => service.Info(Serial, Installer, installer: true));
+        // The ROLL NO of the activated carton cannot be given to a new carton.
         after.Rolls.Add(new Roll { Id = "SZ-TEST-26-000002", Number = 2, ModelCode = "TEST", Type = WarrantyType.Tint,
             Batch = "TEST", Supplier = "ABC", LengthM = 150, Qc = RollQc.Approved, Status = RollStatus.Shipped });
         await after.SaveChangesAsync();
@@ -217,52 +214,49 @@ public class BoxLabelTests
     public async Task SignedInInstallerRegistersAnyNumberOfVehiclesFromTheSameRollAndInvoice()
     {
         using var f = new Fixture();
-        var (label, code) = await f.Issue();
-        await new BoxTransferService(f.Db).Transfer(new([label.Id], "Rep", "09125555555", null, null), "admin");
+        var (label, _) = await f.Issue();
+        var partner = await Partner(f);
+        await f.GiveTo(label.Id, Installer);
         (await f.Db.CoverageSettings.SingleAsync()).TintFilmYears = 10; await f.Db.SaveChangesAsync();
-        // The form's phone is ignored; the signed-in, SMS-verified mobile is the warranty owner.
-        var request = new ActivateBoxRequest(code, Registration("09129999999"), 30m);
-        await Error(400, () => f.Service.Activate(request with { UsedLengthM = 0 }, Customer));
-        await Error(400, () => f.Service.Activate(request with { UsedLengthM = 30.001m }, Customer));
-        var first = await f.Service.Activate(request, Customer);
+        // The form's phone is ignored; the customer's mobile the installer enters is the warranty owner.
+        var request = new ActivateBoxRequest(Serial, Registration("09129999999"), 30m, Customer);
+        await Error(400, () => f.Service.Activate(request with { UsedLengthM = 0 }, Installer, partner, Photos()));
+        await Error(400, () => f.Service.Activate(request with { UsedLengthM = 30.001m }, Installer, partner, Photos()));
+        var first = await f.Service.Activate(request, Installer, partner, Photos());
         var warranty = first.Warranty;
         Assert.Equal(30m, warranty.UsedLengthM);
         Assert.Equal(120m, first.RemainingLengthM);
-        Assert.Equal("active", warranty.Status);
+        Assert.Equal("pending", warranty.Status);
         Assert.Equal("tint", warranty.Type);
         Assert.Equal(label.Id, warranty.FilmSerial);
         Assert.Equal(label.CardCode, warranty.Code);
-        Assert.Equal(DateOnly.Parse("2031-01-14"), warranty.Coverage!.FilmEnds);
-        Assert.Equal(DateOnly.Parse("2028-01-14"), warranty.Coverage.InstallEnds);
         var stored = await f.Db.WarrantyRegistrations.SingleAsync();
+        Assert.Equal(DateOnly.Parse("2031-01-14"), stored.FilmEnds);
+        Assert.Equal(DateOnly.Parse("2028-01-14"), stored.InstallEnds);
         Assert.Equal(Customer, stored.Phone);
-        Assert.Equal("SZ-TEST-26-000001", stored.RollId);
+        Assert.Equal(Serial, stored.RollId);
         var box = await f.Db.BoxLabels.AsNoTracking().SingleAsync();
-        Assert.Equal(Customer, box.HolderPhone);
+        Assert.Equal(Installer, box.HolderPhone);
         Assert.Equal(label.CardCode, box.WarrantyCode);
-        var last = await f.Db.BoxTransfers.OrderBy(x => x.Id).LastAsync();
-        Assert.Equal("09125555555", last.FromPhone);
-        Assert.Equal(Customer, last.ToPhone);
-        await Error(409, () => f.Service.Activate(request, Customer));
+        await Error(409, () => f.Service.Activate(request, Installer, partner, Photos()));
         var another = request with { Registration = request.Registration with { Vin = "JTDBE32K123456788", Plate = "OTHER123" }, UsedLengthM = 120m };
-        await Error(409, () => f.Service.Activate(another, "09124444444"));
-        Assert.False((await f.Service.Info(code)).CanRegister);
-        Assert.Null((await f.Service.Info(code)).RemainingLengthM);
-        Assert.Equal(120m, (await f.Service.Info(code, Customer)).RemainingLengthM);
-        var second = await f.Service.Activate(another, Customer);
+        Assert.False((await f.Service.Info(Serial, "09124444444", installer: true)).CanRegister);
+        Assert.Null((await f.Service.Info(Serial, "09124444444", installer: true)).RemainingLengthM);
+        Assert.Equal(120m, (await f.Service.Info(Serial, Installer, installer: true)).RemainingLengthM);
+        var second = await f.Service.Activate(another, Installer, partner, Photos());
         Assert.NotEqual(warranty.Code, second.Warranty.Code);
         Assert.Equal("OTHER123", second.Warranty.Plate);
         Assert.Equal(0m, second.RemainingLengthM);
         // A roll has no fixed vehicle count: meters are optional and a "used up" balance never blocks the holder.
-        Assert.True((await f.Service.Info(code, Customer)).CanRegister);
-        var third = await f.Service.Activate(another with { Registration = request.Registration with { Vin = "JTDBE32K123456787", Plate = "THIRD123" }, UsedLengthM = null }, Customer);
+        Assert.True((await f.Service.Info(Serial, Installer, installer: true)).CanRegister);
+        var third = await f.Service.Activate(another with { Registration = request.Registration with { Vin = "JTDBE32K123456787", Plate = "THIRD123" }, UsedLengthM = null }, Installer, partner, Photos());
         Assert.Null(third.Warranty.UsedLengthM);
         Assert.Equal(0m, third.RemainingLengthM);
         // Meters beyond the roll's balance are accepted but flagged for the counter.
-        var fourth = await f.Service.Activate(another with { Registration = request.Registration with { Vin = "JTDBE32K123456786", Plate = "FOURTH12" }, UsedLengthM = 5m }, Customer);
+        var fourth = await f.Service.Activate(another with { Registration = request.Registration with { Vin = "JTDBE32K123456786", Plate = "FOURTH12" }, UsedLengthM = 5m }, Installer, partner, Photos());
         Assert.Contains("roll_overuse", JsonSerializer.Deserialize<string[]>((await f.Db.WarrantyRegistrations.AsNoTracking().SingleAsync(x => x.Code == fourth.Warranty.Code)).FlagsJson)!);
         Assert.Equal(2, await f.Db.BoxTransfers.CountAsync());
-        Assert.Equal(4, (await new PortalService(f.Db, f.Sms).Warranties(Customer)).Length);
+        Assert.Equal(4, await f.Db.WarrantyRegistrations.CountAsync(x => x.Phone == Customer && x.InstallerPhone == Installer));
     }
 
     [Fact]
@@ -271,36 +265,39 @@ public class BoxLabelTests
         using var f = new Fixture();
         var (label, code) = await f.Issue();
         var roll = await f.Db.Rolls.SingleAsync(); roll.LengthM = 30; await f.Db.SaveChangesAsync();
-        await new BoxTransferService(f.Db).Transfer(new([label.Id], "Rep", "09125555555", null, null), "admin");
+        var partner = await Partner(f);
+        await f.GiveTo(label.Id, Installer);
         var flags = new List<string[]>();
         // 30 m at 4 m per vehicle at most = 7 plausible vehicles; the 8th is flagged, as is a 7th within 24 hours.
         for (var i = 0; i < 8; i++)
         {
             var reg = Registration() with { Vin = $"JTDBE32K12345{i:0000}", Plate = $"PLATE{i}" };
-            var done = await f.Service.Activate(new ActivateBoxRequest(code, reg), Customer);
+            var done = await f.Service.Activate(new ActivateBoxRequest(Serial, reg, null, Customer), Installer, partner, Photos());
             flags.Add(JsonSerializer.Deserialize<string[]>((await f.Db.WarrantyRegistrations.AsNoTracking().SingleAsync(x => x.Code == done.Warranty.Code)).FlagsJson)!);
         }
         Assert.All(flags.Take(6), x => Assert.Empty(x));
         Assert.Equal(["roll_burst"], flags[6]);
         Assert.Equal(["roll_high_count", "roll_burst"], flags[7]);
-        Assert.True((await f.Service.Info(code, Customer)).CanRegister);
+        Assert.True((await f.Service.Info(Serial, Installer, installer: true)).CanRegister);
     }
 
     [Fact]
     public async Task LostRaceRollsBackTheSecondActivation()
     {
         using var f = new Fixture();
-        var (label, code) = await f.Issue();
-        // Load a stale label in a second context before the first customer wins.
+        var (label, _) = await f.Issue();
+        var partner = await Partner(f);
+        await f.GiveTo(label.Id, Installer);
+        // Load a stale label in a second context before the first registration wins.
         using var stale = new SqliteDb(f.Options);
         await stale.BoxLabels.SingleAsync(x => x.Id == label.Id);
         var staleService = new BoxLabelService(stale, f.Protection, f.Sms);
-        var request = new ActivateBoxRequest(code, Registration(), 100m);
-        await f.Service.Activate(request, Customer);
+        var request = new ActivateBoxRequest(Serial, Registration(), 100m, Customer);
+        await f.Service.Activate(request, Installer, partner, Photos());
         // Both callers saw unused snapshots; the DB revision guard rolls back the loser.
-        await Error(409, () => staleService.Activate(request with { Registration = Registration() with { Vin = "JTDBE32K123456788" } }, Customer));
+        await Error(409, () => staleService.Activate(request with { Registration = Registration() with { Vin = "JTDBE32K123456788" } }, Installer, partner, Photos()));
         Assert.Single(await f.Db.WarrantyRegistrations.ToListAsync());
-        Assert.Equal(50m, (await f.Service.Info(code, Customer)).RemainingLengthM);
+        Assert.Equal(50m, (await f.Service.Info(Serial, Installer, installer: true)).RemainingLengthM);
     }
 
     [Fact]
@@ -432,9 +429,9 @@ public class BoxLabelTests
     public async Task InstallerRegistersForTheCustomerWithPhotosAndTheCounterApproves()
     {
         using var f = new Fixture();
-        var (label, code) = await f.Issue();
+        var (label, _) = await f.Issue();
         var partner = await Partner(f);
-        var request = new ActivateBoxRequest(code, Registration() with { Installer = "typed by hand" }, 20m, "0912 111 1111", null);
+        var request = new ActivateBoxRequest(Serial, Registration() with { Installer = "typed by hand" }, 20m, "0912 111 1111", null);
 
         await Error(400, () => f.Service.Activate(request with { CustomerPhone = Installer }, Installer, partner, Photos()));   // not the installer's own mobile
         await Error(400, () => f.Service.Activate(request, Installer, partner, []));                                          // photos are required
@@ -461,7 +458,7 @@ public class BoxLabelTests
         Assert.Equal(Installer, stored.HolderPhone);
         Assert.Equal(130m, stored.RemainingLengthM);
         var next = request with { Registration = Registration("09126666666") with { Vin = "JTDBE32K123456788" }, CustomerPhone = "09126666666" };
-        await Error(409, () => f.Service.Activate(next with { CustomerPhone = null }, Customer));
+        await Error(403, () => f.Service.Activate(next with { CustomerPhone = null }, Customer));   // customers never register
         await f.Service.Activate(next, Installer, partner, Photos());
         Assert.Equal(2, await f.Db.WarrantyRegistrations.CountAsync(x => x.InstallerPhone == Installer));
 
@@ -480,22 +477,18 @@ public class BoxLabelTests
         var (label, _) = await f.Issue();
         var partner = await Partner(f);
 
-        // The new card QR holds only the Serial Number: only an approved installer can open the carton with it.
-        await Error(403, () => f.Service.Info(label.Id));
-        await Error(403, () => f.Service.Info(label.Id, Customer));
-        Assert.False((await f.Service.Info(label.Id, Installer, installer: true)).CanRegister);   // not transferred to the installer yet
-        await f.GiveTo(label.Id, Installer);
-        var info = await f.Service.Info($" {label.Id.ToLowerInvariant()} ", Installer, installer: true);
+        // The card QR holds only the roll's Serial Number: only an approved installer can open the carton with it.
+        await Error(403, () => f.Service.Info(Serial));
+        await Error(403, () => f.Service.Info(Serial, Customer));
+        Assert.False((await f.Service.Info(Serial, Installer, installer: true)).CanRegister);   // not transferred to the installer yet
+        await f.GiveTo(label.Id, Installer);                                                     // transfers go by ROLL NO
+        var info = await f.Service.Info($" {Serial.ToLowerInvariant()} ", Installer, installer: true);
         Assert.True(info.CanRegister);
-        Assert.Equal(label.Id, info.Id);
+        Assert.Equal(Serial, info.Id);
         Assert.Null(info.WarrantyCode);                                  // the warranty number is not revealed by the serial
-        await Error(404, () => f.Service.Info("CPT00000000", Installer, installer: true));
-        // The roll ID from the inventory QR stands for the carton's Serial Number, with the same restrictions.
-        var byRoll = await f.Service.Info(" sz-test-26-000001 ", Installer, installer: true);
-        Assert.Equal(label.Id, byRoll.Id);
-        Assert.Null(byRoll.WarrantyCode);
-        await Error(403, () => f.Service.Info("SZ-TEST-26-000001", Customer));
-        var request = new ActivateBoxRequest(label.Id, Registration(), 20m, Customer, "Iran");
+        await Error(400, () => f.Service.Info(label.Id, Installer, installer: true));            // the ROLL NO never opens activation
+        await Error(404, () => f.Service.Info("SZ-TEST-26-000099", Installer, installer: true));
+        var request = new ActivateBoxRequest(Serial, Registration(), 20m, Customer, "Iran");
         await Error(403, () => f.Service.Activate(request with { CustomerPhone = null }, Customer));   // customers cannot self-register by serial
 
         await f.Service.Activate(request, Installer, partner, Photos());
@@ -533,7 +526,7 @@ public class BoxLabelTests
         var (label, _) = await f.Issue();
         var partner = await Partner(f);
         await f.GiveTo(label.Id, Installer);
-        await f.Service.Activate(new ActivateBoxRequest(label.Id, Registration(), 20m, Customer, null), Installer, partner, Photos());
+        await f.Service.Activate(new ActivateBoxRequest(Serial, Registration(), 20m, Customer, null), Installer, partner, Photos());
         var w = await f.Db.WarrantyRegistrations.SingleAsync();
         f.Sms.Fails = true;
         var review = new Solarzed.Api.Controllers.ReviewController(f.Db, null, new WarrantyCards(f.Db, f.Sms));
@@ -550,7 +543,7 @@ public class BoxLabelTests
         var (label, _) = await f.Issue();
         var partner = await Partner(f);
         await f.GiveTo(label.Id, Installer);
-        await f.Service.Activate(new ActivateBoxRequest(label.Id, Registration(), 20m, Customer, null), Installer, partner, Photos());
+        await f.Service.Activate(new ActivateBoxRequest(Serial, Registration(), 20m, Customer, null), Installer, partner, Photos());
         var w = await f.Db.WarrantyRegistrations.SingleAsync();
         var cards = new WarrantyCards(f.Db, f.Sms);
         var review = new Solarzed.Api.Controllers.ReviewController(f.Db, null, cards);

@@ -209,6 +209,45 @@ public class WarrantyTests
     }
 
     [Fact]
+    public async Task VerifiesRollNoWithoutLeakingSupplierOrHolder()
+    {
+        using var db = Database();
+        db.Products.Add(new Product { Code = "SV-70", Name = "SunVision Ceramic 70", Series = "Ceramic", Type = WarrantyType.Tint });
+        db.Rolls.Add(new Roll { Id = "SZ-CPT30614374-2611-4827153-ABC", ModelCode = "SV-70", RollNo = "CPT30614374", Batch = "B1", Supplier = "SECRETSUP" });
+        db.BoxLabels.Add(new BoxLabel { Id = "CPT30614374", TokenHash = "h", ProtectedToken = "p", RollId = "SZ-CPT30614374-2611-4827153-ABC",
+            Product = "SV-70", Type = WarrantyType.Tint, HolderPhone = "09120000000", Holder = "Secret Shop", ActivatedAt = new DateTime(2026, 11, 3) });
+        db.Rolls.Add(new Roll { Id = "SZ-CPT40000001-2611-1111111-ABC", ModelCode = "SV-70", RollNo = "CPT40000001", Batch = "B1", Supplier = "SECRETSUP" });
+        db.Rolls.Add(new Roll { Id = "SZ-CPT40000002-2611-2222222-ABC", ModelCode = "SV-70", RollNo = "CPT40000002", Batch = "B1", Supplier = "S", Status = RollStatus.Void });
+        await db.SaveChangesAsync();
+        var controller = new WarrantyController(db) { ControllerContext = new() { HttpContext = new Microsoft.AspNetCore.Http.DefaultHttpContext() } };
+
+        async Task<JsonElement> Check(string q)
+        {
+            var ok = Assert.IsType<OkObjectResult>(await controller.Verify(q));
+            return JsonDocument.Parse(JsonSerializer.Serialize(ok.Value)).RootElement.Clone();
+        }
+
+        foreach (var q in new[] { "CPT30614374", " cpt30614374 ", "CPT30614374-4827153-ABC", "https://x.test/activate#CPT30614374-4827153-ABC", "CPT۳۰۶۱۴۳۷۴" })
+        {
+            var r = await Check(q);
+            Assert.True(r.GetProperty("genuine").GetBoolean(), q);
+            Assert.Equal("CPT30614374", r.GetProperty("rollNo").GetString());
+            Assert.Equal("SunVision Ceramic 70", r.GetProperty("product").GetString());
+            Assert.True(r.GetProperty("activated").GetBoolean());
+            var json = r.GetRawText();
+            foreach (var secret in new[] { "SECRETSUP", "09120000000", "Secret Shop", "4827153" }) Assert.DoesNotContain(secret, json);
+        }
+
+        var noCard = await Check("CPT40000001");
+        Assert.True(noCard.GetProperty("genuine").GetBoolean());
+        Assert.False(noCard.GetProperty("activated").GetBoolean());
+        Assert.False((await Check("CPT40000002")).GetProperty("genuine").GetBoolean());
+        Assert.False((await Check("CPT99999999")).GetProperty("genuine").GetBoolean());
+        Assert.IsType<BadRequestObjectResult>(await controller.Verify(""));
+        Assert.IsType<BadRequestObjectResult>(await controller.Verify("<script>"));
+    }
+
+    [Fact]
     public async Task PublicLookupByMobileIsRefused()
     {
         using var db = Database();

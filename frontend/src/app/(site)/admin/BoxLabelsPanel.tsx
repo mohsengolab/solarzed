@@ -52,9 +52,10 @@ export default function BoxLabelsPanel({ onSettings }: { onSettings: () => void 
   useEffect(() => {
     if (!canManage) return;
     let cancelled = false;
-    // The card QR holds only the Serial Number; the installer scans or types it in their account.
-    Promise.all(labels.filter(label => selected.includes(label.id)).map(async label =>
-      [label.id, await QRCode.toDataURL(label.id, { errorCorrectionLevel: "M", margin: 4, scale: 8 })] as const
+    // The card QR holds only the roll's Serial Number (SZ-…); the installer scans or types it to register the warranty.
+    // The ROLL NO stays on the carton barcode for the authenticity check and transfers.
+    Promise.all(labels.filter(label => selected.includes(label.id) && label.rollId).map(async label =>
+      [label.id, await QRCode.toDataURL(label.rollId!, { errorCorrectionLevel: "M", margin: 4, scale: 8 })] as const
     )).then(entries => { if (!cancelled) setPreviews(Object.fromEntries(entries)); }).catch(ex => { if (!cancelled) setError(message(ex)); });
     return () => { cancelled = true; };
   }, [labels, selected, canManage]);
@@ -91,8 +92,8 @@ export default function BoxLabelsPanel({ onSettings }: { onSettings: () => void 
     const chosen = validSelection;
     if (!chosen.length || chosen.some(label => !previews[label.id])) { setError(fa("Select unused labels and wait for their QR previews.")); return; }
     await printQrLabels("Solarzed warranty cards", width, height, chosen.map(label => ({
-      qr: previews[label.id], alt: `ROLL NO ${label.id}`, title: "ROLL NO",
-      lines: [label.id, `${label.product} · ${label.type.toUpperCase()}`],
+      qr: previews[label.id], alt: `Serial Number ${label.rollId}`, title: "SERIAL NUMBER",
+      lines: [label.rollId!, `${label.product} · ${label.type.toUpperCase()}`],
       footer: "Your installer registers this warranty",
     })));
   }
@@ -156,7 +157,7 @@ export default function BoxLabelsPanel({ onSettings }: { onSettings: () => void 
           <label>{fa("Public website")}<input type="url" dir="ltr" value={site} onChange={event => setSite(event.target.value)} /></label>
           <button type="button" className={styles.ghost} disabled={busy || !loaded} onClick={async () => { setBusy(true); setError(""); try { await saveLabelSite(site); await load(); } catch (ex) { setError(message(ex)); } finally { setBusy(false); } }}>{fa("Save QR website")}</button>
           {sizeFields}
-          <p className={labelsStyle.help}>بارکد ROLL NO که روی کارتن چاپ شده برای انتقال به فروشنده و نصاب است؛ برای کارتن‌هایی که این بارکد را ندارند می‌توانید بارکد چاپ کنید. کارت گارانتی داخل کارتن گذاشته می‌شود؛ QR آن فقط ROLL NO است (مثلاً CPT30614374) و نصابی که رول دستش است آن را اسکن می‌کند. کاغذ هم‌اندازه، مقیاس ۱۰۰٪ و بدون سربرگ/پاورقی مرورگر چاپ کنید.</p>
+          <p className={labelsStyle.help}>بارکد ROLL NO که روی کارتن چاپ شده برای انتقال به فروشنده و نصاب است؛ برای کارتن‌هایی که این بارکد را ندارند می‌توانید بارکد چاپ کنید. کارت گارانتی داخل کارتن گذاشته می‌شود؛ QR آن فقط Serial Number رول است (مثلاً SZ-CPT30614374-2611-4827153-ABC) و نصابی که رول دستش است با آن گارانتی را فعال می‌کند. ROLL NO فقط برای اصالت کالا و انتقال کارتن است. کاغذ هم‌اندازه، مقیاس ۱۰۰٪ و بدون سربرگ/پاورقی مرورگر چاپ کنید.</p>
           {barcodeButton}
           <button type="button" className={styles.btnPrimary} onClick={() => { printCards().catch(ex => setError(message(ex))); }} disabled={busy || !validSelection.length || validSelection.some(label => !previews[label.id])}>چاپ کارت گارانتی داخل کارتن ({validSelection.length.toLocaleString("fa-IR")})</button>
         </div>
@@ -172,7 +173,7 @@ export default function BoxLabelsPanel({ onSettings }: { onSettings: () => void 
       <div className={labelsStyle.previews}>{validSelection.map(label => <article key={label.id} className={labelsStyle.preview}>
         {/* eslint-disable-next-line @next/next/no-img-element */}
         {previews[label.id] && <img src={previews[label.id]} alt={`QR ${label.id}`} width={150} height={150} />}
-        <div><b>SOLARZED · کارت گارانتی</b><p>{label.product} · {label.type.toUpperCase()}</p><p>ROLL NO</p><code dir="ltr">{label.id}</code><p>نصاب ROLL NO را اسکن یا تایپ می‌کند ← ثبت گارانتی برای موبایل مشتری</p></div>
+        <div><b>SOLARZED · کارت گارانتی</b><p>{label.product} · {label.type.toUpperCase()}</p><p>Serial Number</p><code dir="ltr">{label.rollId}</code><p>نصاب Serial Number را اسکن یا تایپ می‌کند ← ثبت گارانتی برای موبایل مشتری</p></div>
       </article>)}</div>
     </section>
   );

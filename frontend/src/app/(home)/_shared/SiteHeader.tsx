@@ -55,6 +55,7 @@ export default function SiteHeader() {
           <div>
             <Link href="/activate">Activate a warranty</Link>
             <Link href="/warranty">Check warranty</Link>
+            <Link href="/verify">Authenticity check</Link>
             <Link href="/coverage">Warranty policy</Link>
           </div>
         </details>
@@ -78,6 +79,7 @@ export function SiteFooter() {
         <Link href="/contact">CONTACTS</Link>
         <Link href="/coverage">WARRANTY POLICY</Link>
         <Link href="/warranty">CHECK WARRANTY</Link>
+        <Link href="/verify">AUTHENTICITY CHECK</Link>
         <Link href="/account">DEALER SIGN-IN</Link>
       </div>
       <span>SOLARZED · DESIGN PRESENTATION</span>
