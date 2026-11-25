@@ -109,6 +109,17 @@ public class BoxTransferService(AppDbContext db)
         {
             var receiver = await new PortalService(db, NoSms.Instance).Ensure(toPhone, toName);
             to = toName ?? receiver.Name ?? toPhone;
+            // Whoever receives rolls by transfer is a partner (همکار): approved at once so they can register warranties
+            // from the Serial Number, and listed under Partners in the admin panel. A suspended partner stays suspended.
+            if (receiver.Partner is PartnerStatus.None or PartnerStatus.Pending)
+            {
+                AuditLog.Add(db, actor, "partner", toPhone, receiver.Partner == PartnerStatus.None ? "added" : "updated",
+                    AuditLog.Diff(("status", receiver.Partner, PartnerStatus.Approved)), "approved by roll transfer");
+                receiver.Partner = PartnerStatus.Approved;
+                receiver.PartnerAppliedAt ??= DateTime.UtcNow;
+                receiver.PartnerReviewedAt = DateTime.UtcNow;
+                receiver.ShopName ??= toName;
+            }
         }
 
         var rollIds = labels.Select(x => x.RollId).Distinct().ToArray();
