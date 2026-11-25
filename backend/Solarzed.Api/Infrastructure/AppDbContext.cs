@@ -76,11 +76,11 @@ public class AppDbContext(DbContextOptions<AppDbContext> options) : DbContext(op
         mb.Entity<ActivationChallenge>().HasOne<BoxLabel>().WithMany().HasForeignKey(x => x.LabelId).OnDelete(DeleteBehavior.Cascade);
         mb.Entity<WarrantyRegistration>()
             .HasIndex(w => new { w.FilmSerial, w.InvoiceNumber })
-            .IsUnique().HasFilter("[UsedLengthM] IS NULL");
+            .IsUnique().HasFilter("[RollId] IS NULL");   // staff registrations without a carton
 
         mb.Entity<WarrantyRegistration>()
             .HasIndex(w => new { w.FilmSerial, w.Vin })
-            .IsUnique().HasFilter("[UsedLengthM] IS NOT NULL");
+            .IsUnique().HasFilter("[RollId] IS NOT NULL");   // carton warranties: one per vehicle per roll
 
         mb.Entity<WarrantyRegistration>()
             .HasIndex(w => w.Vin);

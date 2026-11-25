@@ -32,6 +32,22 @@ export default function TicketsPanel() {
     return () => { live = false; };
   }, [selectedId]);
 
+  // Keep the open conversation and the inbox live, so a user's follow-up shows without a reload.
+  const reloadList = list.reload;
+  useEffect(() => {
+    let live = true;
+    const tick = async () => {
+      if (document.visibilityState !== "visible") return;
+      try {
+        if (selectedId != null) { const d = await adminTicketDetail(selectedId); if (live) setDetail(d); }
+        if (live) await reloadList();
+      } catch { /* transient: try again on the next tick */ }
+    };
+    const timer = window.setInterval(tick, 15_000);
+    document.addEventListener("visibilitychange", tick);
+    return () => { live = false; window.clearInterval(timer); document.removeEventListener("visibilitychange", tick); };
+  }, [selectedId, reloadList]);
+
   async function refresh(selectedId: number) {
     setDetail(await adminTicketDetail(selectedId));
   }

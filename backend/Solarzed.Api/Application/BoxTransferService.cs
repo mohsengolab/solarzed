@@ -49,9 +49,9 @@ public class BoxTransferService(AppDbContext db)
     static string[] Serials(string[]? raw)
     {
         var serials = (raw ?? []).Select(NormalizeSerial).Where(x => x.Length > 0).Distinct().ToArray();
-        if (serials.Length is 0 or > MaxBatch) throw new ActivationError(400, $"Enter 1–{MaxBatch} box serials.");
+        if (serials.Length is 0 or > MaxBatch) throw new ActivationError(400, $"Enter 1–{MaxBatch} ROLL NOs.");
         var malformed = serials.Where(x => !SerialPattern.IsMatch(x)).ToArray();
-        if (malformed.Length > 0) throw new ActivationError(400, $"Invalid box serial: {string.Join(", ", malformed.Take(10))}");
+        if (malformed.Length > 0) throw new ActivationError(400, $"Invalid ROLL NO: {string.Join(", ", malformed.Take(10))}");
         return serials;
     }
 
@@ -77,7 +77,7 @@ public class BoxTransferService(AppDbContext db)
         var serials = Serials(req.Serials);
         if (string.IsNullOrWhiteSpace(req.ToPhone)) throw new ActivationError(400, "Enter the receiver's mobile number.");
         var to = PortalService.CanonicalPhone(req.ToPhone);
-        if (to == myPhone) throw new ActivationError(400, "You already hold these boxes.");
+        if (to == myPhone) throw new ActivationError(400, "You already hold these rolls.");
         // Boxes held by someone else are reported as "not in your account" so serials of other holders reveal nothing.
         return Move(serials, to, NormalizeHolder(req.ToName), req.Note, "mobile:" + myPhone,
             label => label.HolderPhone == myPhone ? null : "not in your account", hideMissing: true);
@@ -95,7 +95,7 @@ public class BoxTransferService(AppDbContext db)
         if (missing.Length > 0)
             throw hideMissing
                 ? new ActivationError(409, "Transfer rejected. " + string.Join("; ", missing.Take(10).Select(x => $"{x}: not in your account")))
-                : new ActivationError(404, $"Box serial not found: {string.Join(", ", missing.Take(10))}");
+                : new ActivationError(404, $"ROLL NO not found: {string.Join(", ", missing.Take(10))}");
 
         string? to = null;
         if (toPhone != null)
@@ -128,6 +128,21 @@ public class BoxTransferService(AppDbContext db)
             ToHolder = to, ToPhone = toPhone, Note = note, Actor = actor, At = now,
         }).ToArray();
         var sources = labels.Select(x => x.Holder ?? x.HolderPhone ?? Warehouse).Distinct().ToArray();
+        // A roll handed out of the company to a seller or installer is released for distribution, so the installer who
+        // ends up holding it can register warranties; it also leaves any staff user it was assigned to.
+        if (toPhone != null)
+        {
+            var rolls = await db.Rolls.Where(r => rollIds.Contains(r.Id)).ToListAsync();
+            foreach (var roll in rolls)
+            {
+                if (roll.Status == RollStatus.InStock && roll.Qc == RollQc.Approved)
+                {
+                    AuditLog.Add(db, actor, "roll", roll.Id, "updated", AuditLog.Diff(("status", roll.Status, RollStatus.Shipped)), $"transfer {batch}");
+                    roll.Status = RollStatus.Shipped;
+                }
+                roll.HolderUserId = null;
+            }
+        }
         foreach (var label in labels)
         {
             label.Holder = to;
@@ -148,7 +163,7 @@ public class BoxTransferService(AppDbContext db)
     {
         var id = NormalizeSerial(serial);
         var label = await db.BoxLabels.AsNoTracking().SingleOrDefaultAsync(x => x.Id == id)
-            ?? throw new ActivationError(404, "Box serial not found.");
+            ?? throw new ActivationError(404, "ROLL NO not found.");
         var transfers = await db.BoxTransfers.AsNoTracking().Where(x => x.LabelId == id)
             .OrderBy(x => x.At).ThenBy(x => x.Id).ToListAsync();
         return new(label.Id, label.Product, label.RollId, label.ActivatedAt.HasValue, label.Holder, label.HolderPhone, label.HeldSince,

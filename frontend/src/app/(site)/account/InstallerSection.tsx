@@ -12,7 +12,7 @@ const date = (value: string) => new Date(value).toLocaleDateString(undefined, { 
 const STATUS = { pending: "Waiting for counter review", active: "Approved · active", rejected: "Sent back — new photos needed" } as const;
 
 /** Installer partners (همکار): apply, then register customers' warranties with photos and follow the counter's review. */
-export default function InstallerSection({ user, onUser }: { user: PortalUser; onUser: (user: PortalUser) => void }) {
+export default function InstallerSection({ user, onUser, view }: { user: PortalUser; onUser: (user: PortalUser) => void; view: "profile" | "warranty" }) {
   const status = user.partner ?? "none";
   const [apply, setApply] = useState({ shopName: user.shopName ?? "", country: user.country ?? "", city: user.city ?? "" });
   const [busy, setBusy] = useState(false);
@@ -26,7 +26,7 @@ export default function InstallerSection({ user, onUser }: { user: PortalUser; o
   const openSerial = (value: string) => { const sn = serialFromScan(value); setSerial(sn); if (/^[A-Z0-9][A-Z0-9-]{2,30}[A-Z0-9]$/.test(sn)) router.push(`/activate#${encodeURIComponent(sn)}`); };
 
   const load = useCallback(() => portalInstallerWarranties().then(r => setRows(r.warranties)).catch(ex => setMsg(ex instanceof Error ? ex.message : "Could not load your installations.")), []);
-  useEffect(() => { if (status === "approved") void Promise.resolve().then(load); }, [status, load]);
+  useEffect(() => { if (status === "approved" && view === "warranty") void Promise.resolve().then(load); }, [status, view, load]);
 
   async function submitApplication(event: FormEvent) {
     event.preventDefault(); setBusy(true); setMsg("");
@@ -43,12 +43,14 @@ export default function InstallerSection({ user, onUser }: { user: PortalUser; o
     finally { setBusy(false); }
   }
 
+  if (view === "warranty" && status !== "approved") return null;
   return <section>
-    <h2>Installer partner {status === "approved" && <small className={own.badge}>{user.shopName}</small>}</h2>
+    <h2>{view === "warranty" ? "Register an installation" : "Installer partner"} {status === "approved" && <small className={own.badge}>{user.shopName}</small>}</h2>
     {msg && <p role="status" className={own.notice}>{msg}</p>}
+    {view === "profile" && status === "approved" && <p>Your partner account is approved. Register installations in the <b>Warranty</b> menu and pass cartons on in <b>Carton transfer</b>.</p>}
     {status === "none" && <>
       <p>Installers and shops register each installation for the customer: vehicle details, the customer&apos;s mobile and photos of the work. Apply once; Solarzed approves your account.</p>
-      {!user.phone && <p role="status" className={own.notice}>Add your verified mobile above first.</p>}
+      {!user.phone && <p role="status" className={own.notice}>Add your verified mobile in your profile first.</p>}
       <form onSubmit={submitApplication} className={own.form}>
         <div className={styles.grid}>
           <label>Shop / workshop name<input required maxLength={200} value={apply.shopName} onChange={e => setApply({ ...apply, shopName: e.target.value })} /></label>
@@ -60,10 +62,10 @@ export default function InstallerSection({ user, onUser }: { user: PortalUser; o
     </>}
     {status === "pending" && <p className={own.notice}>Your application for <b>{user.shopName}</b> is waiting for approval.</p>}
     {status === "suspended" && <p role="alert" className={styles.error}>Your installer account is suspended. Please contact Solarzed support.</p>}
-    {status === "approved" && <>
-      <p>To register a vehicle, scan the QR on the warranty card inside the carton or type the <b>Serial Number</b> printed under it. The warranty goes to the customer&apos;s mobile; when the counter approves your photos the customer gets an SMS with their gold warranty card.</p>
+    {view === "warranty" && status === "approved" && <>
+      <p>To register a vehicle, scan the QR on the warranty card inside the carton or type the <b>ROLL NO</b> printed under it. The warranty goes to the customer&apos;s mobile; when the counter approves your photos the customer gets an SMS with their gold warranty card.</p>
       <form className={own.form} onSubmit={event => { event.preventDefault(); if (serialOk) openSerial(serial); }}>
-        <label>Serial Number
+        <label>ROLL NO
           <span style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
             <input dir="ltr" required style={{ flex: "1 1 200px" }} placeholder="e.g. CPT30614374" autoComplete="off" spellCheck={false} autoCapitalize="characters"
               value={serial} onChange={e => setSerial(e.target.value.replace(/\s+/g, "").toUpperCase())} />

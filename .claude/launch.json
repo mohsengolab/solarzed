@@ -249,6 +249,48 @@
         "SOLARZED_REVALIDATE_SECRET": "local-dev-revalidate-secret-only",
         "NEXT_DIST_DIR": ".next-roles"
       }
+    },
+    {
+      "name": "api-transfer",
+      "runtimeExecutable": "dotnet",
+      "runtimeArgs": [
+        "run",
+        "--project",
+        "backend/Solarzed.Api",
+        "-p:OutDir=bin/transfer/",
+        "--launch-profile",
+        "http",
+        "--urls",
+        "http://localhost:5350"
+      ],
+      "port": 5350,
+      "env": {
+        "ConnectionStrings__Default": "Server=(localdb)\\mssqllocaldb;Database=SolarzedTransferQA;Trusted_Connection=True;",
+        "FrontendOrigin": "http://localhost:3050",
+        "SOLARZED_REVALIDATE_SECRET": "local-dev-revalidate-secret-only",
+        "Sms__DevConsole": "true",
+        "Email__DevConsole": "true",
+        "AdminPassword": "TransferQA-5b17c2e9"
+      }
+    },
+    {
+      "name": "web-transfer",
+      "runtimeExecutable": "npm",
+      "runtimeArgs": [
+        "--prefix",
+        "frontend",
+        "run",
+        "dev",
+        "--",
+        "--port",
+        "3050"
+      ],
+      "port": 3050,
+      "env": {
+        "BACKEND_URL": "http://localhost:5350",
+        "SOLARZED_REVALIDATE_SECRET": "local-dev-revalidate-secret-only",
+        "NEXT_DIST_DIR": ".next-transfer"
+      }
     }
   ]
 }

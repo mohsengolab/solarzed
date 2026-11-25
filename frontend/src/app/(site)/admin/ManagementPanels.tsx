@@ -203,7 +203,7 @@ export function UsersPanel() {
     <header className={s.panelHead}><div><span className={s.eyebrow}>کاربران</span><h1>مدیریت کاربران</h1></div></header>
     <form className={`${s.card} ${s.adminForm}`} onSubmit={create}>
       <h2>ساخت کاربر</h2>
-      <p className={s.empty}>مدیر کل (دسترسی کامل و لیست مشتریان)، مدیر یا اپراتور کارتن/سریال اضافه کنید.</p>
+      <p className={s.empty}>مدیر کل (دسترسی کامل و لیست مشتریان)، مدیر یا کانتر اضافه کنید.</p>
       <div className={s.row2}>
         <label>نام کاربری<input required minLength={3} maxLength={50} pattern="[A-Za-z0-9._-]+" autoComplete="off" value={form.username} onChange={e => setForm({ ...form, username: e.target.value })} dir="ltr" /></label>
         <label>نام (اختیاری)<input maxLength={100} value={form.displayName} onChange={e => setForm({ ...form, displayName: e.target.value })} /></label>

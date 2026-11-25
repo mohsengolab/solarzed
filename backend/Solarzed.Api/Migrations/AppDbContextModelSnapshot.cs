@@ -1050,11 +1050,11 @@ namespace Solarzed.Api.Migrations
 
                     b.HasIndex("FilmSerial", "InvoiceNumber")
                         .IsUnique()
-                        .HasFilter("[UsedLengthM] IS NULL");
+                        .HasFilter("[RollId] IS NULL");
 
                     b.HasIndex("FilmSerial", "Vin")
                         .IsUnique()
-                        .HasFilter("[UsedLengthM] IS NOT NULL");
+                        .HasFilter("[RollId] IS NOT NULL");
 
                     b.HasIndex("Status", "CreatedAt");
 

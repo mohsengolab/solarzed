@@ -64,14 +64,14 @@ export default function ActivationPage() {
     if (installer && !photosComplete(photos)) { setError("Add a photo of the vehicle with its plate and of the installed film."); return; }
     setBusy(true); setError("");
     try {
-      const used = info.remainingLengthM == null ? null : Number(usedLength);
+      // Meters are optional: a roll covers as many vehicles as it fits, nobody has to measure it.
+      const used = usedLength.trim() ? Number(usedLength) : null;
       const registration = { ...form, installer: installer ? (user.shopName ?? "") : form.installer, phone: installer ? customerPhone : user.phone, type: info.type, filmSerial: info.id, windows: info.type === "tint" ? areas : undefined, panels: info.type === "ppf" ? areas : undefined };
       const completed = installer
         ? await installerActivation(token, registration, used, customerPhone, country || user.country || "", photos)
         : await completeActivation(token, registration, used);
       setResult(completed);
-      setInfo({ ...info, activated: true, canRegister: (completed.remainingLengthM ?? 0) > 0, remainingLengthM: completed.remainingLengthM });
-      if (!(completed.remainingLengthM && completed.remainingLengthM > 0)) window.history.replaceState(null, "", window.location.pathname);
+      setInfo({ ...info, activated: true, canRegister: true, remainingLengthM: completed.remainingLengthM });
     } catch (ex) { setError(ex instanceof Error ? ex.message : "Activation failed."); }
     finally { setBusy(false); }
   }
@@ -79,7 +79,7 @@ export default function ActivationPage() {
   const card = info && <div className={styles.product}>
     <b>{info.product} · {info.type === "tint" ? "Window film" : "Paint protection film"}</b>
     <dl>
-      <dt>Serial Number</dt><dd><code dir="ltr">{info.id}</code></dd>
+      <dt>ROLL NO</dt><dd><code dir="ltr">{info.id}</code></dd>
       {info.remainingLengthM != null && <><dt>Remaining roll length</dt><dd>{info.remainingLengthM} m</dd></>}
     </dl>
     <span>{info.filmYears}-year film warranty{info.installYears ? ` · ${info.installYears}-year installation warranty` : ""}</span>
@@ -90,7 +90,7 @@ export default function ActivationPage() {
     <main className={styles.card}>
       {result ? <section aria-live="polite"><span className={styles.eyebrow}>WARRANTY REGISTERED</span>{result.warranty.status === "pending"
           ? <><h1>Sent for review</h1><p>The installation and its photos were sent to the Solarzed counter. Once the photos are approved the warranty becomes active and the customer gets an SMS with their gold warranty card. You can follow it in your account.</p></>
-          : <><h1>Your warranty is active</h1><p>Keep your warranty number for future reference. You can see it any time in your account.</p></>}<small className={styles.codeLabel}>Warranty number</small><code className={styles.code} dir="ltr">{result.warranty.code}</code><dl><dt>Serial Number</dt><dd dir="ltr">{info?.id}</dd><dt>Vehicle</dt><dd>{result.warranty.make} {result.warranty.model}</dd>{result.warranty.usedLengthM != null && <><dt>Film used</dt><dd>{result.warranty.usedLengthM} m</dd><dt>Remaining roll length</dt><dd>{result.remainingLengthM} m</dd></>}{result.warranty.coverage?.filmEnds && <><dt>Film warranty ends</dt><dd>{result.warranty.coverage.filmEnds}</dd></>}{result.warranty.coverage?.installEnds && <><dt>Installation warranty ends</dt><dd>{result.warranty.coverage.installEnds}</dd></>}</dl>
+          : <><h1>Your warranty is active</h1><p>Keep your warranty number for future reference. You can see it any time in your account.</p></>}<small className={styles.codeLabel}>Warranty number</small><code className={styles.code} dir="ltr">{result.warranty.code}</code><dl><dt>ROLL NO</dt><dd dir="ltr">{info?.id}</dd><dt>Vehicle</dt><dd>{result.warranty.make} {result.warranty.model}</dd>{result.warranty.usedLengthM != null && <><dt>Film used</dt><dd>{result.warranty.usedLengthM} m</dd><dt>Remaining roll length</dt><dd>{result.remainingLengthM} m</dd></>}{result.warranty.coverage?.filmEnds && <><dt>Film warranty ends</dt><dd>{result.warranty.coverage.filmEnds}</dd></>}{result.warranty.coverage?.installEnds && <><dt>Installation warranty ends</dt><dd>{result.warranty.coverage.installEnds}</dd></>}</dl>
         {info?.canRegister && <p><button className={styles.button} type="button" onClick={() => { setResult(null); setForm(initial); setAreas([]); setUsedLength(""); setCustomerPhone(""); setPhotos({}); }}>Register another vehicle</button></p>}
         <Link className={styles.button} href="/account">My account</Link></section>
       : <><span className={styles.eyebrow}>SCAN · SIGN IN · ACTIVATE</span><h1>Activate your Solarzed warranty</h1>
@@ -98,9 +98,9 @@ export default function ActivationPage() {
 
       {!info && <form onSubmit={event => { event.preventDefault(); open(typed.trim()); }}>
         {installer
-          ? <p>Scan the QR on the warranty card inside the carton, or type the Serial Number printed under it.</p>
+          ? <p>Scan the QR on the warranty card inside the carton, or type the ROLL NO printed under it.</p>
           : <p>Your Solarzed installer registers the warranty for your mobile and you receive your gold warranty card by SMS. Older cards with a warranty code (e.g. CPT30614374-4827153-ABC) can still be activated here.</p>}
-        <label>{installer ? "Serial Number" : "Serial Number or warranty card code"}
+        <label>{installer ? "ROLL NO" : "ROLL NO or warranty card code"}
           <span style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
             <input dir="ltr" required style={{ flex: "1 1 200px" }} placeholder={installer ? "CPT30614374" : "CPT30614374-4827153-ABC"} value={typed} onChange={event => setTyped(event.target.value.replace(/\s+/g, "").toUpperCase())} />
             <ScanButton label="Scan" onScan={text => { const sn = installer ? serialFromScan(text) : text.trim(); setTyped(sn.toUpperCase()); if (valid(sn)) void open(sn); }} />
@@ -115,8 +115,8 @@ export default function ActivationPage() {
         {checked && !user && <PortalSignIn smsAvailable={info.smsAvailable} onSignedIn={signedIn => { setUser(signedIn); void open(token); }}
           intro={info.activated ? "Sign in with the mobile used for the first vehicle to see whether this roll has film left." : "Sign in with your mobile number. We send you a code by SMS; the warranty is registered to this mobile."} />}
         {user && !user.phone && <p role="status" className={styles.error}>Your account has no verified mobile number yet. Add one in <Link href="/account">my account</Link> first — warranty cards are registered to a mobile number.</p>}
-        {!info.activated && !info.canRegister && <p role="status">The roll length is unavailable. Contact your seller.</p>}
-        {user?.phone && info.activated && !info.canRegister && <p role="status">This card has no available length for this account. <Link href="/account">View my warranties</Link></p>}
+        {!info.activated && !info.canRegister && <p role="status">This ROLL NO is not in your account yet. Ask your seller to transfer it to your mobile; then you can register the warranty.</p>}
+        {user?.phone && info.activated && !info.canRegister && <p role="status">This roll is registered to another installer account. <Link href="/account">View my warranties</Link></p>}
         {user?.phone && info.canRegister && <form onSubmit={activate}>
           {installer
             ? <p>Installer: <b>{user.shopName}</b> (<span dir="ltr">{user.phone}</span>). Enter the customer&apos;s details and the installation photos. The warranty is registered to the customer&apos;s mobile and becomes active after the counter approves the photos.</p>
@@ -128,7 +128,7 @@ export default function ActivationPage() {
           </div>}
           {installer && <p />}
           <div className={styles.grid}>{fields.filter(([key]) => !(installer && key === "installer")).map(([key, label, max]) => <label key={key}>{installer && key === "owner" ? "Customer full name" : label}<input required maxLength={max} value={form[key]} type={key === "installed" ? "date" : "text"} autoComplete={key === "owner" ? "name" : "off"} onChange={event => setForm(value => ({ ...value, [key]: event.target.value }))} /></label>)}</div>
-          {info.remainingLengthM != null && <label className={styles.meters}>Film used (m)<input required type="number" inputMode="decimal" min="0.01" step="0.01" max={info.remainingLengthM} value={usedLength} onChange={event => setUsedLength(event.target.value)} /></label>}
+          <label className={styles.meters}>Film used (m, optional)<input type="number" inputMode="decimal" min="0.01" step="0.01" value={usedLength} onChange={event => setUsedLength(event.target.value)} /></label>
           <fieldset><legend>{info.type === "tint" ? "Installed windows" : "Protected panels"}</legend>{info.type === "tint" ? <CarWindows value={areas} onChange={setAreas} /> : <div className={styles.areas}>{panels.map(area => <label key={area}><input type="checkbox" checked={areas.includes(area)} onChange={event => setAreas(current => event.target.checked ? [...current, area] : current.filter(item => item !== area))} />{area.replaceAll("-", " ")}</label>)}</div>}</fieldset>
           {installer && <PhotoPicker value={photos} onChange={setPhotos} disabled={busy} />}
           <button className={styles.button} type="submit" disabled={busy || !info.released}>{busy ? (installer ? "Uploading…" : "Checking…") : installer ? "Send for review" : "Check & register warranty"}</button>

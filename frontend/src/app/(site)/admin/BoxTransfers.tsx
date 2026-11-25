@@ -11,7 +11,7 @@ const FRAGMENTS: [string, string][] = [
   ["Transfer rejected.", "انتقال رد شد."], ["already activated on a vehicle", "روی خودرو فعال شده"],
   ["product is void", "محصول باطل شده"], ["held by", "در دست"], ["already with", "از قبل در دست"],
   ["central warehouse", "انبار مرکزی"], ["not in your account", "در حساب شما نیست"],
-  ["Enter the receiver's mobile number.", "شماره موبایل گیرنده را وارد کنید."], ["Enter a valid mobile number.", "شماره موبایل معتبر نیست."], ["Invalid box serial:", "سریال نامعتبر:"], ["Box serial not found:", "سریال یافت نشد:"],
+  ["Enter the receiver's mobile number.", "شماره موبایل گیرنده را وارد کنید."], ["Enter a valid mobile number.", "شماره موبایل معتبر نیست."], ["Invalid ROLL NO:", "ROLL NO نامعتبر:"], ["ROLL NO not found:", "ROLL NO یافت نشد:"],
 ];
 const message = (error: unknown) => {
   const text = error instanceof Error ? error.message : "The request failed.";
@@ -24,8 +24,14 @@ const holderName = (holder: string | null, phone?: string | null) =>
 const date = (value: string) => new Date(value).toLocaleString(FA_DATE);
 const ANY = "__any__", WAREHOUSE = "__warehouse__";
 
-export default function BoxTransfers({ selected = [], onChanged }: { selected?: string[]; onChanged: () => void }) {
-  const [list, setSerials] = useState<string[]>([]);
+/**
+ * Moves rolls to a seller's or installer's mobile by ROLL NO (company → seller → installer). The list can be owned by
+ * the caller (the roll list adds a row's ROLL NO with its transfer button).
+ */
+export default function BoxTransfers({ selected = [], onChanged, list: outerList, onList, title }:
+  { selected?: string[]; onChanged: () => void; list?: string[]; onList?: (next: string[]) => void; title?: string }) {
+  const [innerList, setInnerList] = useState<string[]>([]);
+  const list = outerList ?? innerList, setSerials = onList ?? setInnerList;
   const [from, setFrom] = useState(ANY);
   const [to, setTo] = useState("");
   const [phone, setPhone] = useState("");
@@ -65,12 +71,12 @@ export default function BoxTransfers({ selected = [], onChanged }: { selected?: 
 
   return (
     <div className={labelsStyle.list}>
-      <header className={styles.panelHead}><div><span className={styles.eyebrow}>{fa("BOX TRANSFERS")}</span><h2>{fa("Move boxes by carton serial")}</h2></div></header>
+      <header className={styles.panelHead}><div><span className={styles.eyebrow}>{fa("BOX TRANSFERS")}</span><h2>{title ?? fa("Move boxes by carton serial")}</h2></div></header>
       {error && <p role="alert" className={labelsStyle.error}>{error}</p>}
       {done && <p role="status" className={labelsStyle.notice}>{done}</p>}
       <div className={labelsStyle.columns}>
         <form className={`${styles.card} ${styles.adminForm}`} onSubmit={submit}>
-          <SerialInput label="سریال کارتن‌ها (Roll No؛ با بارکدخوان، تایپ یا فایل اکسل)" value={list} onChange={setSerials} />
+          <SerialInput label="ROLL NO رول‌ها (با بارکدخوان، تایپ یا فایل اکسل)" value={list} onChange={setSerials} />
           {selected.length > 0 && <button type="button" className={styles.ghost} onClick={() => setSerials([...new Set([...list, ...selected])])}>{fa("Use selected boxes")} ({selected.length.toLocaleString("fa-IR")})</button>}
           <label>{fa("Current holder (safety check)")}
             <select value={from} onChange={e => setFrom(e.target.value)}>
@@ -80,9 +86,9 @@ export default function BoxTransfers({ selected = [], onChanged }: { selected?: 
             </select>
           </label>
           <label><input type="checkbox" checked={toWarehouse} onChange={e => setToWarehouse(e.target.checked)} /> {fa("Return to central warehouse")}</label>
-          {!toWarehouse && <label>موبایل نماینده / گیرنده (با همین موبایل وارد سایت می‌شود و کارتن‌ها را می‌بیند)<input dir="ltr" required inputMode="tel" maxLength={20} list="box-holder-phones" value={phone} onChange={e => setPhone(e.target.value)} placeholder="09…" /></label>}
+          {!toWarehouse && <label>موبایل فروشنده / نصاب گیرنده (با همین موبایل وارد سایت می‌شود و رول‌ها را می‌بیند)<input dir="ltr" required inputMode="tel" maxLength={20} list="box-holder-phones" value={phone} onChange={e => setPhone(e.target.value)} placeholder="09…" /></label>}
           <datalist id="box-holder-phones">{named.filter(h => h.phone).map(h => <option key={h.phone!} value={h.phone!}>{h.holder ?? ""}</option>)}</datalist>
-          {!toWarehouse && <label>نام نماینده / گیرنده (اختیاری)<input maxLength={200} value={to} onChange={e => setTo(e.target.value)} /></label>}
+          {!toWarehouse && <label>نام فروشنده / نصاب (اختیاری)<input maxLength={200} value={to} onChange={e => setTo(e.target.value)} /></label>}
           <label>{fa("Note (optional)")}<input maxLength={500} value={note} onChange={e => setNote(e.target.value)} /></label>
           <button className={styles.btnPrimary} disabled={busy || !list.length || (!toWarehouse && !phone.trim())}>{busy ? fa("Working…") : `${fa("Record transfer")} (${list.length.toLocaleString("fa-IR")})`}</button>
         </form>

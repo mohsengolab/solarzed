@@ -159,4 +159,31 @@ public class BoxTransferTests
         var many = Enumerable.Range(0, BoxTransferService.MaxBatch + 1).Select(i => $"SZB-{i:X16}").ToArray();
         await Error(400, () => f.Transfers.Transfer(To(RepA, many), "admin"));
     }
+
+    [Fact]
+    public async Task RollsTransferFromTheRollListByRollNoAndAreReleasedToTheSeller()
+    {
+        using var f = new Fixture();
+        f.Db.Rolls.Add(new Roll { Id = "SZ-CPT30614374-2611-1234567-ABC", Number = 2, ModelCode = "TEST", RollNo = "CPT30614374", Type = WarrantyType.Tint,
+            Batch = "TEST", Supplier = "ABC", LengthM = 30, Qc = RollQc.Approved, Status = RollStatus.InStock, HolderUserId = 7 });
+        f.Db.AdminUsers.Add(new AdminUser { Id = 7, Username = "store", PasswordHash = "x" });
+        await f.Db.SaveChangesAsync();
+        var api = new Solarzed.Api.Controllers.BoxLabelsController(f.Db, f.Labels, f.Transfers, new NoSms())
+            { ControllerContext = new() { HttpContext = new Microsoft.AspNetCore.Http.DefaultHttpContext() } };
+
+        // A bad mobile is refused before any warranty card is issued.
+        Assert.Equal(400, Assert.IsType<Microsoft.AspNetCore.Mvc.ObjectResult>(await api.Transfer(To("12", "cpt30614374"))).StatusCode);
+        Assert.Empty(f.Db.BoxLabels);
+
+        Assert.IsType<Microsoft.AspNetCore.Mvc.OkObjectResult>(await api.Transfer(To(RepA, "cpt30614374")));
+        var label = await f.Db.BoxLabels.SingleAsync();                  // the card was issued on the way out
+        Assert.Equal(("CPT30614374", RepA), (label.Id, label.HolderPhone));
+        var roll = await f.Db.Rolls.SingleAsync(r => r.Number == 2);
+        Assert.Equal(RollStatus.Shipped, roll.Status);                   // released, so the installer can register it later
+        Assert.Null(roll.HolderUserId);
+
+        // The seller passes it on to the installer by mobile and ROLL NO.
+        await f.Transfers.TransferAsHolder(new(["CPT30614374"], Shop, null, null), RepA);
+        Assert.Equal(Shop, (await f.Db.BoxLabels.SingleAsync()).HolderPhone);
+    }
 }

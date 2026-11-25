@@ -6,18 +6,18 @@ import css from "./SerialInput.module.css";
 
 const TEXT = {
   fa: {
-    placeholder: "Roll No را اسکن یا تایپ کنید و Enter بزنید", add: "افزودن", upload: "بارگذاری اکسل", clear: "پاک کردن همه",
-    remove: "حذف", count: (n: number) => `${n.toLocaleString("fa-IR")} کارتن`, invalid: "نامعتبر", duplicate: "تکراری بود و دوباره اضافه نشد",
-    fromFile: (n: number, file: string) => `${n.toLocaleString("fa-IR")} Roll No از ${file} اضافه شد.`, none: "در این فایل Roll No معتبری پیدا نشد.",
+    placeholder: "ROLL NO را اسکن یا تایپ کنید و Enter بزنید", add: "افزودن", upload: "بارگذاری اکسل", clear: "پاک کردن همه",
+    remove: "حذف", count: (n: number) => `${n.toLocaleString("fa-IR")} ROLL NO`, invalid: "نامعتبر", duplicate: "تکراری بود و دوباره اضافه نشد",
+    fromFile: (n: number, file: string) => `${n.toLocaleString("fa-IR")} ROLL NO از ${file} اضافه شد.`, none: "در این فایل ROLL NO معتبری پیدا نشد.",
     oldXls: "فایل .xls قدیمی پشتیبانی نمی‌شود؛ آن را به‌صورت .xlsx یا CSV ذخیره کنید.", unreadable: "این فایل خوانده نشد. فایل .xlsx یا CSV انتخاب کنید.",
-    max: (n: number) => `حداکثر ${n.toLocaleString("fa-IR")} کارتن.`,
+    max: (n: number) => `حداکثر ${n.toLocaleString("fa-IR")} ROLL NO.`,
   },
   en: {
-    placeholder: "Scan or type a serial and press Enter", add: "Add", upload: "Upload Excel", clear: "Clear all",
-    remove: "Remove", count: (n: number) => `${n} carton${n === 1 ? "" : "s"}`, invalid: "Invalid", duplicate: "already in the list",
-    fromFile: (n: number, file: string) => `Added ${n} serial${n === 1 ? "" : "s"} from ${file}.`, none: "No valid serials found in this file.",
+    placeholder: "Scan or type a ROLL NO and press Enter", add: "Add", upload: "Upload Excel", clear: "Clear all",
+    remove: "Remove", count: (n: number) => `${n} ROLL NO${n === 1 ? "" : "s"}`, invalid: "Invalid", duplicate: "already in the list",
+    fromFile: (n: number, file: string) => `Added ${n} ROLL NO${n === 1 ? "" : "s"} from ${file}.`, none: "No valid ROLL NOs found in this file.",
     oldXls: "Old .xls files are not supported; save it as .xlsx or CSV.", unreadable: "Could not read this file. Choose an .xlsx or CSV file.",
-    max: (n: number) => `At most ${n} cartons.`,
+    max: (n: number) => `At most ${n} ROLL NOs.`,
   },
 };
 

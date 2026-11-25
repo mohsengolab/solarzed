@@ -12,6 +12,7 @@ import styles from "./admin.module.css";
 import { backdropProps } from "@/components/backdrop";
 import labelsStyle from "./labels.module.css";
 import BoxLabelsPanel from "./BoxLabelsPanel";
+import BoxTransfers from "./BoxTransfers";
 import { printQrLabels, printQrImage } from "./qrPrint";
 import { ProductsPanel, CustomersPanel, AccountPanel, UsersPanel } from "./ManagementPanels";
 import { WarehousesPanel, WarehouseIcon, PersonIcon } from "./WarehousesPanel";
@@ -434,7 +435,7 @@ function ReportWarranties() {
       downloadCsv("warranties-report", all.items, [
         ["code", "کد گارانتی"], ["status", "وضعیت"], ["type", "نوع محصول"],
         ["owner", "مالک"], ["phone", "موبایل"], ["make", "برند خودرو"], ["model", "مدل خودرو"],
-        ["vin", "VIN"], ["plate", "پلاک"], ["filmSerial", "سریال فیلم"], ["usedLengthM", "مصرف (متر)"], ["invoiceNumber", "شماره فاکتور"],
+        ["vin", "VIN"], ["plate", "پلاک"], ["filmSerial", "ROLL NO"], ["usedLengthM", "مصرف (متر)"], ["invoiceNumber", "شماره فاکتور"],
         ["installer", "نصّاب / فروشنده"], ["installed", "تاریخ نصب"],
         ["filmEnds", "پایان گارانتی فیلم"], ["createdAt", "تاریخ ثبت"],
       ]);
@@ -596,7 +597,7 @@ function ReportRolls() {
 type WRow = { code: string; owner: string; phone: string; make: string; model: string; vin: string; plate: string; type: string; installer: string;
   installed: string; status: string; flagsJson: string; filmEnds: string | null; createdAt: string; filmSerial: string; invoiceNumber: string } & Record<string, unknown>;
 
-const FLAGS = ["roll_unknown", "roll_not_approved", "roll_not_distributed", "roll_void", "type_mismatch", "vin_repeat"];
+const FLAGS = ["roll_unknown", "roll_not_approved", "roll_not_distributed", "roll_void", "type_mismatch", "vin_repeat", "roll_high_count", "roll_burst", "roll_overuse"];
 const W_EMPTY = { q: "", type: "", flagged: "", flag: "", make: "", installer: "", installedFrom: "", installedTo: "", createdFrom: "", createdTo: "", expiringDays: "" };
 
 // Rows carry `ref`, an opaque handle for decisions; «مدیر» sees the code masked (last four characters).
@@ -682,7 +683,7 @@ function WarrantiesPanel() {
     try {
       const all = await adminWarranties<WRow>(list.exportQuery);
       downloadCsv("warranties", all.items, [["code", "کد"], ["status", "وضعیت"], ["type", "نوع"], ["owner", "مالک"], ["phone", "موبایل"],
-        ["make", "برند"], ["model", "مدل"], ["vin", "VIN"], ["plate", "پلاک"], ["filmSerial", "سریال فیلم"], ["usedLengthM", "مصرف (متر)"], ["invoiceNumber", "فاکتور"],
+        ["make", "برند"], ["model", "مدل"], ["vin", "VIN"], ["plate", "پلاک"], ["filmSerial", "ROLL NO"], ["usedLengthM", "مصرف (متر)"], ["invoiceNumber", "فاکتور"],
         ["installer", "نصّاب"], ["installed", "تاریخ نصب"], ["filmEnds", "پایان گارانتی فیلم"], ["createdAt", "ثبت"]]);
     } catch (e) { setQrError(fa(errorText(e, "خروجی ناموفق بود."))); }
   }
@@ -702,7 +703,7 @@ function WarrantiesPanel() {
         ))}
       </div>
       <FilterBar active={countActive(f)} onClear={() => setF(W_EMPTY)}>
-        <label className={styles.wide}>جستجوی گارانتی<input type="search" placeholder="کد، مالک، موبایل، VIN، پلاک، سریال، فاکتور، رول" value={f.q} onChange={set("q")} /></label>
+        <label className={styles.wide}>جستجوی گارانتی<input type="search" placeholder="کد، مالک، موبایل، VIN، پلاک، ROLL NO، فاکتور" value={f.q} onChange={set("q")} /></label>
         <label>نوع محصول<select value={f.type} onChange={set("type")}><option value="">همه انواع</option><option value="tint">فیلم شیشه</option><option value="ppf">PPF</option></select></label>
         <label>پرچم‌ها<select value={f.flagged} onChange={set("flagged")}><option value="">هر</option><option value="true">فقط دارای پرچم</option><option value="false">بدون پرچم</option></select></label>
         <label>پرچم مشخص<select value={f.flag} onChange={set("flag")}><option value="">هر پرچم</option>{FLAGS.map(x => <option key={x} value={x}>{fa(x)}</option>)}</select></label>
@@ -795,7 +796,7 @@ function WarrantiesPanel() {
                 ["مالک", [["owner", "نام"], ["phone", "موبایل", true]]],
                 ["خودرو", [["make", "برند"], ["model", "مدل"], ["plate", "پلاک", true], ["vin", "VIN", true]]],
                 ["نصب", [["installer", "نصّاب"], ["installed", "تاریخ نصب", true], ["sellerName", "فروشنده"], ["sellerPhone", "موبایل فروشنده", true]]],
-                ["فیلم و فاکتور", [["filmSerial", "سریال فیلم", true], ["invoiceNumber", "شماره فاکتور", true], ...(seesCodes ? [["rollId", "شناسه رول", true] as [string, string, boolean]] : [])]],
+                ["فیلم و فاکتور", [["filmSerial", "ROLL NO", true], ["invoiceNumber", "شماره فاکتور", true], ...(seesCodes ? [["rollId", "شناسه رول", true] as [string, string, boolean]] : [])]],
               ];
               return <>
                 {flags.length > 0 && <div className={styles.wFlags} role="note">
@@ -846,18 +847,24 @@ function WarrantiesPanel() {
 
 type RollLocation = { kind: "warehouse" | "user" | "person"; id: number; name: string; phone?: string | null };
 type RollTransferBrief = { from: string; to: string; info?: string | null; deliveredAt?: string | null; at: string };
-/** Warranty meters left on a roll, with a bar against its full length. */
-function RemainingMeters({ r }: { r: { remainingM?: number | null; usedM?: number; lengthM?: number | null } }) {
-  if (r.remainingM == null) return <>—</>;
-  const pct = r.lengthM ? Math.max(0, Math.min(100, (r.remainingM / r.lengthM) * 100)) : null;
-  const low = pct != null && pct < 15;
+/** Meters used out of a roll's full length (e.g. «۱۰ از ۳۰ متر»), with a usage bar and what is left. */
+function RollUsage({ r }: { r: { remainingM?: number | null; usedM?: number; lengthM?: number | null } }) {
+  const total = r.lengthM ?? null;
+  // Installs record their meters; fall back to length − remaining when a card tracked usage without a figure.
+  const used = r.usedM ? r.usedM : total != null && r.remainingM != null ? Math.max(0, +(total - r.remainingM).toFixed(2)) : (r.usedM ?? 0);
+  if (total == null && r.remainingM == null && !used) return <>—</>;
+  const pct = total ? Math.max(0, Math.min(100, (used / total) * 100)) : null;
+  const remaining = r.remainingM ?? (total != null ? Math.max(0, total - used) : null);
+  const low = total != null && remaining != null && remaining / total < 0.15;
+  const n = (v: number) => v.toLocaleString("fa-IR");
   return (
-    <span title={r.usedM ? `مصرف‌شده: ${r.usedM.toLocaleString("fa-IR")} متر` : "هنوز مصرف نشده"}>
-      <b style={low ? { color: "var(--sz-red)" } : undefined}>{r.remainingM.toLocaleString("fa-IR")}</b>
-      {r.lengthM != null && <small style={{ opacity: .7 }}> / {r.lengthM.toLocaleString("fa-IR")} متر</small>}
+    <span title={remaining != null ? `مانده: ${n(remaining)} متر` : undefined}>
+      <b style={low ? { color: "var(--sz-red)" } : undefined}>{n(used)}</b>
+      {total != null ? <small style={{ opacity: .7 }}> از {n(total)} متر</small> : <small style={{ opacity: .7 }}> متر</small>}
       {pct != null && <span aria-hidden="true" style={{ display: "block", height: 4, marginTop: 3, borderRadius: 2, background: "rgb(128 128 128 / .2)" }}>
         <span style={{ display: "block", height: "100%", width: `${pct}%`, borderRadius: 2, background: low ? "var(--sz-red)" : "var(--sz-accent-fg)" }} />
       </span>}
+      {remaining != null && <small style={{ display: "block", opacity: .7 }}>مانده {n(remaining)} متر</small>}
     </span>
   );
 }
@@ -943,6 +950,14 @@ function RollsPanel() {
   const [created, setCreated] = useState<string[]>([]);
   const inventoryRef = useRef<HTMLDivElement>(null);
   const list = usePaged<RollRow>(adminRollsSearch<RollRow>, f, { sort: "receivedAt" });
+  // ROLL NOs queued for transfer to a seller's / installer's mobile (company → seller → installer).
+  const [transferList, setTransferList] = useState<string[]>([]);
+  const transferRef = useRef<HTMLDivElement>(null);
+  const canTransfer = can("rolls.transfer");
+  function queueTransfer(rollNo: string) {
+    setTransferList(items => items.includes(rollNo) ? items : [...items, rollNo]);
+    setTimeout(() => transferRef.current?.scrollIntoView({ behavior: "smooth", block: "start" }), 50);
+  }
   const set = (k: keyof typeof R_EMPTY) => (e: { target: { value: string } }) => setF(p => ({ ...p, [k]: e.target.value }));
   // A QR of the roll ID for every listed roll, drawn right in the registry.
   const [qrs, setQrs] = useState<Record<string, string>>({});
@@ -1036,7 +1051,7 @@ function RollsPanel() {
   async function exportCsv() {
     try {
       const all = await adminRollsSearch<RollRow>(list.exportQuery);
-      downloadCsv("rolls", all.items, [["number", "#"], ["id", "شناسه رول"], ["rollNo", "Roll No کارتن"], ["modelCode", "مدل"], ["type", "نوع"], ["batch", "Batch"], ["supplier", "تأمین‌کننده"],
+      downloadCsv("rolls", all.items, [["number", "#"], ["id", "شناسه رول"], ["rollNo", "ROLL NO"], ["modelCode", "مدل"], ["type", "نوع"], ["batch", "Batch"], ["supplier", "تأمین‌کننده"],
         ["widthCm", "عرض (cm)"], ["lengthM", "طول (m)"], ["remainingM", "متراژ مانده (m)"], ["usedM", "مصرف‌شده (m)"], ["qc", "QC"], ["status", "وضعیت"], ["installs", "نصب‌ها"], ["receivedAt", "دریافت"]]);
     } catch (e) { setMsg(fa(errorText(e, "خروجی ناموفق بود."))); }
   }
@@ -1098,8 +1113,8 @@ function RollsPanel() {
             </label>
           </div>
           <div>
-            <SerialInput label="Roll No کارتن‌ها (بارکد کارخانه روی کارتن؛ با بارکدخوان، تایپ یا فایل اکسل)" value={rollNos} onChange={setRollNos} />
-            <small style={{ opacity: .75 }}>هر کارتن یک رول است: برای هر Roll No یک رول ساخته می‌شود. اگر خالی بماند، یک رول ساخته می‌شود و Roll No را بعداً در «مدیریت» همان رول وارد کنید.</small>
+            <SerialInput label="ROLL NO (بارکد کارخانه روی کارتن؛ با بارکدخوان، تایپ یا فایل اکسل)" value={rollNos} onChange={setRollNos} />
+            <small style={{ opacity: .75 }}>هر کارتن یک رول است: برای هر ROLL NO یک رول ساخته می‌شود. اگر خالی بماند، یک رول ساخته می‌شود و ROLL NO را بعداً در «مدیریت» همان رول وارد کنید.</small>
           </div>
           <button type="submit" className={styles.btnPrimary} disabled={saving}>
             {saving ? "در حال ساخت…" : "ساخت شناسه رول ↗"}
@@ -1115,7 +1130,7 @@ function RollsPanel() {
         </div>
       </div>
       <FilterBar active={countActive(f)} onClear={() => setF(R_EMPTY)}>
-        <label className={styles.wide}>جستجوی موجودی<input type="search" placeholder={seesCodes ? "شماره، شناسه رول، Roll No، مدل، Batch یا تأمین‌کننده" : "شماره، Roll No، مدل، Batch یا تأمین‌کننده"} value={f.q} onChange={set("q")} /></label>
+        <label className={styles.wide}>جستجوی موجودی<input type="search" placeholder={seesCodes ? "شماره، شناسه رول، ROLL NO، مدل، Batch یا تأمین‌کننده" : "شماره، ROLL NO، مدل، Batch یا تأمین‌کننده"} value={f.q} onChange={set("q")} /></label>
         <label>محصول<select value={f.model} onChange={set("model")}><option value="">همه محصولات</option>{products.map(p => <option key={p.code} value={p.code}>{p.code}</option>)}</select></label>
         <label>نوع<select value={f.type} onChange={set("type")}><option value="">همه انواع</option><option value="tint">فیلم شیشه</option><option value="ppf">PPF</option></select></label>
         <label>فیلتر QC<select value={f.qc} onChange={set("qc")}><option value="">هر QC</option><option value="pending">در انتظار</option><option value="approved">تأیید شده</option><option value="rejected">رد شده</option></select></label>
@@ -1133,8 +1148,8 @@ function RollsPanel() {
       {list.error && <p role="alert" className={styles.errorText}>{list.error}</p>}
       <div className={`${styles.card} ${styles.rollsCard}`}>
         <table className={`${styles.table} ${styles.tableCompact} ${seesCodes ? "" : styles.noCodes} ${list.loading ? styles.tableBusy : ""}`}>
-          <thead><tr><SortTh column="number" label="#" {...sortProps} /><th>QR</th><SortTh column="id" label="شناسه رول" {...sortProps} /><SortTh column="rollNo" label="Roll No" {...sortProps} /><SortTh column="modelCode" label="مدل" {...sortProps} /><SortTh column="type" label="نوع" {...sortProps} />
-            <SortTh column="batch" label="Batch" {...sortProps} /><th>ابعاد</th><th>متراژ مانده</th><SortTh column="qc" label="QC" {...sortProps} />
+          <thead><tr><SortTh column="number" label="#" {...sortProps} /><th>QR</th><SortTh column="id" label="شناسه رول" {...sortProps} /><SortTh column="rollNo" label="ROLL NO" {...sortProps} /><SortTh column="modelCode" label="مدل" {...sortProps} /><SortTh column="type" label="نوع" {...sortProps} />
+            <SortTh column="batch" label="Batch" {...sortProps} /><th>ابعاد</th><th>مصرف‌شده / کل</th><SortTh column="qc" label="QC" {...sortProps} />
             <th>لوکیشن</th><th>نصب‌ها</th><SortTh column="receivedAt" label="دریافت" {...sortProps} /><th>عملیات</th></tr></thead>
           <tbody>
             {list.items.map(r => (
@@ -1150,7 +1165,7 @@ function RollsPanel() {
                 <td>{r.type}</td>
                 <td>{r.batch}</td>
                 <td dir="ltr" style={{ whiteSpace: "nowrap" }}>{r.widthCm != null && r.lengthM != null ? `${r.widthCm}×${r.lengthM}` : "—"}</td>
-                <td style={{ whiteSpace: "nowrap" }}><RemainingMeters r={r} /></td>
+                <td style={{ whiteSpace: "nowrap" }}><RollUsage r={r} /></td>
                 <td><QcMark qc={r.qc} /></td>
                 <td><LocationCell loc={r.location} />{r.lastTransfer?.deliveredAt && <small style={{ display: "block", opacity: .7 }} title={`${r.lastTransfer.from || "نامشخص"} ← ${r.lastTransfer.to || "نامشخص"}${r.lastTransfer.info ? ` · ${r.lastTransfer.info}` : ""}`}>
                   تحویل {new Date(r.lastTransfer.deliveredAt).toLocaleString(FA_DATE, { dateStyle: "short", timeStyle: "short" })}</small>}{r.status !== "instock" && <small style={{ display: "block", opacity: .7 }}>{fa(r.status)}</small>}</td>
@@ -1160,6 +1175,10 @@ function RollsPanel() {
                   <button type="button" className={`${styles.ghost} ${styles.iconBtn}`} title="تاریخچه" aria-label={`تاریخچه رول ${r.number}`} onClick={() => openHistory(r)}>
                     <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><path d="M3 12a9 9 0 1 0 3-6.7L3 8"/><path d="M3 3v5h5"/><path d="M12 7v5l3 2"/></svg>
                   </button>
+                  {canTransfer && r.rollNo && r.qc === "approved" && r.status !== "void" && r.status !== "consumed" &&
+                    <button type="button" className={`${styles.ghost} ${styles.iconBtn}`} title="انتقال به فروشنده / نصاب" aria-label={`انتقال ROLL NO ${r.rollNo}`} onClick={() => queueTransfer(r.rollNo!)}>
+                      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><path d="M5 12h14"/><path d="M13 6l6 6-6 6"/></svg>
+                    </button>}
                   {can("rolls.edit") && <button type="button" className={`${styles.ghost} ${styles.iconBtn}`} title="مدیریت" aria-label={`مدیریت رول ${r.number}`} onClick={() => openEdit(r)}>
                     <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><path d="M12 20h9"/><path d="M16.5 3.5a2.1 2.1 0 0 1 3 3L7 19l-4 1 1-4z"/></svg>
                   </button>}
@@ -1174,6 +1193,10 @@ function RollsPanel() {
         {!list.loading && !list.items.length && <p className={styles.empty}>رولی با این فیلترها یافت نشد.</p>}
         <Pager page={list.page} pageSize={list.pageSize} total={list.total} loading={list.loading} onPage={list.setPage} />
       </div>
+      {canTransfer && <div ref={transferRef} style={{ marginTop: 24, scrollMarginTop: 16 }}>
+        <p style={{ margin: "0 0 8px", fontSize: 13, opacity: .8 }}>رول با موبایل و ROLL NO منتقل می‌شود: مدیر ← فروشنده ← نصاب (یا مستقیم به نصاب). فروشنده در حساب خود رول را به نصاب منتقل می‌کند و فقط نصابی که رول دستش است می‌تواند گارانتی را فعال کند. کارت گارانتی رولی که هنوز صادر نشده، هنگام انتقال صادر می‌شود.</p>
+        <BoxTransfers title="انتقال رول به فروشنده / نصاب با ROLL NO" list={transferList} onList={setTransferList} onChanged={list.reload} />
+      </div>}
       {edit && <div className={styles.dialog} role="dialog" aria-modal="true" aria-label="مدیریت موجودی" {...backdropProps(() => setEdit(null))}><form className={`${styles.dialogInner} ${styles.adminForm}`} onSubmit={updateRoll}>
         <h2 dir="ltr">#{edit.number}{seesCodes && ` · ${edit.id}`}</h2><button type="button" className={styles.dialogClose} aria-label="بستن موجودی" onClick={() => setEdit(null)}>×</button>
         <label>کنترل کیفیت<select disabled={!seesCodes} value={edit.qc} onChange={e => setEdit({ ...edit, qc: e.target.value })}>{["pending", "approved", "rejected"].map(v => <option key={v} value={v}>{fa(v)}</option>)}</select></label>
@@ -1190,7 +1213,7 @@ function RollsPanel() {
         <label>وضعیت انبار<select value={edit.status} onChange={e => setEdit({ ...edit, status: e.target.value })}>{["instock", "shipped", "consumed", "void"].map(v => <option key={v} value={v}>{fa(v)}</option>)}</select></label>
         {!seesCodes && <p style={{ margin: 0, fontSize: 13, opacity: .75 }}>شما فقط لوکیشن و وضعیت را تغییر می‌دهید.</p>}
         <fieldset disabled={!seesCodes} className={styles.row2} style={{ border: 0, padding: 0, margin: 0, minWidth: 0 }}>
-          <label>Roll No کارتن (بارکد کارخانه)<input maxLength={32} value={edit.rollNo ?? ""} dir="ltr" disabled={edit.cards > 0} placeholder="مثلاً CPT30614374"
+          <label>ROLL NO (بارکد کارخانه)<input maxLength={32} value={edit.rollNo ?? ""} dir="ltr" disabled={edit.cards > 0} placeholder="مثلاً CPT30614374"
             title={edit.cards > 0 ? "کارت صادر شده، قابل تغییر نیست" : undefined}
             onChange={e => setEdit({ ...edit, rollNo: e.target.value.replace(/\s+/g, "").toUpperCase() })} />
             {edit.cards > 0 && <small style={{ fontSize: 12, fontWeight: 400, opacity: .7 }}>کارت صادر شده، قابل تغییر نیست</small>}</label>

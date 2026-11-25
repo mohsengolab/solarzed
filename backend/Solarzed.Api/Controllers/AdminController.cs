@@ -364,7 +364,7 @@ public class AdminController(AppDbContext db, IConfiguration cfg, Microsoft.AspN
             catch (ActivationError ex) { return BadRequest(new { error = ex.Message }); }
             var taken = await db.Rolls.Where(r => r.RollNo != null && rollNos.Contains(r.RollNo)).Select(r => r.RollNo!).ToListAsync();
             taken.AddRange(await db.BoxLabels.Where(b => rollNos.Contains(b.Id)).Select(b => b.Id).ToListAsync());
-            if (taken.Count > 0) return Conflict(new { error = $"These Roll Nos are already registered: {string.Join(", ", taken.Distinct().Take(10))}" });
+            if (taken.Count > 0) return Conflict(new { error = $"These ROLL NOs are already registered: {string.Join(", ", taken.Distinct().Take(10))}" });
         }
         else if (req.Quantity < 1 || req.Quantity > 200) return BadRequest(new { error = "quantity 1–200" });
         if (!System.Text.RegularExpressions.Regex.IsMatch(req.ModelCode, "^[A-Za-z0-9-]{1,24}$") ||
@@ -506,9 +506,9 @@ public class AdminController(AppDbContext db, IConfiguration cfg, Microsoft.AspN
             if (!BoxLabelService.SerialPattern.IsMatch(rollNo!)) return BadRequest(new { error = $"Invalid roll number: {rollNo}" });
             // The issued card's QR already carries the old carton number.
             if (await db.BoxLabels.AnyAsync(b => b.RollId == id))
-                return Conflict(new { error = "A warranty card was already issued for this roll, so its Roll No cannot change." });
+                return Conflict(new { error = "A warranty card was already issued for this roll, so its ROLL NO cannot change." });
             if (await db.Rolls.AnyAsync(r => r.RollNo == rollNo && r.Id != id) || await db.BoxLabels.AnyAsync(b => b.Id == rollNo))
-                return Conflict(new { error = $"These Roll Nos are already registered: {rollNo}" });
+                return Conflict(new { error = $"These ROLL NOs are already registered: {rollNo}" });
         }
 
         // Location: "warehouse:{id}", "user:{id}", or "" to clear; null leaves it unchanged.
