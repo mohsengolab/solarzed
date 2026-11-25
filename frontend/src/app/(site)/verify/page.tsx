@@ -8,6 +8,32 @@ import styles from "../warranty/warranty.module.css";
 
 const GOOD = "#1fc3cf", BAD = "#ef4444";
 
+const has = (v: unknown) => v !== null && v !== undefined && v !== "";
+const years = (n: number) => `${n} year${n === 1 ? "" : "s"}`;
+
+/** Every public detail of the carton; the Serial Number is never sent by the API. */
+function fields(r: RollVerification): [string, string][] {
+  const rows: [string, unknown][] = [
+    ["Product", r.product],
+    ["Model code", r.productCode !== r.product ? r.productCode : null],
+    ["Series", r.series],
+    ["Type", r.type === "ppf" ? "Paint protection film" : "Window film"],
+    ["Thickness", has(r.thicknessMil) ? `${r.thicknessMil} mil` : null],
+    ["Visible light (VLT)", has(r.vlt) ? `${r.vlt}%` : null],
+    ["IR rejection", has(r.irr) ? `${r.irr}%` : null],
+    ["UV rejection", has(r.uv) ? `${r.uv}%` : null],
+    ["Total solar energy rejected (TSER)", has(r.tser) ? `${r.tser}%` : null],
+    ["Roll width", has(r.widthCm) ? `${r.widthCm} cm` : null],
+    ["Roll length", has(r.lengthM) ? `${r.lengthM} m` : null],
+    ["Batch", r.batch],
+    ["Received", r.receivedOn],
+    ["Film warranty", has(r.filmYears) && r.filmYears! > 0 ? years(r.filmYears!) : null],
+    ["Installation warranty", has(r.installYears) && r.installYears! > 0 ? years(r.installYears!) : null],
+    ["Warranty card", r.activated ? `Activated${r.activatedOn ? ` (${r.activatedOn})` : ""}` : "Not activated yet"],
+  ];
+  return rows.filter(([, v]) => has(v)).map(([k, v]) => [k, String(v)]);
+}
+
 function Result({ r }: { r: RollVerification }) {
   const color = r.genuine ? GOOD : BAD;
   return (
@@ -18,13 +44,12 @@ function Result({ r }: { r: RollVerification }) {
           {r.genuine ? "✓ Genuine Solarzed product" : "✕ Not found"}
         </span>
       </div>
-      {r.genuine ? (
+      {r.genuine ? (<>
         <div className={styles.certGrid}>
-          <div><span>Product</span><b>{r.product}</b></div>
-          <div><span>Type</span><b>{r.type === "ppf" ? "Paint protection film" : "Window film"}</b></div>
-          <div><span>Warranty card</span><b>{r.activated ? `Activated${r.activatedOn ? ` (${r.activatedOn})` : ""}` : "Not activated yet"}</b></div>
+          {fields(r).map(([k, v]) => <div key={k}><span>{k}</span><b>{v}</b></div>)}
         </div>
-      ) : (
+        {r.description && <p className={styles.helpText}>{r.description}</p>}
+      </>) : (
         <p className={styles.helpText}>
           This ROLL NO is not registered by Solarzed. Check that you typed it exactly as printed on the carton.
           If it is correct, the product may not be genuine — please <Link href="/contact">contact support</Link>.

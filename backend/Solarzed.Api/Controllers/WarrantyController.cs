@@ -57,8 +57,8 @@ public class WarrantyController(AppDbContext db, WarrantyCards? warrantyCards = 
 
     /// <summary>
     /// Public authenticity check by ROLL NO: is this carton one we made? Accepts the bare ROLL NO, the card QR text,
-    /// or an old card link ({site}/activate#ROLLNO-1234567-ABC). It returns only the product and whether the card was
-    /// activated — never the supplier, holder, installer or owner.
+    /// or an old card link ({site}/activate#ROLLNO-1234567-ABC). It returns the product, its specifications, the roll
+    /// details and whether the card was activated — never the Serial Number, supplier, holder, installer or owner.
     /// </summary>
     [HttpGet("verify"), EnableRateLimiting("warranty-lookup")]
     public async Task<IActionResult> Verify([FromQuery] string? rollNo)
@@ -88,13 +88,28 @@ public class WarrantyController(AppDbContext db, WarrantyCards? warrantyCards = 
             var code = label?.Product ?? roll!.ModelCode;
             var product = await db.Products.AsNoTracking().FirstOrDefaultAsync(p => p.Code == code);
             var type = label?.Type ?? roll!.Type;
+            // Everything about the product and the roll except the Serial Number (Roll.Id), the confidential
+            // supplier, who holds the carton, and the card / warranty codes.
             return Ok(new
             {
                 genuine = true,
                 rollNo = c,
+                productCode = code,
                 product = product?.Name ?? code,
-                series = product?.Series,
+                series = string.IsNullOrWhiteSpace(product?.Series) ? null : product!.Series,
+                description = string.IsNullOrWhiteSpace(product?.Description) ? null : product!.Description,
                 type = type == WarrantyType.Ppf ? "ppf" : "tint",
+                thicknessMil = product?.ThicknessMil,
+                vlt = product?.Vlt,
+                irr = product?.Irr,
+                uv = product?.Uv,
+                tser = product?.Tser,
+                widthCm = roll?.WidthCm,
+                lengthM = roll?.LengthM ?? label?.RemainingLengthM,
+                batch = roll?.Batch,
+                receivedOn = roll?.ReceivedAt.ToString("yyyy-MM-dd"),
+                filmYears = label?.FilmYears ?? product?.WarrantyYears,
+                installYears = label?.InstallYears,
                 activated = label?.ActivatedAt != null,
                 activatedOn = label?.ActivatedAt?.ToString("yyyy-MM"),
             });

@@ -1238,13 +1238,14 @@ function RollsPanel() {
       {qrView && <div className={styles.dialog} role="dialog" aria-modal="true" aria-label={`QR رول ${qrView.roll.id}`} {...backdropProps(() => setQrView(null))}>
         <div className={`${styles.dialogInner} ${styles.qrDialog}`} style={{ textAlign: "center" }}>
           <button type="button" className={styles.dialogClose} aria-label="بستن QR" onClick={() => setQrView(null)}>×</button>
+          <p dir="ltr" style={{ margin: "0 0 8px", fontWeight: 700, fontSize: "1.25rem", fontFamily: "monospace", letterSpacing: ".05em" }}>ROLL NO: {qrView.roll.rollNo || "—"}</p>
           <img src={qrView.src} alt={`QR رول ${qrView.roll.id}`}
             style={{ display: "block", width: "max(140px, min(360px, 100%, calc(90vh - 260px)))", height: "auto", margin: "4px auto", background: "#fff", borderRadius: 8, imageRendering: "pixelated" }} />
           <p dir="ltr" style={{ margin: "0 0 12px", opacity: .75 }}>SN: {qrView.roll.id}</p>
           {qrViewError && <p role="alert" className={styles.errorText}>{qrViewError}</p>}
           <div className={styles.filters} style={{ justifyContent: "center" }}>
             <button type="button" className={styles.btnPrimary} autoFocus
-              onClick={() => { printQrImage(`QR ${qrView.roll.id}`, qrView.src, qrView.roll.id).catch(ex => setQrViewError(fa(errorText(ex, "چاپ ناموفق بود.")))); }}>چاپ QR</button>
+              onClick={() => { printQrImage(`QR ${qrView.roll.id}`, qrView.src, qrView.roll.id, qrView.roll.rollNo ? `ROLL NO: ${qrView.roll.rollNo}` : undefined).catch(ex => setQrViewError(fa(errorText(ex, "چاپ ناموفق بود.")))); }}>چاپ QR</button>
             <button type="button" className={styles.ghost} onClick={() => setQrView(null)}>بستن</button>
           </div>
         </div>

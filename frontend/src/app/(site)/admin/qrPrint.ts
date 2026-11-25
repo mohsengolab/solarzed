@@ -1,18 +1,19 @@
 export type QrPrintItem = { qr: string; alt: string; title: string; lines: string[]; footer: string };
 
 // Prints a single QR code large on a plain page, with its code under it — no label layout.
-export async function printQrImage(docTitle: string, qr: string, caption: string) {
+export async function printQrImage(docTitle: string, qr: string, caption: string, heading?: string) {
   const popup = window.open("", "_blank");
   if (!popup) throw new Error("Allow the print preview window in your browser.");
   popup.opener = null;
   const doc = popup.document;
   doc.title = docTitle;
   const style = doc.createElement("style");
-  style.textContent = `@page{margin:15mm}body{margin:0;font-family:Arial,sans-serif;color:#000;background:#fff}main{display:flex;flex-direction:column;align-items:center;justify-content:center;gap:6mm;padding-top:20mm}img{width:120mm;height:120mm;image-rendering:pixelated}code{font:700 16pt monospace;letter-spacing:.05em}`;
+  style.textContent = `@page{margin:15mm}body{margin:0;font-family:Arial,sans-serif;color:#000;background:#fff}main{display:flex;flex-direction:column;align-items:center;justify-content:center;gap:6mm;padding-top:20mm}img{width:120mm;height:120mm;image-rendering:pixelated}code{font:700 16pt monospace;letter-spacing:.05em}h1{margin:0;font:700 22pt monospace;letter-spacing:.05em}`;
   doc.head.append(style);
   const main = doc.createElement("main");
   const image = doc.createElement("img"); image.src = qr; image.alt = caption;
   const code = doc.createElement("code"); code.textContent = caption;
+  if (heading) { const title = doc.createElement("h1"); title.textContent = heading; main.append(title); }
   main.append(image, code);
   doc.body.append(main);
   await image.decode();
