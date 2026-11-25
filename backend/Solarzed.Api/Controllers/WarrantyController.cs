@@ -5,6 +5,7 @@ using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.RateLimiting;
 using Microsoft.EntityFrameworkCore;
 using Solarzed.Api.Application;
+using Solarzed.Api.Domain;
 using Solarzed.Api.Infrastructure;
 
 namespace Solarzed.Api.Controllers;
@@ -50,6 +51,55 @@ public class WarrantyController(AppDbContext db, WarrantyCards? warrantyCards = 
             return Ok(new { records = list.Select(WarrantyService.ToCheck) });
         }
         return BadRequest(new { error = "Search by warranty number or VIN. To see every warranty on your mobile number, sign in to your account." });
+    }
+
+    static readonly Regex RollNoPattern = new(@"\A[A-Z0-9][A-Z0-9-]{2,31}\z", RegexOptions.Compiled);
+
+    /// <summary>
+    /// Public authenticity check by ROLL NO: is this carton one we made? Accepts the bare ROLL NO, the card QR text,
+    /// or an old card link ({site}/activate#ROLLNO-1234567-ABC). It returns only the product and whether the card was
+    /// activated — never the supplier, holder, installer or owner.
+    /// </summary>
+    [HttpGet("verify"), EnableRateLimiting("warranty-lookup")]
+    public async Task<IActionResult> Verify([FromQuery] string? rollNo)
+    {
+        Response.Headers.CacheControl = "no-store";
+        var raw = new string((rollNo ?? "").Select(ch => ch is >= '۰' and <= '۹' ? (char)('0' + ch - '۰')
+            : ch is >= '٠' and <= '٩' ? (char)('0' + ch - '٠') : ch).ToArray()).Trim();
+        if (raw.Contains('#')) raw = raw[(raw.LastIndexOf('#') + 1)..];
+        raw = Uri.UnescapeDataString(raw).Trim().ToUpperInvariant().Replace(" ", "");
+        if (raw.Length == 0 || raw.Length > 80) return BadRequest(new { error = "Enter the ROLL NO printed on the carton." });
+
+        // Exact first (old SZB-… ROLL NOs contain dashes), then the part before the card's warranty number.
+        var candidates = new List<string> { raw };
+        if (raw.IndexOf('-') is > 0 and var dash) candidates.Add(raw[..dash]);
+        candidates = candidates.Where(c => RollNoPattern.IsMatch(c)).Distinct().ToList();
+        if (candidates.Count == 0) return BadRequest(new { error = "Enter the ROLL NO printed on the carton." });
+
+        foreach (var c in candidates)
+        {
+            var label = await db.BoxLabels.AsNoTracking().FirstOrDefaultAsync(b => b.Id == c);
+            var roll = label?.RollId != null
+                ? await db.Rolls.AsNoTracking().FirstOrDefaultAsync(r => r.Id == label.RollId)
+                : await db.Rolls.AsNoTracking().FirstOrDefaultAsync(r => r.RollNo == c);
+            if (label == null && roll == null) continue;
+            if (label == null && roll!.Status == RollStatus.Void) continue;   // voided before a card was issued
+
+            var code = label?.Product ?? roll!.ModelCode;
+            var product = await db.Products.AsNoTracking().FirstOrDefaultAsync(p => p.Code == code);
+            var type = label?.Type ?? roll!.Type;
+            return Ok(new
+            {
+                genuine = true,
+                rollNo = c,
+                product = product?.Name ?? code,
+                series = product?.Series,
+                type = type == WarrantyType.Ppf ? "ppf" : "tint",
+                activated = label?.ActivatedAt != null,
+                activatedOn = label?.ActivatedAt?.ToString("yyyy-MM"),
+            });
+        }
+        return Ok(new { genuine = false, rollNo = candidates[0] });
     }
 
     WarrantyCards cards => warrantyCards ??= new WarrantyCards(db);

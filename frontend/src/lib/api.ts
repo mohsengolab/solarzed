@@ -314,6 +314,21 @@ export interface LookupResult {
   records: WarrantyCheck[];
 }
 
+/** Public authenticity check by the ROLL NO on the carton or the card QR. */
+export interface RollVerification {
+  genuine: boolean;
+  rollNo: string;
+  product?: string;
+  series?: string | null;
+  type?: "tint" | "ppf";
+  activated?: boolean;
+  activatedOn?: string | null;
+}
+
+export function verifyRollNo(rollNo: string) {
+  return apiFetch<RollVerification>(`/api/warranty/verify?rollNo=${encodeURIComponent(rollNo)}`);
+}
+
 export function lookupWarranty(q: string): Promise<LookupResult> {
   return apiFetch(`/api/warranty?q=${encodeURIComponent(q)}`);
 }

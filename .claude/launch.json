@@ -291,6 +291,48 @@
         "SOLARZED_REVALIDATE_SECRET": "local-dev-revalidate-secret-only",
         "NEXT_DIST_DIR": ".next-transfer"
       }
+    },
+    {
+      "name": "api-verify",
+      "runtimeExecutable": "dotnet",
+      "runtimeArgs": [
+        "run",
+        "--project",
+        "backend/Solarzed.Api",
+        "-p:OutDir=bin/verify/",
+        "--launch-profile",
+        "http",
+        "--urls",
+        "http://localhost:5360"
+      ],
+      "port": 5360,
+      "env": {
+        "ConnectionStrings__Default": "Server=(localdb)\\mssqllocaldb;Database=SolarzedTransferQA;Trusted_Connection=True;",
+        "FrontendOrigin": "http://localhost:3060",
+        "SOLARZED_REVALIDATE_SECRET": "local-dev-revalidate-secret-only",
+        "Sms__DevConsole": "true",
+        "Email__DevConsole": "true",
+        "AdminPassword": "TransferQA-5b17c2e9"
+      }
+    },
+    {
+      "name": "web-verify",
+      "runtimeExecutable": "npm",
+      "runtimeArgs": [
+        "--prefix",
+        "frontend",
+        "run",
+        "dev",
+        "--",
+        "--port",
+        "3060"
+      ],
+      "port": 3060,
+      "env": {
+        "BACKEND_URL": "http://localhost:5360",
+        "SOLARZED_REVALIDATE_SECRET": "local-dev-revalidate-secret-only",
+        "NEXT_DIST_DIR": ".next-verify"
+      }
     }
   ]
 }
