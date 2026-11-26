@@ -2,6 +2,8 @@
 .shortcuts{display:flex;gap:8px;flex-wrap:wrap}
 .shortcuts button{font-weight:700;font-size:12.5px;padding:9px 15px;border:1.5px solid #c9dce6;border-radius:999px;background:#fff;color:#102a43;cursor:pointer;transition:background .15s,border-color .15s,transform .15s}
 .shortcuts button:hover{background:#dff8f8;border-color:#0b9aa8;transform:translateY(-1px)}
+.sunroofToggle{display:flex;align-items:center;gap:7px;font-weight:600;font-size:12.5px;padding:0 6px;cursor:pointer}
+.sunroofToggle input{width:16px;height:16px;accent-color:#0b9aa8;margin:0}
 .map{position:relative;width:min(100%,360px);aspect-ratio:400/640;margin:4px auto 0}
 .map svg{position:absolute;inset:0;width:100%;height:100%;filter:drop-shadow(0 18px 24px #0b1d3a22)}
 .front{position:absolute;top:1%;width:100%;text-align:center;font-weight:700;font-size:10.5px;letter-spacing:2px;color:#087f8c}
@@ -20,7 +22,9 @@
 .lr{left:21.5%;clip-path:polygon(0 0,100% 0,95% 100%,18% 88%)}
 .rr{right:21.5%;clip-path:polygon(0 0,100% 0,82% 88%,5% 100%)}
 .rear{top:74%;left:28.5%;width:43%;height:9.8%;clip-path:polygon(0 0,100% 0,87% 86%,65% 98%,35% 98%,13% 86%);gap:7px;padding-bottom:5px}
-.rear span{position:static;width:auto;height:auto;overflow:visible;clip:auto;font-weight:600;font-size:10px}
+.windshield{top:26.9%;left:26.75%;width:46.5%;height:12%;clip-path:polygon(0 18%,25% 4%,50% 0,75% 4%,100% 18%,91.4% 100%,75% 87%,50% 82%,25% 87%,8.6% 100%);gap:7px;padding-bottom:6px}
+.sunroof{top:44.5%;left:40%;width:20%;height:12.5%;border-radius:12px;flex-direction:column;gap:4px}
+.rear span,.windshield span,.sunroof span{position:static;width:auto;height:auto;overflow:visible;clip:auto;font-weight:600;font-size:10px}
 .labels{position:absolute;inset:0;pointer-events:none;z-index:2}
 .labels span{position:absolute;font-weight:600;font-size:11px;color:#36576d;line-height:1.5;width:20%;text-align:center}
 .labels span::after{content:'';height:1px;background:#a6bfcd;position:absolute;top:50%;width:13%}

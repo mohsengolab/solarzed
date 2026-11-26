@@ -34,7 +34,7 @@ public record CoveragePublic(DateOnly? FilmEnds, DateOnly? InstallEnds);
 
 public static class WarrantyService
 {
-    static readonly string[] ValidWindows = ["left-front", "right-front", "left-rear", "right-rear", "rear"];
+    static readonly string[] ValidWindows = ["windshield", "left-front", "right-front", "left-rear", "right-rear", "rear", "sunroof"];
     static readonly string[] ValidPanels = [
         "hood", "front-bumper", "roof", "trunk", "rear-bumper",
         "left-front-fender", "right-front-fender", "left-doors", "right-doors",
