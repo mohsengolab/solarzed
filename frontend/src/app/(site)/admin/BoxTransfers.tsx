@@ -102,8 +102,7 @@ export default function BoxTransfers({ onChanged }: { onChanged?: () => void }) 
       <p className={labelsStyle.help} style={{ marginTop: 0 }}>رول با ROLL NO و موبایل گیرنده ارسال می‌شود: شرکت ← فروشنده ← نصاب (یا مستقیم به نصاب). فقط نصابی که رول دستش است می‌تواند گارانتی را فعال کند. رولی که برگردد با «بازگشت به انبار» دوباره موجود می‌شود.</p>
       {error && <p role="alert" className={labelsStyle.error}>{error}</p>}
       {done && <p role="status" className={labelsStyle.notice}>{done}</p>}
-      <div className={labelsStyle.columns}>
-        <form className={`${styles.card} ${styles.adminForm}`} onSubmit={send}>
+      <form className={`${styles.card} ${styles.adminForm}`} onSubmit={send}>
           <SerialInput label="رول‌ها" value={list} onChange={setList} />
           <div className={styles.row2}>
             <label>موبایل گیرنده<input dir="ltr" required inputMode="tel" maxLength={20} list="box-holder-phones" value={phone} onChange={e => setPhone(e.target.value)} placeholder="09…" /></label>
@@ -119,15 +118,6 @@ export default function BoxTransfers({ onChanged }: { onChanged?: () => void }) 
             <button type="button" className={styles.ghost} disabled={busy || !list.length} onClick={openReturn}>بازگشت به انبار…</button>
           </div>
         </form>
-        <div className={styles.card}>
-          <h2>رول‌ها دست چه کسانی است</h2>
-          <table className={styles.table}><thead><tr><th>{fa("Holder")}</th><th>تعداد رول</th></tr></thead>
-            <tbody>{holders.map(h => <tr key={`${h.phone}|${h.holder}`}>
-              <td>{holderName(h.holder, h.phone)}</td><td>{n(h.boxes)}</td>
-            </tr>)}</tbody>
-          </table>
-        </div>
-      </div>
       <div className={`${styles.card} ${labelsStyle.list}`}>
         <h2>تاریخچه یک رول</h2>
         <form className={labelsStyle.sizes} onSubmit={e => { e.preventDefault(); showHistory(lookup); }}>
@@ -160,6 +150,28 @@ export default function BoxTransfers({ onChanged }: { onChanged?: () => void }) 
           <button className={styles.btnPrimary} disabled={busy}>{busy ? fa("Working…") : "ثبت بازگشت به انبار"}</button>
         </form>
       </div>}
+    </div>
+  );
+}
+
+/** Who holds rolls right now and how many — its own page («دارندگان رول»), apart from sending rolls. */
+export function RollHolders() {
+  const [holders, setHolders] = useState<HolderSummary[] | null>(null);
+  const [error, setError] = useState("");
+  useEffect(() => { boxHolders().then(result => setHolders(result.holders)).catch(ex => setError(message(ex))); }, []);
+  return (
+    <div>
+      <header className={styles.panelHead}><div><span className={styles.eyebrow}>دارندگان رول</span><h2>رول‌ها دست چه کسانی است</h2></div></header>
+      {error && <p role="alert" className={labelsStyle.error}>{error}</p>}
+      <div className={styles.card}>
+        {holders === null ? <p className={styles.empty}>{fa("Loading…")}</p> : holders.length ? (
+          <table className={styles.table}><thead><tr><th>{fa("Holder")}</th><th>تعداد رول</th></tr></thead>
+            <tbody>{holders.map(h => <tr key={`${h.phone}|${h.holder}`}>
+              <td>{holderName(h.holder, h.phone)}</td><td>{n(h.boxes)}</td>
+            </tr>)}</tbody>
+          </table>
+        ) : <p className={styles.empty}>رولی در دست کسی نیست.</p>}
+      </div>
     </div>
   );
 }
