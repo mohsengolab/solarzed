@@ -24,7 +24,7 @@ export default function ActivationPage() {
   }, [user]);
 
   return <div className={styles.page}>
-    <header><Link href="/">SOLAR<span>ZED</span></Link><small>DIGITAL WARRANTY</small></header>
+    <header><Link href="/" aria-label="Solarzed home">{/* eslint-disable-next-line @next/next/no-img-element */}<img src="/assets/solarzed-original.png" width={160} height={32} alt="SOLARZED" style={{ display: "block" }} /></Link><small>DIGITAL WARRANTY</small></header>
     <main className={styles.card}>
       <span className={styles.eyebrow}>INSTALLER SIGN-IN · CHECK SERIAL NUMBER · ACTIVATE</span><h1>Activate a Solarzed warranty</h1>
       {!checked && <p role="status">Checking sign-in…</p>}

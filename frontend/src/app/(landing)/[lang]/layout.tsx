@@ -12,9 +12,9 @@ export const metadata: Metadata = {
   metadataBase: new URL("https://solarzed.com"),
   robots: { index: true, follow: true },
   icons: {
-    icon: "/assets/solarzed-logo.svg",
-    shortcut: "/assets/solarzed-logo.svg",
-    apple: "/assets/solarzed-logo.svg",
+    icon: "/assets/solarzed-original.png",
+    shortcut: "/assets/solarzed-original.png",
+    apple: "/assets/solarzed-original.png",
   },
 };
 

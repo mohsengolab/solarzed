@@ -275,7 +275,7 @@ export default function AccountPage() {
   }
 
   if (!checked || !user) return <div className={styles.page}>
-    <header><Link href="/">SOLAR<span>ZED</span></Link><small>MY ACCOUNT</small></header>
+    <header><Link href="/" aria-label="Solarzed home">{/* eslint-disable-next-line @next/next/no-img-element */}<img src="/assets/solarzed-original.png" width={160} height={32} alt="SOLARZED" style={{ display: "block" }} /></Link><small>MY ACCOUNT</small></header>
     <main className={`${styles.card} ${own.stack}`}>
       <span className={styles.eyebrow}>PARTNER &amp; CUSTOMER ACCOUNT</span>
       {!checked ? <p>Loading…</p> : <>
@@ -311,7 +311,7 @@ export default function AccountPage() {
     </button>;
 
   return <div className={`${styles.page} ${own.wide}`}>
-    <header><Link href="/">SOLAR<span>ZED</span></Link><small>MY ACCOUNT</small></header>
+    <header><Link href="/" aria-label="Solarzed home">{/* eslint-disable-next-line @next/next/no-img-element */}<img src="/assets/solarzed-original.png" width={160} height={32} alt="SOLARZED" style={{ display: "block" }} /></Link><small>MY ACCOUNT</small></header>
     <div className={own.shell}>
       <aside className={own.side}>
         <div className={own.me}>

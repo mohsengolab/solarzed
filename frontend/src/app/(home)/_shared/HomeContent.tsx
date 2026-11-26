@@ -11,7 +11,7 @@ const organizationSchema = {
   "@type": "Organization",
   name: "Solarzed",
   url: "https://solarzed.com",
-  logo: "https://solarzed.com/assets/solarzed-logo.svg",
+  logo: "https://solarzed.com/assets/solarzed-original.png",
   sameAs: ["https://instagram.com/solarzed_official"],
   contactPoint: {
     "@type": "ContactPoint",
