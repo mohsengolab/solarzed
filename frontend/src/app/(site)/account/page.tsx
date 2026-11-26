@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useState, FormEvent, type ReactNode } from "react";
 import Link from "next/link";
+import VehicleCoverage, { byVehicle } from "@/components/VehicleCoverage";
 import {
   portalBoxes, portalLogout, portalMe, portalTransfer, portalWarranties, portalInstallerWarranties,
   portalProfile, portalBind, portalBindVerify, portalTickets, portalCreateTicket, portalTicketDetail, portalTicketReply,
@@ -386,6 +387,11 @@ export default function AccountPage() {
           </div>
           {activating && !installer && <div className={own.panel}><ActivationFlow user={user} checked onUser={setUser} embedded onDone={() => { void load().catch(() => undefined); }} /></div>}
           {!user.phone && <p role="status" className={own.notice}>Warranty card activation needs a verified mobile number — add one in <button type="button" className={styles.linkButton} onClick={() => go("profile")}>your profile</button> first.</p>}
+          {warranties.length > 0 && <div className={own.vehicles}>
+            <h3>Coverage by vehicle</h3>
+            {byVehicle(warranties).map(car => <VehicleCoverage key={car[0].code} title={`${car[0].make} ${car[0].model} · ${car[0].plate} · VIN ${car[0].vinMasked}`}
+              items={car.map(w => ({ ...w, film: `ROLL NO ${w.filmSerial}` }))} />)}
+          </div>}
           {warranties.length > 0 && <ListToolbar view={warrantyList} placeholder="Search plate, vehicle, ROLL NO, warranty code…" filters={WARRANTY_FILTERS} />}
           {!warranties.length ? <Empty title="No warranties yet">
             <span>{installer ? "Warranties you register for customers are listed under Installations." : "Your installer registers the warranty for your mobile and you receive your gold card by SMS."}</span>

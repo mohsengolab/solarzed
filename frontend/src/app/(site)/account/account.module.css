@@ -133,3 +133,5 @@ a.ghost{display:inline-block;text-decoration:none;text-align:center}
   .navOpen{display:flex}
   .itemSide{align-items:flex-start;text-align:start}
 }
+.vehicles{display:grid;gap:14px;margin:0 0 22px}
+.vehicles h3{margin:0;font-size:15px;color:var(--sz-fg-2)}

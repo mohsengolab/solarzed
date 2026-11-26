@@ -4,6 +4,7 @@ import { useState, useEffect, FormEvent } from "react";
 import Link from "next/link";
 import { lookupWarranty, lookupByVinAndMobile, WarrantyCheck, WarrantyCard } from "@/lib/api";
 import GoldCard from "@/components/GoldCard";
+import VehicleCoverage, { byVehicle } from "@/components/VehicleCoverage";
 import styles from "./warranty.module.css";
 
 function CertificateCard({ w }: { w: WarrantyCheck }) {
@@ -79,6 +80,7 @@ export default function WarrantyPage() {
   async function doLookup(value: string) {
     setLoading(true);
     setError(null);
+    setRecords(null);
     try {
       const res = await lookupWarranty(value);
       setRecords(res.records);
@@ -142,13 +144,19 @@ export default function WarrantyPage() {
             <input id="inquiry-mobile" value={mobile} onChange={e => setMobile(e.target.value)} required maxLength={20}
               type="tel" inputMode="tel" autoComplete="tel" dir="ltr" placeholder="Mobile number (09…)" />
             <button type="submit" disabled={loading}>{loading ? "Searching…" : "Show my warranty card"}</button>
-            <p className={styles.helpText}>Enter your vehicle&apos;s VIN and the mobile number your installer registered the warranty to.</p>
+            <p className={styles.helpText}>Enter your vehicle&apos;s VIN and the mobile number your installer registered the warranty to.
+              If different films were used on different windows, you will see the warranty of each window.
+              Have more than one vehicle? Look up each VIN, or <Link href="/account">sign in to your account</Link> to see all of them.</p>
           </form>}
 
           {mode === "owner" && cards !== null && <div className={`${styles.results} ${styles.cards}`} aria-live="polite">
             {cards.length === 0
               ? <p className={styles.noResult}>No warranty found for this VIN and mobile number.</p>
-              : cards.map(c => <GoldCard key={c.code} card={c} />)}
+              : byVehicle(cards).map(car => <div key={car[0].code} className={styles.cards}>
+                <VehicleCoverage title={`${car[0].make} ${car[0].model} · ${car[0].plate}`}
+                  items={car.map(c => ({ ...c, film: c.product }))} />
+                {car.map(c => <GoldCard key={c.code} card={c} />)}
+              </div>)}
           </div>}
 
           {mode === "code" && <form onSubmit={onSubmit} className={styles.form}>
