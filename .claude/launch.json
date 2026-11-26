@@ -352,6 +352,24 @@
         "SOLARZED_REVALIDATE_SECRET": "local-dev-revalidate-secret-only",
         "NEXT_DIST_DIR": ".next-glass"
       }
+    },
+    {
+      "name": "web-lang",
+      "runtimeExecutable": "npm",
+      "runtimeArgs": [
+        "--prefix",
+        "frontend",
+        "run",
+        "dev",
+        "--",
+        "--port",
+        "3080"
+      ],
+      "port": 3080,
+      "env": {
+        "SOLARZED_REVALIDATE_SECRET": "local-dev-revalidate-secret-only",
+        "NEXT_DIST_DIR": ".next-lang"
+      }
     }
   ]
 }

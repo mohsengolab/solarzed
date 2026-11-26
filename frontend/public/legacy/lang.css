@@ -1,0 +1,8 @@
+/* Landing-page language switch (EN / فا / ع), shown in the header of /, /fa and /ar. */
+.sv-lang{display:flex;align-items:center;gap:2px;padding:3px;border:1px solid #ffffff26;border-radius:999px;direction:ltr}
+.sv-lang a{display:grid;place-items:center;min-width:30px;height:26px;padding:0 8px;border-radius:999px;font:700 11px/1 "Plus Jakarta Sans",Vazirmatn,sans-serif;letter-spacing:.4px;color:#d9e6f2;transition:background .2s,color .2s}
+.sv-lang a:hover{color:#fff;background:#ffffff14}
+.sv-lang a[aria-current=page]{background:#26ced5;color:#06223a}
+.sv-lang a:lang(fa),.sv-lang a:lang(ar){font-family:Vazirmatn,sans-serif;font-size:12px}
+@media(max-width:1100px){.sv-header .sv-dealer{display:none}}
+@media(max-width:600px){.sv-lang a{min-width:24px;height:24px;padding:0 6px}.sv-header .sv-button{white-space:nowrap}}

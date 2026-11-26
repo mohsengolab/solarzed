@@ -49,3 +49,4 @@ next-env.d.ts
 /.next-slot
 /.next-transfer/
 /.next-glass/
+/.next-lang/
