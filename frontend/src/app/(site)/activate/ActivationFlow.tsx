@@ -27,6 +27,15 @@ export function serialFrom(raw: string) {
   if (/^https?:\/\//i.test(text) && hash >= 0) text = decodeURIComponent(text.slice(hash + 1));
   return text.replace(/\s+/g, "").toUpperCase();
 }
+/** Why a typed or scanned value can't open activation, or null when it is a Serial Number. */
+export function serialProblem(value: string) {
+  const v = value.trim().toUpperCase();
+  if (!v) return "Enter the Serial Number printed under the QR on the warranty card.";
+  if (validSerial(v)) return null;
+  if (/^[A-Z0-9][A-Z0-9-]{2,31}$/.test(v) && !v.startsWith("SZ-"))
+    return `${v} looks like a ROLL NO. Activation needs the Serial Number (SZ-…) printed under the QR on the warranty card inside the carton.`;
+  return `${v} is not a valid Serial Number. It starts with SZ- and is printed under the QR on the warranty card.`;
+}
 
 /**
  * Scan / type the Serial Number from the warranty card, then register the installation.
@@ -118,19 +127,19 @@ export default function ActivationFlow({ user, checked, onUser, initialCode, emb
   return <>
     {error && <p role="alert" className={styles.error}>{error}</p>}
 
-    {!info && <form onSubmit={event => { event.preventDefault(); void open(typed.trim()); }}>
+    {!info && <form noValidate onSubmit={event => { event.preventDefault(); const problem = serialProblem(typed); if (problem) setError(problem); else void open(typed.trim()); }}>
       {installer
         ? <p>Scan the QR on the warranty card inside the carton, or type the <b>Serial Number</b> printed under it.</p>
         : <p>Your Solarzed installer registers the warranty for your mobile and you receive your gold warranty card by SMS.</p>}
       <label>Serial Number
         <span style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
           <input dir="ltr" required style={{ flex: "1 1 200px" }} placeholder="e.g. SZ-CPT30614374-2611-4827153-ABC" autoComplete="off" spellCheck={false} autoCapitalize="characters"
-            value={typed} onChange={event => setTyped(event.target.value.replace(/\s+/g, "").toUpperCase())} />
-          <ScanButton label="Scan" onScan={text => { const sn = serialFrom(text); setTyped(sn.toUpperCase()); if (validSerial(sn)) void open(sn); }} />
+            value={typed} onChange={event => { setTyped(event.target.value.replace(/\s+/g, "").toUpperCase()); setError(""); }} />
+          <ScanButton label="Scan" onScan={text => { const sn = serialFrom(text); setTyped(sn); const problem = serialProblem(sn); if (problem) setError(problem); else void open(sn); }} />
         </span>
       </label>
       <p />
-      <button className={styles.button} disabled={!validSerial(typed.trim())}>Check Serial Number</button>
+      <button className={styles.button} disabled={!typed.trim()}>Check Serial Number</button>
     </form>}
 
     {info && <>{card}
