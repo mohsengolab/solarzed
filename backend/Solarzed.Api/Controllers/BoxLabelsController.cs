@@ -45,6 +45,19 @@ public class BoxLabelsController(AppDbContext db, BoxLabelService labels, BoxTra
     [HttpGet("holders"), Perm("labels.view", "labels.transfer", "rolls.transfer")]
     public async Task<IActionResult> Holders() => Ok(new { holders = await transfers.Holders() });
 
+    // «دارندگان رول»: searchable, paged list of who holds rolls; one person's rolls and transfers on demand.
+    [HttpGet("holders/page"), Perm("labels.view", "labels.transfer", "rolls.transfer")]
+    public async Task<IActionResult> HolderPage([FromQuery] string? q, [FromQuery] int page = 1, [FromQuery] int pageSize = 25,
+        [FromQuery] string? sort = null, [FromQuery] string? dir = null)
+    {
+        var (result, warehouse) = await transfers.SearchHolders(q, new PageQuery(page, pageSize, sort, dir));
+        return Ok(new { items = result.Items, total = result.Total, page = result.Page, pageSize = result.PageSize, warehouse });
+    }
+
+    [HttpGet("holders/detail"), Perm("labels.view", "labels.transfer", "rolls.transfer")]
+    public async Task<IActionResult> HolderDetail([FromQuery] string? phone, [FromQuery] string? name) =>
+        Ok(await transfers.HolderDetail(phone, name));
+
     [HttpGet, Perm("labels.view", "warranties.view")]
     public async Task<IActionResult> List()
     {

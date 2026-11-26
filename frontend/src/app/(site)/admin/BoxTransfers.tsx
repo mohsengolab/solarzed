@@ -154,26 +154,4 @@ export default function BoxTransfers({ onChanged }: { onChanged?: () => void }) 
   );
 }
 
-/** Who holds rolls right now and how many — its own page («دارندگان رول»), apart from sending rolls. */
-export function RollHolders() {
-  const [holders, setHolders] = useState<HolderSummary[] | null>(null);
-  const [error, setError] = useState("");
-  useEffect(() => { boxHolders().then(result => setHolders(result.holders)).catch(ex => setError(message(ex))); }, []);
-  return (
-    <div>
-      <header className={styles.panelHead}><div><span className={styles.eyebrow}>دارندگان رول</span><h2>رول‌ها دست چه کسانی است</h2></div></header>
-      {error && <p role="alert" className={labelsStyle.error}>{error}</p>}
-      <div className={styles.card}>
-        {holders === null ? <p className={styles.empty}>{fa("Loading…")}</p> : holders.length ? (
-          <table className={styles.table}><thead><tr><th>{fa("Holder")}</th><th>تعداد رول</th></tr></thead>
-            <tbody>{holders.map(h => <tr key={`${h.phone}|${h.holder}`}>
-              <td>{holderName(h.holder, h.phone)}</td><td>{n(h.boxes)}</td>
-            </tr>)}</tbody>
-          </table>
-        ) : <p className={styles.empty}>رولی در دست کسی نیست.</p>}
-      </div>
-    </div>
-  );
-}
-
 export { holderName };

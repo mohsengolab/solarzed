@@ -525,6 +525,13 @@ export function transferBoxes(data: TransferInput) {
 export function boxHistory(serial: string) { return apiFetch<BoxHistory>(`/api/admin/box-labels/${encodeURIComponent(serial.trim())}/transfers`); }
 export interface HolderSummary { holder: string | null; phone: string | null; boxes: number }
 export function boxHolders() { return apiFetch<{ holders: HolderSummary[] }>("/api/admin/box-labels/holders"); }
+/** One row per person holding rolls; phone null = a legacy holder recorded by name only. */
+export interface HolderRow { phone: string | null; name: string | null; firstName: string | null; lastName: string | null; shopName: string | null; boxes: number; lastAt: string | null }
+export function holderPage(query: string) { return apiFetch<Paged<HolderRow> & { warehouse: number }>(`/api/admin/box-labels/holders/page${query}`); }
+export interface HeldRoll { id: string; product: string; type: string; rollId: string | null; heldSince: string | null }
+export interface HolderDetail { phone: string | null; name: string | null; firstName: string | null; lastName: string | null; shopName: string | null; city: string | null; boxes: number; held: HeldRoll[]; transfers: BoxTransfer[] }
+/** Both null = the central warehouse. */
+export function holderDetail(phone: string | null, name: string | null) { return apiFetch<HolderDetail>(`/api/admin/box-labels/holders/detail${qs({ phone, name })}`); }
 export function saveLabelSite(siteUrl: string) {
   return apiFetch("/api/admin/box-labels/site", { method: "POST", body: JSON.stringify({ siteUrl }) });
 }

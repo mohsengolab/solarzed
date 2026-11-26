@@ -21,6 +21,10 @@ public record TransferView(long Id, string LabelId, string BatchId, string? From
 public record TransferResult(string BatchId, string? ToHolder, string? ToPhone, TransferView[] Transfers, string? Sms = null);
 public record BoxHistory(string Id, string Product, string? RollId, bool Activated, string? Holder, string? HolderPhone, DateTime? HeldSince, TransferView[] Transfers);
 public record HolderSummary(string? Holder, string? Phone, int Boxes);
+/// <param name="Phone">Null for a legacy holder recorded by name only.</param>
+public record HolderRow(string? Phone, string? Name, string? FirstName, string? LastName, string? ShopName, int Boxes, DateTime? LastAt);
+public record HolderDetail(string? Phone, string? Name, string? FirstName, string? LastName, string? ShopName, string? City, int Boxes,
+    HeldBox[] Held, TransferView[] Transfers);
 public record HeldBox(string Id, string Product, string Type, string? RollId, DateTime? HeldSince);
 public record MyBoxes(HeldBox[] Boxes, TransferView[] Outgoing);
 
@@ -208,6 +212,116 @@ public class BoxTransferService(AppDbContext db)
         var rows = await db.BoxLabels.AsNoTracking().Where(x => x.ActivatedAt == null)
             .GroupBy(x => new { x.HolderPhone, x.Holder }).Select(g => new HolderSummary(g.Key.Holder, g.Key.HolderPhone, g.Count())).ToListAsync();
         return rows.OrderBy(x => x.Holder != null || x.Phone != null).ThenByDescending(x => x.Boxes).ToArray();
+    }
+
+    // Arabic ي/ك and digits typed on either keyboard match the Persian forms stored in names.
+    static string Fold(string? value)
+    {
+        if (string.IsNullOrEmpty(value)) return "";
+        var chars = value.ToLowerInvariant().ToCharArray();
+        for (var i = 0; i < chars.Length; i++)
+            chars[i] = chars[i] switch
+            {
+                'ي' or 'ى' => 'ی', 'ك' => 'ک',
+                >= '۰' and <= '۹' => (char)('0' + chars[i] - '۰'),
+                >= '٠' and <= '٩' => (char)('0' + chars[i] - '٠'),
+                _ => chars[i],
+            };
+        return new string(chars);
+    }
+
+    static string Key(string? phone, string? holder) => phone ?? "name:" + holder;
+
+    /// <summary>
+    /// People holding not-yet-activated rolls, one row per mobile, searched by name, family name, shop, mobile or a
+    /// ROLL NO they hold. The central warehouse is counted separately.
+    /// </summary>
+    public async Task<(PagedResult<HolderRow> Page, int Warehouse)> SearchHolders(string? q, PageQuery page)
+    {
+        var groups = await db.BoxLabels.AsNoTracking().Where(x => x.ActivatedAt == null)
+            .GroupBy(x => new { x.HolderPhone, x.Holder })
+            .Select(g => new { g.Key.HolderPhone, g.Key.Holder, Boxes = g.Count(), Last = g.Max(x => x.HeldSince) }).ToListAsync();
+        var warehouse = groups.Where(g => g.HolderPhone == null && g.Holder == null).Sum(g => g.Boxes);
+        var people = groups.Where(g => g.HolderPhone != null || g.Holder != null)
+            .GroupBy(g => Key(g.HolderPhone, g.Holder))
+            .Select(g => new { Phone = g.First().HolderPhone, Holder = g.OrderByDescending(x => x.Last).First().Holder, Boxes = g.Sum(x => x.Boxes), Last = g.Max(x => x.Last) })
+            .ToList();
+        var phones = people.Where(p => p.Phone != null).Select(p => p.Phone!).ToList();
+        var users = (await db.PortalUsers.AsNoTracking().Where(u => u.Phone != null && phones.Contains(u.Phone!))
+                .Select(u => new { u.Phone, u.Name, u.FirstName, u.LastName, u.ShopName }).ToListAsync())
+            .GroupBy(u => u.Phone!).ToDictionary(g => g.Key, g => g.First());
+        var rows = people.Select(p =>
+        {
+            var u = p.Phone != null && users.TryGetValue(p.Phone, out var found) ? found : null;
+            var full = NormalizeHolder($"{u?.FirstName} {u?.LastName}");
+            var holder = p.Holder == p.Phone ? null : p.Holder;
+            return (Key: Key(p.Phone, p.Holder), Row: new HolderRow(p.Phone, full ?? NormalizeHolder(u?.Name) ?? holder, u?.FirstName, u?.LastName,
+                u?.ShopName ?? (full != null && holder != full ? holder : null), p.Boxes, p.Last));
+        });
+
+        var term = Paging.Term(q);
+        if (term != null)
+        {
+            var tokens = Fold(term).Split(' ', StringSplitOptions.RemoveEmptyEntries);
+            // A ROLL NO (or part of one) finds whoever holds that roll.
+            var roll = NormalizeSerial(term);
+            var byRoll = roll.Length >= 3
+                ? (await db.BoxLabels.AsNoTracking()
+                    .Where(x => x.ActivatedAt == null && (x.HolderPhone != null || x.Holder != null) && (x.Id.Contains(roll) || (x.RollId != null && x.RollId.Contains(roll))))
+                    .Select(x => new { x.HolderPhone, x.Holder }).Distinct().Take(500).ToListAsync()).Select(x => Key(x.HolderPhone, x.Holder)).ToHashSet()
+                : [];
+            rows = rows.Where(r =>
+            {
+                if (byRoll.Contains(r.Key)) return true;
+                var ph = r.Row.Phone ?? "";
+                var local = ph.StartsWith("+98") ? "0" + ph[3..] : ph.StartsWith("98") ? "0" + ph[2..] : "";
+                var hay = Fold($"{r.Row.Name} {r.Row.FirstName} {r.Row.LastName} {r.Row.ShopName} {ph} {local}");
+                return tokens.All(hay.Contains);
+            });
+        }
+
+        var list = rows.Select(r => r.Row);
+        list = (page.Sort, page.Desc) switch
+        {
+            ("name", false) => list.OrderBy(r => r.Name ?? "\uffff"),
+            ("name", true) => list.OrderByDescending(r => r.Name),
+            ("lastAt", false) => list.OrderBy(r => r.LastAt),
+            ("lastAt", true) => list.OrderByDescending(r => r.LastAt),
+            ("boxes", false) => list.OrderBy(r => r.Boxes),
+            _ => list.OrderByDescending(r => r.Boxes).ThenBy(r => r.Name),
+        };
+        var all = list.ToList();
+        var items = all.Skip((page.SafePage - 1) * page.SafeSize).Take(page.SafeSize).ToList();
+        return (new PagedResult<HolderRow>(items, all.Count, page.SafePage, page.SafeSize), warehouse);
+    }
+
+    /// <summary>
+    /// The rolls one person holds now and every transfer to or from them. <paramref name="phone"/> and
+    /// <paramref name="name"/> both empty is the central warehouse; a name alone is a legacy holder without a mobile.
+    /// </summary>
+    public async Task<HolderDetail> HolderDetail(string? phone, string? name)
+    {
+        phone = string.IsNullOrWhiteSpace(phone) ? null : phone.Trim();
+        name = phone == null ? NormalizeHolder(name) : null;
+        var held = db.BoxLabels.AsNoTracking().Where(x => x.ActivatedAt == null);
+        held = phone != null ? held.Where(x => x.HolderPhone == phone)
+            : name != null ? held.Where(x => x.HolderPhone == null && x.Holder == name)
+            : held.Where(x => x.HolderPhone == null && x.Holder == null);
+        var count = await held.CountAsync();
+        var boxes = await held.OrderByDescending(x => x.HeldSince).ThenBy(x => x.Id).Take(1000).ToListAsync();
+
+        var moves = db.BoxTransfers.AsNoTracking();
+        moves = phone != null ? moves.Where(x => x.FromPhone == phone || x.ToPhone == phone)
+            : name != null ? moves.Where(x => (x.FromPhone == null && x.FromHolder == name) || (x.ToPhone == null && x.ToHolder == name))
+            : moves.Where(x => (x.FromPhone == null && x.FromHolder == null) || (x.ToPhone == null && x.ToHolder == null));
+        var transfers = await moves.OrderByDescending(x => x.At).ThenByDescending(x => x.Id).Take(1000).ToListAsync();
+
+        var user = phone == null ? null : await db.PortalUsers.AsNoTracking().FirstOrDefaultAsync(u => u.Phone == phone);
+        var full = NormalizeHolder($"{user?.FirstName} {user?.LastName}");
+        return new(phone, full ?? NormalizeHolder(user?.Name) ?? name ?? boxes.Select(x => x.Holder).FirstOrDefault(x => x != phone), user?.FirstName, user?.LastName, user?.ShopName,
+            user?.City, count,
+            boxes.Select(x => new HeldBox(x.Id, x.Product, x.Type.ToString().ToLowerInvariant(), x.RollId, x.HeldSince)).ToArray(),
+            transfers.Select(View).ToArray());
     }
 
     /// <summary>What a signed-in representative holds now, and what they recently passed on.</summary>
