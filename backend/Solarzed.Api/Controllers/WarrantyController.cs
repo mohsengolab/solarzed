@@ -122,21 +122,57 @@ public class WarrantyController(AppDbContext db, WarrantyCards? warrantyCards = 
     static readonly Regex VinPattern = new(@"\A[A-HJ-NPR-Z0-9]{17}\z", RegexOptions.Compiled);
 
     /// <summary>
-    /// Owner inquiry: the VIN and the mobile the installer registered the warranty to. Both must match, so the full
-    /// gold card (owner name, plate, installer, coverage and its card link) is shown only to the owner.
+    /// Owner inquiry: the gold cards (owner name, plate, installer, coverage, product specs and card link) found by
+    /// any one of the VIN, the mobile the installer registered the warranty to, or the email of the owner's account.
+    /// <paramref name="q"/> takes any of the three and is recognised by its shape. When both a VIN and a mobile are
+    /// given, both must match.
     /// </summary>
     [HttpGet("owner"), EnableRateLimiting("warranty-lookup")]
-    public async Task<IActionResult> Owner([FromQuery] string? vin, [FromQuery] string? phone)
+    public async Task<IActionResult> Owner([FromQuery] string? vin, [FromQuery] string? phone, [FromQuery] string? email = null, [FromQuery] string? q = null)
     {
         Response.Headers.CacheControl = "no-store";
-        var v = WarrantyService.NormalizePhone(vin ?? "").Trim().ToUpperInvariant().Replace(" ", "");
-        if (!VinPattern.IsMatch(v)) return BadRequest(new { error = "Enter the 17-character VIN." });
-        string mobile;
-        try { mobile = PortalService.CanonicalPhone(phone); }
-        catch (ActivationError ex) { return BadRequest(new { error = ex.Message }); }
-        var variants = PortalService.PhoneVariants(mobile);
-        var rows = await db.WarrantyRegistrations.Where(w => w.Vin == v && variants.Contains(w.Phone))
-            .OrderByDescending(w => w.Installed).Take(20).ToListAsync();
+        if (!string.IsNullOrWhiteSpace(q))
+        {
+            var t = WarrantyService.NormalizePhone(q).Trim();
+            if (t.Contains('@')) email = t;
+            else if (VinPattern.IsMatch(t.ToUpperInvariant().Replace(" ", ""))) vin = t;
+            else phone = t;
+        }
+        var query = db.WarrantyRegistrations.AsQueryable();
+        var any = false;
+
+        if (!string.IsNullOrWhiteSpace(vin))
+        {
+            var v = WarrantyService.NormalizePhone(vin).Trim().ToUpperInvariant().Replace(" ", "");
+            if (!VinPattern.IsMatch(v)) return BadRequest(new { error = "Enter the 17-character VIN." });
+            query = query.Where(w => w.Vin == v);
+            any = true;
+        }
+        if (!string.IsNullOrWhiteSpace(phone))
+        {
+            string mobile;
+            try { mobile = PortalService.CanonicalPhone(phone); }
+            catch (ActivationError ex) { return BadRequest(new { error = ex.Message }); }
+            var variants = PortalService.PhoneVariants(mobile);
+            query = query.Where(w => variants.Contains(w.Phone));
+            any = true;
+        }
+        else if (!string.IsNullOrWhiteSpace(email))
+        {
+            string address;
+            try { address = PortalService.CanonicalEmail(email); }
+            catch (ActivationError ex) { return BadRequest(new { error = ex.Message }); }
+            // Warranties are registered to a mobile; an email finds them through the account that holds both.
+            var phones = await db.PortalUsers.AsNoTracking().Where(u => u.Email == address && u.Phone != null)
+                .Select(u => u.Phone!).ToListAsync();
+            var variants = phones.SelectMany(PortalService.PhoneVariants).Distinct().ToList();
+            if (variants.Count == 0) return Ok(new { cards = Array.Empty<WarrantyCardView>() });
+            query = query.Where(w => variants.Contains(w.Phone));
+            any = true;
+        }
+        if (!any) return BadRequest(new { error = "Enter a VIN, mobile number or email." });
+
+        var rows = await query.OrderByDescending(w => w.Installed).Take(40).ToListAsync();
         var list = new List<WarrantyCardView>();
         foreach (var w in rows) list.Add(await cards.View(w));
         if (db.ChangeTracker.HasChanges()) await db.SaveChangesAsync();

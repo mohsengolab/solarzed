@@ -1,4 +1,4 @@
-/** Landing-page copy. English lives at "/", Persian at "/fa" and Arabic at "/ar". Only the landing page is translated. */
+/** Landing-page copy. English lives at "/", Persian at "/fa" and Arabic at "/ar". */
 export const LANDING_LANGS = ["en", "fa", "ar"] as const;
 export type LandingLang = (typeof LANDING_LANGS)[number];
 export const isLandingLang = (value: string): value is LandingLang => (LANDING_LANGS as readonly string[]).includes(value);

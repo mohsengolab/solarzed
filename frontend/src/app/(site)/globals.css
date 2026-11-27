@@ -65,11 +65,51 @@ html[data-theme="light"] img[src$="solarzed-original.png"] {
   box-sizing: content-box;
 }
 
-.sz-theme-toggle {
+/* Language switch and day/night button, fixed in the corner of every public page. */
+.sz-corner {
   position: fixed;
   top: 84px;
   right: 16px;
   z-index: 1000;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 8px;
+}
+.sz-lang {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  padding: 3px;
+  border-radius: 999px;
+  border: 1px solid rgb(var(--sz-tint) / 0.18);
+  background: rgb(var(--sz-bg-rgb) / 0.85);
+  backdrop-filter: blur(8px);
+  box-shadow: 0 4px 14px rgb(0 0 0 / 0.15);
+}
+.sz-lang button {
+  width: 32px;
+  height: 28px;
+  border: 0;
+  border-radius: 999px;
+  background: none;
+  color: var(--sz-fg);
+  font: 700 11px "Plus Jakarta Sans", Vazirmatn, sans-serif;
+  cursor: pointer;
+}
+.sz-lang button:lang(fa), .sz-lang button:lang(ar) { font: 700 13px Vazirmatn, sans-serif; }
+.sz-lang button:hover { color: var(--sz-teal); }
+.sz-lang button[aria-pressed="true"] { background: var(--sz-teal); color: #06223a; }
+@media print { .sz-corner { display: none; } }
+/* Codes, VINs and phone numbers are typed left to right, but a Persian or Arabic placeholder reads right to left. */
+[dir="rtl"] input[dir="ltr"]:placeholder-shown { direction: rtl; }
+/* Keep connected Persian/Arabic letters together, while preserving code and OTP spacing. */
+body:has(.sz-lang):is(:lang(fa), :lang(ar)) :is(h1, h2, h3, p, label, a, button, th, dt, small, span) {
+  letter-spacing: normal;
+}
+.sz-corner { direction: ltr; }
+
+.sz-theme-toggle {
   display: inline-flex;
   align-items: center;
   justify-content: center;

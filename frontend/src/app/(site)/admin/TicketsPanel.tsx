@@ -7,19 +7,21 @@ import { usePaged, SortTh, Pager, FilterBar, countActive, errorText } from "./Ad
 import { useCan } from "./RolesPanel";
 
 const T_EMPTY = { q: "" };
+const DEPARTMENT: Record<string, string> = { support: "پشتیبانی", sales: "فروش" };
 const date = (value: string) => new Date(value).toLocaleString(FA_DATE);
 
 /** Support inbox: every ticket shows who is writing (mobile, name, profile) — never masked. */
 export default function TicketsPanel() {
   const canReply = useCan()("tickets.edit");
   const [status, setStatus] = useState("");
+  const [department, setDepartment] = useState("");
   const [f, setF] = useState(T_EMPTY);
   const [selectedId, setSelectedId] = useState<number | null>(null);
   const [detail, setDetail] = useState<AdminTicketDetail | null>(null);
   const [reply, setReply] = useState("");
   const [busy, setBusy] = useState(false);
   const [msg, setMsg] = useState("");
-  const list = usePaged<AdminTicketRow>(adminTickets, { ...f, status }, { sort: "updatedAt" });
+  const list = usePaged<AdminTicketRow>(adminTickets, { ...f, status, department }, { sort: "updatedAt" });
   const set = (k: keyof typeof T_EMPTY) => (e: { target: { value: string } }) => setF(p => ({ ...p, [k]: e.target.value }));
 
   useEffect(() => {
@@ -76,6 +78,11 @@ export default function TicketsPanel() {
         <button key={value} type="button" onClick={() => setStatus(value)} className={status === value ? s.segActive : s.seg} aria-pressed={status === value}>{label}</button>
       ))}
     </div>
+    <div className={s.filters} role="group" aria-label="واحد">
+      {[["", "همه واحدها"], ["support", "پشتیبانی"], ["sales", "فروش"]].map(([value, label]) => (
+        <button key={value} type="button" onClick={() => setDepartment(value)} className={department === value ? s.segActive : s.seg} aria-pressed={department === value}>{label}</button>
+      ))}
+    </div>
     <FilterBar active={countActive(f)} onClear={() => setF(T_EMPTY)}>
       <label className={s.wide}>جستجوی تیکت<input type="search" placeholder="کد، موضوع، موبایل، ایمیل یا نام" value={f.q} onChange={set("q")} /></label>
     </FilterBar>
@@ -83,6 +90,7 @@ export default function TicketsPanel() {
     <div className={s.card}>
       <table className={`${s.table} ${list.loading ? s.tableBusy : ""}`}>
         <thead><tr><SortTh column="code" label="کد" {...sortProps} /><SortTh column="subject" label="موضوع" {...sortProps} />
+          <SortTh column="department" label="واحد" {...sortProps} />
           <th>نویسنده</th><th>تماس</th><SortTh column="status" label="وضعیت" {...sortProps} />
           <th>پاسخ‌ها</th><SortTh column="updatedAt" label="آخرین فعالیت" {...sortProps} /></tr></thead>
         <tbody>
@@ -90,6 +98,7 @@ export default function TicketsPanel() {
             <tr key={t.id} onClick={() => setSelectedId(t.id)} style={{ cursor: "pointer" }}>
               <td><code dir="ltr">{t.code}</code></td>
               <td>{t.subject}</td>
+              <td>{DEPARTMENT[t.department] ?? t.department}</td>
               <td>{[t.firstName, t.lastName].filter(Boolean).join(" ") || "—"}</td>
               <td dir="ltr">{t.userPhone ?? t.userEmail ?? "—"}</td>
               <td><span className={s.badge} data-tone={tone[t.status] ?? "muted"}>{fa(t.status)}</span></td>
@@ -106,7 +115,7 @@ export default function TicketsPanel() {
     {selectedId != null && <div className={s.card} style={{ marginTop: 20 }}>
       {!detail ? <p className={s.loading}>{fa("Loading…")}</p> : <>
         <div className={s.panelHead}>
-          <h2>{detail.ticket.subject} · <code dir="ltr">{detail.ticket.code}</code></h2>
+          <h2>{detail.ticket.subject} · <code dir="ltr">{detail.ticket.code}</code> · <span className={s.badge} data-tone={detail.ticket.department === "sales" ? "active" : "pending"}>واحد {DEPARTMENT[detail.ticket.department] ?? detail.ticket.department}</span></h2>
           <div className={s.filters}>
             {canReply && (detail.ticket.status !== "closed"
               ? <button type="button" className={s.ghost} disabled={busy} onClick={() => act(() => adminTicketClose(selectedId))}>بستن تیکت</button>
@@ -132,7 +141,7 @@ export default function TicketsPanel() {
               border: `1px solid ${r.author === "staff" ? "rgba(31,195,207,.35)" : "rgba(255,255,255,.12)"}`,
               borderRadius: 12, padding: "10px 14px",
             }}>
-              <b style={{ fontSize: 12 }}>{r.author === "staff" ? `پشتیبانی${r.authorLabel ? ` · ${r.authorLabel}` : ""}` : [detail.ticket.firstName, detail.ticket.lastName].filter(Boolean).join(" ") || "کاربر"}</b>
+              <b style={{ fontSize: 12 }}>{r.author === "staff" ? `${DEPARTMENT[detail.ticket.department] ?? "پشتیبانی"}${r.authorLabel ? ` · ${r.authorLabel}` : ""}` : [detail.ticket.firstName, detail.ticket.lastName].filter(Boolean).join(" ") || "کاربر"}</b>
               <p style={{ margin: "6px 0", whiteSpace: "pre-wrap" }}>{r.message}</p>
               <span style={{ fontSize: 11, opacity: .6 }}>{date(r.createdAt)}</span>
             </article>

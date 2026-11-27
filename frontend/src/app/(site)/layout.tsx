@@ -1,6 +1,10 @@
 import type { Metadata } from "next";
 import "./globals.css";
 import ThemeToggle from "@/components/ThemeToggle";
+import LanguageSwitch from "@/components/LanguageSwitch";
+import { LangProvider } from "@/lib/i18n/client";
+import { dirOf } from "@/lib/i18n";
+import { getLang } from "@/lib/i18n/server";
 
 // Applies the saved day/night choice before first paint so it never flashes.
 const THEME_INIT = `try{if(localStorage.getItem("sz-theme")==="light")document.documentElement.dataset.theme="light"}catch(e){}`;
@@ -41,13 +45,15 @@ export const metadata: Metadata = {
   },
 };
 
-export default function RootLayout({
+export default async function RootLayout({
   children,
 }: {
   children: React.ReactNode;
 }) {
+  // English, Persian or Arabic from the sz-lang cookie. /admin keeps its own Persian, right-to-left wrapper.
+  const lang = await getLang();
   return (
-    <html lang="en" suppressHydrationWarning>
+    <html data-scroll-behavior="smooth" lang={lang} dir={dirOf(lang)} suppressHydrationWarning>
       <head>
         <script dangerouslySetInnerHTML={{ __html: THEME_INIT }} />
         <link rel="preconnect" href="https://fonts.googleapis.com" />
@@ -58,8 +64,13 @@ export default function RootLayout({
         />
       </head>
       <body>
-        <ThemeToggle />
-        {children}
+        <LangProvider lang={lang}>
+          <div className="sz-corner">
+            <LanguageSwitch className="sz-lang" />
+            <ThemeToggle />
+          </div>
+          {children}
+        </LangProvider>
       </body>
     </html>
   );

@@ -6,10 +6,15 @@
 .ghost:hover{border-color:#1fc3cf}
 .notice{background:#1fc3cf12;border:1px solid #1fc3cf55;padding:14px;border-radius:10px;color:var(--sz-accent-fg)!important}
 .form{display:flex;flex-direction:column;gap:18px}
+.departments{display:flex;flex-wrap:wrap;gap:10px;border:0;margin:0;padding:0}
+.departments legend{width:100%;margin-bottom:8px}
+.departments label{display:inline-flex;align-items:center;gap:8px;padding:9px 16px;border:1px solid rgb(var(--sz-tint) / 0.161);border-radius:999px;cursor:pointer}
+.departments label:has(input:checked){border-color:var(--sz-accent, #1fc3cf);background:rgb(var(--sz-tint) / 0.05)}
+.departments input{accent-color:var(--sz-accent, #1fc3cf);margin:0}
 .form textarea{width:100%;background:rgb(var(--sz-tint) / 0.02);border:1px solid rgb(var(--sz-tint) / 0.161);border-radius:9px;padding:13px;color:var(--sz-fg);font:inherit;box-sizing:border-box;color-scheme:var(--sz-scheme);resize:vertical}
 .scroll{overflow-x:auto;margin-bottom:18px}
 .table{width:100%;border-collapse:collapse;font-size:13px;min-width:480px}
-.table th{text-align:left;color:var(--sz-fg-3);font-weight:600;padding:9px 10px;border-bottom:1px solid rgb(var(--sz-tint) / 0.125)}
+.table th{text-align:start;color:var(--sz-fg-3);font-weight:600;padding:9px 10px;border-bottom:1px solid rgb(var(--sz-tint) / 0.125)}
 .table td{padding:10px;border-bottom:1px solid rgb(var(--sz-tint) / 0.063);color:var(--sz-fg-1)}
 .table code{color:var(--sz-accent-fg);font-size:12px}
 .table a{color:var(--sz-accent-fg)}
@@ -135,3 +140,20 @@ a.ghost{display:inline-block;text-decoration:none;text-align:center}
 }
 .vehicles{display:grid;gap:14px;margin:0 0 22px}
 .vehicles h3{margin:0;font-size:15px;color:var(--sz-fg-2)}
+.field{display:flex;flex-direction:column;gap:8px;font-size:12px;font-weight:600;color:var(--sz-fg-1)}
+.phoneFact{display:flex;align-items:center;gap:8px}
+
+/* Installer: one card per vehicle, opening to the warranty of each roll used */
+.car{padding:0;overflow:hidden}
+.carHead{display:flex;flex-wrap:wrap;justify-content:space-between;align-items:center;gap:12px 20px;width:100%;padding:14px 16px;background:none;border:0;font:inherit;color:inherit;text-align:start;cursor:pointer}
+.carHead:hover{background:rgb(var(--sz-tint) / 0.03)}
+.carHead[aria-expanded="true"]{background:#1fc3cf0d}
+.carBody{display:flex;flex-direction:column;gap:14px;margin:0 16px 16px}
+.subhead{margin:4px 0 0;font-size:15px;color:var(--sz-fg-2)}
+.rolls{list-style:none;margin:0;padding:0;display:grid;gap:10px}
+.roll{display:flex;flex-direction:column;align-items:flex-start;gap:10px;padding:12px 14px;border:1px solid rgb(var(--sz-tint) / 0.1);border-radius:12px;background:rgb(var(--sz-tint) / 0.025)}
+.roll .facts{margin:0!important;font-size:13px}
+.roll .facts dt{color:var(--sz-fg-3)}
+.roll .form{align-self:stretch}
+.rollHead{display:flex;justify-content:space-between;align-items:center;gap:10px;align-self:stretch}
+.rollHead code{color:var(--sz-accent-fg)}

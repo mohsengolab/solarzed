@@ -4,6 +4,9 @@ namespace Solarzed.Api.Domain;
 
 public enum TicketStatus { Open, Answered, Closed }
 
+/// <summary>Which team a ticket goes to. Support is 0 so tickets opened before departments existed stay with support.</summary>
+public enum TicketDepartment { Support, Sales }
+
 /// <summary>
 /// A support ticket a portal user opens. The user's mobile, first and last name are captured from
 /// their verified session and profile so support can always see who is writing.
@@ -15,6 +18,7 @@ public class Ticket
     [MaxLength(200)] public string Subject { get; set; } = default!;
 
     public TicketStatus Status { get; set; } = TicketStatus.Open;
+    public TicketDepartment Department { get; set; } = TicketDepartment.Support;
 
     // Snapshot of the writer's identity at ticket time (never masked for support).
     [MaxLength(30)] public string? UserPhone { get; set; }

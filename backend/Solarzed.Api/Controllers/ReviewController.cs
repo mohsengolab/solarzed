@@ -43,6 +43,7 @@ public class ReviewController(AppDbContext db, IDataProtectionProvider? protecti
                 w.Installer, w.InstallerPhone, w.Country, w.UsedLengthM, w.InvoiceNumber, carton = w.FilmSerial,
                 product = w.RollId != null ? products.GetValueOrDefault(w.RollId) : null,
                 areas = JsonSerializer.Deserialize<string[]>(w.AreasJson) ?? [],
+                glassSizes = w.GlassSizesJson != null ? JsonSerializer.Deserialize<Dictionary<string, GlassSize>>(w.GlassSizesJson) : null,
                 flags = JsonSerializer.Deserialize<string[]>(w.FlagsJson) ?? [],
                 w.ReviewNote, w.CreatedAt, w.ReviewedAt, w.CardSentAt,
                 photos = photos.GetValueOrDefault(w.Code)?.Select(p => new { p.Id, p.Kind, p.CreatedAt }) ?? [],

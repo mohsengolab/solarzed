@@ -142,4 +142,25 @@ public class TicketsTests
         Assert.Contains("TK-3", listJson);
         Assert.Contains("Ahmadi", listJson);
     }
+
+    [Fact]
+    public async Task TicketsGoToTheChosenDepartment()
+    {
+        using var db = Database();
+        var me = Writer(); db.PortalUsers.Add(me); await db.SaveChangesAsync();
+        var portal = Portal(db, me);
+
+        Assert.IsType<OkObjectResult>(await portal.CreateTicket(new("Price list", "Dealer prices?", "sales")));
+        Assert.IsType<OkObjectResult>(await portal.CreateTicket(new("Bubbles", "Film has bubbles.")));
+        Assert.IsType<BadRequestObjectResult>(await portal.CreateTicket(new("Other", "hi", "billing")));
+
+        Assert.Equal(TicketDepartment.Sales, (await db.Tickets.SingleAsync(t => t.Subject == "Price list")).Department);
+        // No department given: it goes to support, like every ticket opened before departments existed.
+        Assert.Equal(TicketDepartment.Support, (await db.Tickets.SingleAsync(t => t.Subject == "Bubbles")).Department);
+
+        var sales = Assert.IsType<OkObjectResult>(await new TicketsController(db).List(new TicketSearch { Department = "sales" }, default));
+        var json = JsonSerializer.Serialize(sales.Value);
+        Assert.Contains("Price list", json);
+        Assert.DoesNotContain("Bubbles", json);
+    }
 }

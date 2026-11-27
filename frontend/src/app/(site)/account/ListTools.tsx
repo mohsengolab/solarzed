@@ -1,6 +1,7 @@
 "use client";
 
 import { useMemo, useState, type ReactNode } from "react";
+import { useT } from "@/lib/i18n/client";
 import own from "./account.module.css";
 
 const PAGE_SIZE = 10;
@@ -44,13 +45,14 @@ export function ListToolbar<F extends string>({ view, placeholder, filters, chil
   filters?: readonly (readonly [F, string])[];
   children?: ReactNode;
 }) {
+  const t = useT();
   return <div className={own.toolbar}>
     <label className={own.search}>
       <svg aria-hidden="true" viewBox="0 0 24 24" width="16" height="16"><path fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" d="M11 18a7 7 0 1 0 0-14 7 7 0 0 0 0 14Zm9 2-4-4" /></svg>
       <input type="search" aria-label={placeholder} placeholder={placeholder} value={view.query} onChange={e => view.setQuery(e.target.value)} />
     </label>
-    {filters && <div className={own.chips} role="group" aria-label="Filter">
-      <button type="button" className={own.chip} aria-pressed={view.filter === "all"} onClick={() => view.setFilter("all")}>All <span>{view.total}</span></button>
+    {filters && <div className={own.chips} role="group" aria-label={t("Filter")}>
+      <button type="button" className={own.chip} aria-pressed={view.filter === "all"} onClick={() => view.setFilter("all")}>{t("All")} <span>{view.total}</span></button>
       {filters.map(([id, label]) => <button key={id} type="button" className={own.chip} aria-pressed={view.filter === id} onClick={() => view.setFilter(id)}>
         {label} <span>{view.counts.get(id) ?? 0}</span>
       </button>)}
@@ -60,13 +62,14 @@ export function ListToolbar<F extends string>({ view, placeholder, filters, chil
 }
 
 export function Pager({ page, pages, setPage, shown, matched }: { page: number; pages: number; setPage: (p: number) => void; shown: number; matched: number }) {
+  const t = useT();
   if (matched === 0) return null;
   return <div className={own.pager}>
-    <span>{matched} result{matched === 1 ? "" : "s"}{pages > 1 && ` · showing ${shown}`}</span>
+    <span>{t(matched === 1 ? "{n} result" : "{n} results", { n: matched })}{pages > 1 && ` · ${t("showing {n}", { n: shown })}`}</span>
     {pages > 1 && <span className={own.pagerButtons}>
-      <button type="button" className={own.ghost} disabled={page <= 1} onClick={() => setPage(page - 1)}>‹ Prev</button>
+      <button type="button" className={own.ghost} disabled={page <= 1} onClick={() => setPage(page - 1)}>{t("‹ Prev")}</button>
       <b>{page} / {pages}</b>
-      <button type="button" className={own.ghost} disabled={page >= pages} onClick={() => setPage(page + 1)}>Next ›</button>
+      <button type="button" className={own.ghost} disabled={page >= pages} onClick={() => setPage(page + 1)}>{t("Next ›")}</button>
     </span>}
   </div>;
 }

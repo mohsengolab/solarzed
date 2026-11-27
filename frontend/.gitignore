@@ -50,3 +50,5 @@ next-env.d.ts
 /.next-transfer/
 /.next-glass/
 /.next-lang/
+
+/.next-i18n/

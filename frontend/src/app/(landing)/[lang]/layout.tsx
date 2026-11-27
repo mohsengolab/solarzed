@@ -2,6 +2,7 @@ import type { Metadata, Viewport } from "next";
 import { notFound } from "next/navigation";
 import LegacyHead from "../../(home)/_shared/LegacyHead";
 import { isLandingLang, landingDir } from "../../(home)/_shared/landingCopy";
+import { LangProvider } from "@/lib/i18n/client";
 
 // Persian and Arabic landing pages (/fa, /ar). They need their own root layout so <html> carries
 // the right lang and dir="rtl"; English stays at "/" in the (home) layout.
@@ -24,9 +25,9 @@ export default async function LandingLayout({ children, params }: LayoutProps<"/
   const { lang } = await params;
   if (!isLandingLang(lang) || lang === "en") notFound();
   return (
-    <html lang={lang} dir={landingDir(lang)}>
-      <LegacyHead rtl />
-      <body>{children}</body>
+    <html data-scroll-behavior="smooth" lang={lang} dir={landingDir(lang)}>
+      <LegacyHead />
+      <body><LangProvider lang={lang}>{children}</LangProvider></body>
     </html>
   );
 }

@@ -50,7 +50,13 @@
     ".next-glass/types/**/*.ts",
     ".next-glass/dev/types/**/*.ts",
     ".next-lang/types/**/*.ts",
-    ".next-lang/dev/types/**/*.ts"
+    ".next-lang/dev/types/**/*.ts",
+    ".next-i18n/types/**/*.ts",
+    ".next-i18n/dev/types/**/*.ts",
+    ".next-installs/types/**/*.ts",
+    ".next-installs/dev/types/**/*.ts",
+    ".next-warranty/types/**/*.ts",
+    ".next-warranty/dev/types/**/*.ts"
   ],
   "exclude": [
     "node_modules",

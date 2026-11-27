@@ -2,8 +2,6 @@
 .shortcuts{display:flex;gap:8px;flex-wrap:wrap}
 .shortcuts button{font-weight:700;font-size:12.5px;padding:9px 15px;border:1.5px solid #c9dce6;border-radius:999px;background:#fff;color:#102a43;cursor:pointer;transition:background .15s,border-color .15s,transform .15s}
 .shortcuts button:hover{background:#dff8f8;border-color:#0b9aa8;transform:translateY(-1px)}
-.sunroofToggle{display:flex;align-items:center;gap:7px;font-weight:600;font-size:12.5px;padding:0 6px;cursor:pointer}
-.sunroofToggle input{width:16px;height:16px;accent-color:#0b9aa8;margin:0}
 .map{position:relative;width:min(100%,360px);aspect-ratio:400/640;margin:4px auto 0}
 .map svg{position:absolute;inset:0;width:100%;height:100%;filter:drop-shadow(0 18px 24px #0b1d3a22)}
 .front{position:absolute;top:1%;width:100%;text-align:center;font-weight:700;font-size:10.5px;letter-spacing:2px;color:#087f8c}
@@ -37,3 +35,13 @@
 .summary{display:grid;gap:4px;margin:0;padding:12px 14px;border:1px solid #d6e7ef;border-radius:12px;background:transparent;text-align:center}
 .summary b{font-size:14px}
 .summary span{font-size:12.5px;opacity:.75}
+.sizes{display:grid;gap:8px}
+.sizesHead{margin:0;font-weight:700;font-size:13px}
+.sizeRow{display:grid;grid-template-columns:minmax(90px,1fr) minmax(80px,110px) minmax(80px,110px) auto;gap:8px;align-items:end;padding:8px 10px;border:1px solid #d6e7ef;border-radius:10px}
+.sizeRow>b{font-size:13px;align-self:center}
+.sizeRow label{display:grid;gap:3px;font-size:11.5px;font-weight:600}
+.sizeRow input{width:100%;min-width:0}
+.sizeRow small{font-size:11.5px;opacity:.75;align-self:center}
+.sizeShort{border-color:#d64545;background:#fdf1f1}
+.sizeShort small{color:#b42318;opacity:1;font-weight:700}
+@media (max-width:480px){.sizeRow{grid-template-columns:1fr 1fr}.sizeRow>b,.sizeRow small{grid-column:1/-1}}

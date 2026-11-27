@@ -66,7 +66,8 @@ public class BoxLabelTests
     /// <summary>Serial Number of the fixture roll: the only code that opens activation.</summary>
     const string Serial = "SZ-TEST-26-000001";
     static RegisterRequest Registration(string phone = "09121111111") => new("ppf", "Toyota", "Camry", "Test Customer", phone,
-        "TEST123", "JTDBE32K123456789", "FORGED", "INV-TEST", "2026-01-15", "Test Seller", "09122222222", "Test Shop", ["rear"], ["hood"]);
+        "TEST123", "JTDBE32K123456789", "FORGED", "INV-TEST", "2026-01-15", "Test Seller", "09122222222", "Test Shop", ["rear"], ["hood"],
+        new() { ["rear"] = new(110, 60) });
     static async Task Error(int status, Func<Task> action) => Assert.Equal(status, (await Assert.ThrowsAsync<ActivationError>(action)).Status);
 
     [Fact]
@@ -257,6 +258,21 @@ public class BoxLabelTests
         Assert.Contains("roll_overuse", JsonSerializer.Deserialize<string[]>((await f.Db.WarrantyRegistrations.AsNoTracking().SingleAsync(x => x.Code == fourth.Warranty.Code)).FlagsJson)!);
         Assert.Equal(2, await f.Db.BoxTransfers.CountAsync());
         Assert.Equal(4, await f.Db.WarrantyRegistrations.CountAsync(x => x.Phone == Customer && x.InstallerPhone == Installer));
+    }
+
+    [Fact]
+    public async Task InstallationPhotosAreVisibleToTheOwnerAndTheInstallerOnly()
+    {
+        using var f = new Fixture();
+        var (label, _) = await f.Issue();
+        var partner = await Partner(f);
+        await f.GiveTo(label.Id, Installer);
+        var done = await f.Service.Activate(new ActivateBoxRequest(Serial, Registration(), 30m, Customer), Installer, partner, Photos());
+        var portal = new PortalService(f.Db, f.Sms);
+        Assert.True(await portal.CanSeePhotos(Customer, done.Warranty.Code));
+        Assert.True(await portal.CanSeePhotos(Installer, done.Warranty.Code));
+        Assert.False(await portal.CanSeePhotos("09124444444", done.Warranty.Code));
+        Assert.False(await portal.CanSeePhotos(Customer, "0000000"));
     }
 
     [Fact]
@@ -513,6 +529,14 @@ public class BoxLabelTests
         var other = Assert.IsType<Microsoft.AspNetCore.Mvc.OkObjectResult>(await api.Owner("JTDBE32K123456789", "09129999999"));
         Assert.DoesNotContain(w.Code, System.Text.Json.JsonSerializer.Serialize(other.Value));
         Assert.IsType<Microsoft.AspNetCore.Mvc.BadRequestObjectResult>(await api.Owner("SHORT", Customer));
+        // Any one of VIN, mobile or the owner's account email finds the cards on its own.
+        Assert.Contains(w.Code, System.Text.Json.JsonSerializer.Serialize(Assert.IsType<Microsoft.AspNetCore.Mvc.OkObjectResult>(await api.Owner(null, null, q: "JTDBE32K123456789")).Value));
+        Assert.Contains(w.Code, System.Text.Json.JsonSerializer.Serialize(Assert.IsType<Microsoft.AspNetCore.Mvc.OkObjectResult>(await api.Owner(null, null, q: "+98 912 111 1111")).Value));
+        f.Db.PortalUsers.Add(new PortalUser { Phone = Customer, Email = "owner@example.com" });
+        await f.Db.SaveChangesAsync();
+        Assert.Contains(w.Code, System.Text.Json.JsonSerializer.Serialize(Assert.IsType<Microsoft.AspNetCore.Mvc.OkObjectResult>(await api.Owner(null, null, q: "Owner@Example.com")).Value));
+        Assert.DoesNotContain(w.Code, System.Text.Json.JsonSerializer.Serialize(Assert.IsType<Microsoft.AspNetCore.Mvc.OkObjectResult>(await api.Owner(null, null, q: "nobody@example.com")).Value));
+        Assert.IsType<Microsoft.AspNetCore.Mvc.BadRequestObjectResult>(await api.Owner(null, null));
         var card = Assert.IsType<WarrantyCardView>(Assert.IsType<Microsoft.AspNetCore.Mvc.OkObjectResult>(await api.Card(w.Code, w.CardKey)).Value);
         Assert.Equal("Test Customer", card.Owner);
         Assert.Equal("active", card.Status);

@@ -1,19 +1,23 @@
 import type { Metadata } from "next";
 import Link from "next/link";
+import { getT } from "@/lib/i18n/server";
 import styles from "./coverage.module.css";
 
-export const metadata: Metadata = {
-  title: "What's Covered | Warranty Policy",
+export async function generateMetadata(): Promise<Metadata> {
+  const t = await getT();
+  return {
+  title: t("What's Covered | Warranty Policy"),
   description:
-    "Solarzed window film and PPF warranty coverage. Learn what is covered — UV rejection, delamination, adhesive failure — and how to make a warranty claim.",
+    t("Solarzed window film and PPF warranty coverage. Learn what is covered — UV rejection, delamination, adhesive failure — and how to make a warranty claim."),
   keywords: ["window film warranty coverage", "PPF warranty", "automotive tint claim", "Solarzed warranty policy"],
   alternates: { canonical: "https://solarzed.com/coverage" },
   openGraph: {
     url: "https://solarzed.com/coverage",
-    title: "Solarzed Warranty Coverage | What's Covered",
-    description: "Solarzed window film and PPF warranty coverage — UV rejection, delamination, adhesive failure and how to make a claim.",
+    title: t("What's Covered | Warranty Policy"),
+    description: t("Solarzed window film and PPF warranty coverage. Learn what is covered — UV rejection, delamination, adhesive failure — and how to make a warranty claim."),
   },
-};
+  };
+}
 
 const TINT_ITEMS = [
   { title: "UV & heat rejection", desc: "Film blocks 99% of UV and reduces interior heat." },
@@ -38,7 +42,8 @@ const NOT_COVERED = [
   "Damage from parking impacts, accidents, or vandalism",
 ];
 
-export default function CoveragePage() {
+export default async function CoveragePage() {
+  const t = await getT();
   return (
     <div className={styles.page}>
       <header className={styles.header}>
@@ -47,36 +52,35 @@ export default function CoveragePage() {
           <img src="/assets/solarzed-original.png" width={160} height={32} alt="SOLARZED" />
         </Link>
         <nav className={styles.nav}>
-          <Link href="/products">Products</Link>
-          <Link href="/warranty">Warranty</Link>
-          <Link href="/coverage">Coverage</Link>
-          <Link href="/contact">Contact</Link>
-          <Link href="/activate" className={styles.navCta}>Activate</Link>
+          <Link href="/products">{t("Products")}</Link>
+          <Link href="/warranty">{t("Warranty")}</Link>
+          <Link href="/coverage">{t("Coverage")}</Link>
+          <Link href="/contact">{t("Contact")}</Link>
+          <Link href="/activate" className={styles.navCta}>{t("Activate")}</Link>
         </nav>
       </header>
 
       <main className={styles.main}>
         <section className={styles.hero}>
-          <span className={styles.heroLabel}>WARRANTY POLICY</span>
-          <h1 className={styles.heroTitle}>What&rsquo;s Covered</h1>
+          <span className={styles.heroLabel}>{t("WARRANTY POLICY")}</span>
+          <h1 className={styles.heroTitle}>{t("What’s Covered")}</h1>
           <p className={styles.heroSub}>
-            SOLARZED films carry a manufacturer&rsquo;s warranty against material and adhesive defects.
-            Coverage duration is set at installation and shown on your warranty certificate.
+            {t("SOLARZED films carry a manufacturer’s warranty against material and adhesive defects. Coverage duration is set at installation and shown on your warranty certificate.")}
           </p>
         </section>
 
         <section className={styles.section}>
           <div className={styles.grid}>
             <div className={styles.card}>
-              <div className={styles.cardBadge}>Window Tint</div>
-              <h2 className={styles.cardTitle}>Tint film coverage</h2>
+              <div className={styles.cardBadge}>{t("Window Tint")}</div>
+              <h2 className={styles.cardTitle}>{t("Tint film coverage")}</h2>
               <ul className={styles.itemList}>
                 {TINT_ITEMS.map(item => (
                   <li key={item.title} className={styles.item}>
                     <span className={styles.itemIcon}>✓</span>
                     <div>
-                      <strong>{item.title}</strong>
-                      <p>{item.desc}</p>
+                      <strong>{t(item.title)}</strong>
+                      <p>{t(item.desc)}</p>
                     </div>
                   </li>
                 ))}
@@ -85,14 +89,14 @@ export default function CoveragePage() {
 
             <div className={styles.card}>
               <div className={styles.cardBadge}>PPF</div>
-              <h2 className={styles.cardTitle}>Paint protection film coverage</h2>
+              <h2 className={styles.cardTitle}>{t("Paint protection film coverage")}</h2>
               <ul className={styles.itemList}>
                 {PPF_ITEMS.map(item => (
                   <li key={item.title} className={styles.item}>
                     <span className={styles.itemIcon}>✓</span>
                     <div>
-                      <strong>{item.title}</strong>
-                      <p>{item.desc}</p>
+                      <strong>{t(item.title)}</strong>
+                      <p>{t(item.desc)}</p>
                     </div>
                   </li>
                 ))}
@@ -102,39 +106,39 @@ export default function CoveragePage() {
         </section>
 
         <section className={styles.notCoveredSection}>
-          <h2 className={styles.sectionTitle}>Not covered</h2>
+          <h2 className={styles.sectionTitle}>{t("Not covered")}</h2>
           <ul className={styles.notCoveredList}>
             {NOT_COVERED.map(item => (
               <li key={item} className={styles.notCoveredItem}>
                 <span className={styles.xIcon}>✕</span>
-                {item}
+                {t(item)}
               </li>
             ))}
           </ul>
         </section>
 
         <section className={styles.claimSection}>
-          <h2 className={styles.claimTitle}>How to make a warranty claim</h2>
+          <h2 className={styles.claimTitle}>{t("How to make a warranty claim")}</h2>
           <ol className={styles.stepList}>
             <li className={styles.step}>
               <span className={styles.stepNum}>01</span>
               <div>
-                <strong>Look up your warranty</strong>
-                <p>Go to the <Link href="/warranty">Warranty page</Link> and enter your warranty code, VIN, or phone number.</p>
+                <strong>{t("Look up your warranty")}</strong>
+                <p>{t("Go to the Warranty page and enter your warranty code, VIN, or phone number.")} <Link href="/warranty">{t("Warranty page")}</Link></p>
               </div>
             </li>
             <li className={styles.step}>
               <span className={styles.stepNum}>02</span>
               <div>
-                <strong>Contact your installer</strong>
-                <p>Bring your vehicle and warranty certificate to the authorised installer who performed the installation.</p>
+                <strong>{t("Contact your installer")}</strong>
+                <p>{t("Bring your vehicle and warranty certificate to the authorised installer who performed the installation.")}</p>
               </div>
             </li>
             <li className={styles.step}>
               <span className={styles.stepNum}>03</span>
               <div>
-                <strong>Assessment &amp; resolution</strong>
-                <p>Our team will assess the defect. Covered claims are resolved by repair or replacement of the affected film section.</p>
+                <strong>{t("Assessment & resolution")}</strong>
+                <p>{t("Our team will assess the defect. Covered claims are resolved by repair or replacement of the affected film section.")}</p>
               </div>
             </li>
           </ol>
@@ -144,8 +148,8 @@ export default function CoveragePage() {
       <footer className={styles.footer}>
         <span>© {new Date().getFullYear()} SOLARZED</span>
         <nav className={styles.footerNav}>
-          <Link href="/contact">Contact</Link>
-          <Link href="/warranty">Check warranty</Link>
+          <Link href="/contact">{t("Contact")}</Link>
+          <Link href="/warranty">{t("Check warranty")}</Link>
         </nav>
       </footer>
     </div>

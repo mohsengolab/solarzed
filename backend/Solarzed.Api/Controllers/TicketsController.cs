@@ -22,6 +22,8 @@ public class TicketsController(AppDbContext db) : ControllerBase
         var query = db.Tickets.AsNoTracking();
         if (!string.IsNullOrEmpty(f.Status) && Enum.TryParse<TicketStatus>(f.Status, true, out var st) && Enum.IsDefined(st))
             query = query.Where(t => t.Status == st);
+        if (!string.IsNullOrEmpty(f.Department) && Enum.TryParse<TicketDepartment>(f.Department, true, out var dep) && Enum.IsDefined(dep))
+            query = query.Where(t => t.Department == dep);
         if (Paging.Term(f.Q) is { } q)
             query = query.Where(t =>
                 t.Subject.Contains(q) || t.Code.Contains(q) || (t.UserPhone != null && t.UserPhone.Contains(q)) ||
@@ -29,7 +31,7 @@ public class TicketsController(AppDbContext db) : ControllerBase
                 (t.FirstName != null && t.FirstName.Contains(q)) || (t.LastName != null && t.LastName.Contains(q)));
         var page = new PageQuery(f.Page, f.PageSize, f.Sort, f.Dir);
         var result = await query.OrderBy(f.Sort, page.Desc, new Dictionary<string, System.Linq.Expressions.Expression<Func<Ticket, object>>> {
-            ["createdAt"] = t => t.CreatedAt, ["updatedAt"] = t => t.UpdatedAt, ["subject"] = t => t.Subject, ["status"] = t => t.Status,
+            ["createdAt"] = t => t.CreatedAt, ["updatedAt"] = t => t.UpdatedAt, ["subject"] = t => t.Subject, ["status"] = t => t.Status, ["department"] = t => t.Department,
         }, "updatedAt").ToPage(page, ct);
 
         var ids = result.Items.Select(t => t.Id).ToList();
@@ -41,7 +43,7 @@ public class TicketsController(AppDbContext db) : ControllerBase
         {
             items = result.Items.Select(t => new
             {
-                t.Id, t.Code, t.Subject, Status = t.Status.ToString().ToLower(), t.CreatedAt, t.UpdatedAt,
+                t.Id, t.Code, t.Subject, Status = t.Status.ToString().ToLower(), Department = t.Department.ToString().ToLower(), t.CreatedAt, t.UpdatedAt,
                 t.UserPhone, t.UserEmail, t.FirstName, t.LastName, t.Country, t.City, t.Job,
                 Replies = replies.GetValueOrDefault(t.Id, 0),
             }),
@@ -62,6 +64,7 @@ public class TicketsController(AppDbContext db) : ControllerBase
             ticket = new
             {
                 ticket.Id, ticket.Code, ticket.Subject, Status = ticket.Status.ToString().ToLower(),
+                Department = ticket.Department.ToString().ToLower(),
                 ticket.CreatedAt, ticket.UpdatedAt, ticket.UserPhone, ticket.UserEmail,
                 ticket.FirstName, ticket.LastName, ticket.Country, ticket.City, ticket.Job,
             },
@@ -121,6 +124,7 @@ public class TicketSearch
 {
     public string? Q { get; set; }
     public string? Status { get; set; }
+    public string? Department { get; set; }
     public int Page { get; set; } = 1;
     public int PageSize { get; set; } = 25;
     public string? Sort { get; set; }

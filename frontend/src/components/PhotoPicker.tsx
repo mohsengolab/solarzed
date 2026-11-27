@@ -2,6 +2,7 @@
 
 import { useEffect, useMemo, useState } from "react";
 import { compressPhoto, PHOTO_KINDS, PhotoKind, PhotoSet } from "@/lib/api";
+import { useT } from "@/lib/i18n/client";
 import styles from "./PhotoPicker.module.css";
 
 /**
@@ -9,6 +10,7 @@ import styles from "./PhotoPicker.module.css";
  * The vehicle (with plate) and installed-film photos are required.
  */
 export default function PhotoPicker({ value, onChange, disabled }: { value: PhotoSet; onChange: (next: PhotoSet) => void; disabled?: boolean }) {
+  const t = useT();
   const [busy, setBusy] = useState<PhotoKind | null>(null);
   const [error, setError] = useState("");
 
@@ -24,15 +26,15 @@ export default function PhotoPicker({ value, onChange, disabled }: { value: Phot
     if (!file) return;
     setError(""); setBusy(kind);
     try { onChange({ ...value, [kind]: await compressPhoto(file) }); }
-    catch (ex) { setError(ex instanceof Error ? ex.message : "Could not read this photo."); }
+    catch (ex) { setError(ex instanceof Error ? t(ex.message) : t("Could not read this photo.")); }
     finally { setBusy(null); }
   }
 
   return <fieldset className={styles.box}>
-    <legend>Installation photos <small>(vehicle with plate and installed film are required)</small></legend>
+    <legend>{t("Installation photos")} <small>{t("(vehicle with plate and installed film are required)")}</small></legend>
     {error && <p role="alert" className={styles.error}>{error}</p>}
     <div className={styles.grid}>
-      {PHOTO_KINDS.map(({ kind, labelEn: label, required }) => <div key={kind} className={styles.slot} data-filled={previews[kind] ? "" : undefined}>
+      {PHOTO_KINDS.map(({ kind, labelEn, required }) => { const label = t(labelEn); return <div key={kind} className={styles.slot} data-filled={previews[kind] ? "" : undefined}>
         <label>
           {/* eslint-disable-next-line @next/next/no-img-element -- local blob preview, not a remote image */}
           {previews[kind] ? <img src={previews[kind]} alt={label} /> : <span className={styles.plus} aria-hidden>{busy === kind ? "…" : "+"}</span>}
@@ -40,9 +42,9 @@ export default function PhotoPicker({ value, onChange, disabled }: { value: Phot
           <input type="file" accept="image/*" capture="environment" disabled={disabled || busy !== null}
             aria-label={label} data-kind={kind} onChange={event => { void pick(kind, event.target.files?.[0]); event.target.value = ""; }} />
         </label>
-        {previews[kind] && !disabled && <button type="button" className={styles.remove} aria-label={`Remove ${label}`}
+        {previews[kind] && !disabled && <button type="button" className={styles.remove} aria-label={t("Remove {name}", { name: label })}
           onClick={() => { const next = { ...value }; delete next[kind]; onChange(next); }}>×</button>}
-      </div>)}
+      </div>; })}
     </div>
   </fieldset>;
 }

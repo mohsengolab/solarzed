@@ -12,7 +12,11 @@ public record RegisterRequest(
     string Make, string Model, string Owner, string Phone, string Plate, string Vin,
     string FilmSerial, string InvoiceNumber, string Installed,
     string SellerName, string SellerPhone, string Installer,
-    string[]? Windows, string[]? Panels);
+    string[]? Windows, string[]? Panels,
+    Dictionary<string, GlassSize>? GlassSizes = null);
+
+/// <summary>The size of the film cut for one glass, in centimetres.</summary>
+public record GlassSize(decimal LengthCm, decimal WidthCm);
 
 public record WarrantyPublic(
     string Code, string Type, string Make, string Model, string VinMasked,
@@ -40,6 +44,29 @@ public static class WarrantyService
         "left-front-fender", "right-front-fender", "left-doors", "right-doors",
         "left-rear-quarter", "right-rear-quarter", "mirrors"];
 
+    /// <summary>Smallest film cut (length, width in cm) accepted per glass; a smaller piece cannot be registered.</summary>
+    public static readonly IReadOnlyDictionary<string, (decimal Length, decimal Width)> MinGlassSize = new Dictionary<string, (decimal, decimal)>
+    {
+        ["windshield"] = (100, 100),
+        ["left-front"] = (80, 50), ["right-front"] = (80, 50), ["left-rear"] = (80, 50), ["right-rear"] = (80, 50),
+        ["rear"] = (100, 0),
+        ["sunroof"] = (0, 0),
+    };
+
+    /// <summary>Every selected glass needs its film size, at least the minimum for that glass.</summary>
+    static string? CheckGlassSizes(string[] windows, Dictionary<string, GlassSize>? sizes)
+    {
+        foreach (var w in windows)
+        {
+            if (sizes == null || !sizes.TryGetValue(w, out var size) || size.LengthCm <= 0 || size.WidthCm <= 0 || size.LengthCm > 1000 || size.WidthCm > 1000)
+                return $"enter the film length and width for {w}";
+            var (minLength, minWidth) = MinGlassSize[w];
+            if (size.LengthCm < minLength || size.WidthCm < minWidth)
+                return $"the film for {w} must be at least {minLength} cm long" + (minWidth > 0 ? $" and {minWidth} cm wide" : "");
+        }
+        return null;
+    }
+
     static readonly Regex VinRx = new(@"^[A-HJ-NPR-Z0-9]{17}$", RegexOptions.Compiled);
     static readonly Regex PhoneRx = new(@"^\+?\d{7,15}$", RegexOptions.Compiled);
 
@@ -64,7 +91,7 @@ public static class WarrantyService
         return "SZ-" + new string(code);
     }
 
-    public static (string? Error, WarrantyRegistration? Entity) Validate(RegisterRequest req, int codeLength = 16)
+    public static (string? Error, WarrantyRegistration? Entity) Validate(RegisterRequest req, int codeLength = 16, bool requireGlassSizes = true)
     {
         if (string.IsNullOrWhiteSpace(req.Make)) return ("make required", null);
         if (string.IsNullOrWhiteSpace(req.Model)) return ("model required", null);
@@ -105,6 +132,12 @@ public static class WarrantyService
             areas = req.Windows ?? [];
             var invalid = areas.Except(ValidWindows).ToArray();
             if (invalid.Length > 0) return ($"unknown windows: {string.Join(", ", invalid)}", null);
+            // Customers and installers must give each glass's film size; staff entering old paperwork may leave it out.
+            if (requireGlassSizes || req.GlassSizes != null)
+            {
+                var sizeError = CheckGlassSizes(areas, req.GlassSizes);
+                if (sizeError != null) return (sizeError, null);
+            }
         }
         else
         {
@@ -134,6 +167,8 @@ public static class WarrantyService
             SellerPhone = sellerPhone,
             Installer = req.Installer.Trim(),
             AreasJson = JsonSerializer.Serialize(areas),
+            GlassSizesJson = type == WarrantyType.Tint && req.GlassSizes != null
+                ? JsonSerializer.Serialize(areas.ToDictionary(a => a, a => req.GlassSizes[a])) : null,
             FlagsJson = "[]"
         };
         return (null, entity);

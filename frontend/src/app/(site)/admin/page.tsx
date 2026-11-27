@@ -616,7 +616,7 @@ const loadWarranties = (q: string) => adminWarranties<WRow>(q).then(r => {
 function WarrantiesPanel() {
   const can = useCan();
   const seesCodes = can("codes.view");
-  const [status, setStatus] = useState("pending");
+  const [status, setStatus] = useState("");
   const [f, setF] = useState(W_EMPTY);
   const [selected, setSelected] = useState<WRow | null>(null);
   const [decStatus, setDecStatus] = useState("active");

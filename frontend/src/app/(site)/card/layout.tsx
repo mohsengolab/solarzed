@@ -1,3 +1,7 @@
 import type { Metadata } from "next";
-export const metadata: Metadata = { title: "Your warranty card", robots: { index: false, follow: false }, referrer: "no-referrer" };
+import { getT } from "@/lib/i18n/server";
+export async function generateMetadata(): Promise<Metadata> {
+  const t = await getT();
+  return { title: t("Your warranty card"), robots: { index: false, follow: false }, referrer: "no-referrer" };
+}
 export default function CardLayout({ children }: { children: React.ReactNode }) { return children; }

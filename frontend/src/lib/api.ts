@@ -226,6 +226,7 @@ const FarsiStrings = {
   "Tickets": "تیکت‌ها", "tickets": "تیکت‌ها", "Support tickets": "تیکت‌های پشتیبانی",
   "Subject": "موضوع", "Replies": "پاسخ‌ها", "User": "کاربر", "Profile": "پروفایل",
   "open": "باز", "answered": "پاسخ داده شد", "closed": "بسته", "Open": "باز",
+  "Choose a department: sales or support.": "واحد را انتخاب کنید: فروش یا پشتیبانی.",
   "Reply": "پاسخ", "Close ticket": "بستن تیکت", "Reopen": "بازگشایی",
   // Products: name-only edit + hard delete
   "Rename": "تغییر نام", "Delete product": "حذف محصول", "Delete roll": "حذف رول",
@@ -364,11 +365,20 @@ export interface WarrantyCard {
   statusLabel: string;
   coverage?: { filmEnds?: string | null; installEnds?: string | null } | null;
   link: string;
+  /** Datasheet values of the film: VLT, IR and UV rejection in %, thickness in mil. */
+  specs?: FilmSpecs | null;
 }
+
+export interface FilmSpecs { vlt?: number | null; irr?: number | null; uvr?: number | null; thicknessMil?: number | null }
 
 /** Owner inquiry: both the VIN and the mobile the warranty was registered to must match. */
 export function lookupByVinAndMobile(vin: string, phone: string) {
   return apiFetch<{ cards: WarrantyCard[] }>(`/api/warranty/owner?vin=${encodeURIComponent(vin)}&phone=${encodeURIComponent(phone)}`);
+}
+
+/** Owner inquiry by any one of: VIN, the mobile the warranty is registered to, or the owner's account email. */
+export function lookupOwner(q: string) {
+  return apiFetch<{ cards: WarrantyCard[] }>(`/api/warranty/owner?q=${encodeURIComponent(q)}`);
 }
 
 export function warrantyCard(code: string, key: string) {
@@ -464,10 +474,13 @@ export function adminDeleteRoll(id: string) {
   return apiFetch<{ ok: boolean }>(`/api/admin/rolls/${encodeURIComponent(id)}`, { method: "DELETE" });
 }
 
+/** The team a ticket goes to. */
+export type TicketDepartment = "support" | "sales";
+
 // ── Admin support tickets ────────────────────────────────────────────────────
 
 export interface AdminTicketRow {
-  id: number; code: string; subject: string; status: "open" | "answered" | "closed";
+  id: number; code: string; subject: string; status: "open" | "answered" | "closed"; department: TicketDepartment;
   createdAt: string; updatedAt: string; replies: number;
   userPhone: string | null; userEmail: string | null;
   firstName: string | null; lastName: string | null; country: string | null; city: string | null; job: string | null;
@@ -571,7 +584,7 @@ export function portalLogin(challengeId: string, code: string) {
 export function portalLogout() { return apiFetch<{ ok: boolean }>("/api/portal/logout", { method: "POST" }); }
 
 /** Saves the profile: first/last name, country, city and job. */
-export function portalProfile(data: { name?: string; firstName?: string; lastName?: string; country?: string; city?: string; job?: string }) {
+export function portalProfile(data: { name?: string; company?: string; firstName?: string; lastName?: string; country?: string; city?: string; job?: string }) {
   return apiFetch<PortalUser>("/api/portal/profile", { method: "POST", body: JSON.stringify(data) });
 }
 /** Starts the bind challenge for a new mobile number or email address; complete it with portalBindVerify. */
@@ -584,21 +597,32 @@ export function portalBindVerify(channel: PortalChannel, challengeId: string, co
 }
 
 // ── Portal support tickets: each ticket carries the writer's verified identity ──
-export interface PortalTicket { id: number; code: string; subject: string; status: "open" | "answered" | "closed"; createdAt: string; updatedAt: string; replies: number }
-export function portalCreateTicket(subject: string, message: string) {
-  return apiFetch<{ ticket: PortalTicket }>("/api/portal/tickets", { method: "POST", body: JSON.stringify({ subject, message }) });
+export interface PortalTicket { id: number; code: string; subject: string; status: "open" | "answered" | "closed"; department: TicketDepartment; createdAt: string; updatedAt: string; replies: number }
+export function portalCreateTicket(subject: string, message: string, department: TicketDepartment = "support") {
+  return apiFetch<{ ticket: PortalTicket }>("/api/portal/tickets", { method: "POST", body: JSON.stringify({ subject, message, department }) });
 }
 export function portalTickets() { return apiFetch<{ tickets: PortalTicket[] }>("/api/portal/tickets"); }
 export function portalTicketDetail(id: number) {
-  return apiFetch<{ ticket: { id: number; code: string; subject: string; status: string; createdAt: string; updatedAt: string }; replies: AdminTicketReply[] }>(`/api/portal/tickets/${id}`);
+  return apiFetch<{ ticket: { id: number; code: string; subject: string; status: string; department: TicketDepartment; createdAt: string; updatedAt: string }; replies: AdminTicketReply[] }>(`/api/portal/tickets/${id}`);
 }
 export function portalTicketReply(id: number, message: string) {
   return apiFetch<{ ok: boolean }>(`/api/portal/tickets/${id}/replies`, { method: "POST", body: JSON.stringify({ message }) });
 }
 
-export interface HeldBox { id: string; product: string; type: "tint" | "ppf"; rollId: string; heldSince: string | null }
+/** A held roll with what it is: product, size, warranty years and film specs (null when not recorded). */
+export interface HeldBox {
+  id: string; product: string; type: "tint" | "ppf"; rollId: string; heldSince: string | null;
+  productName?: string | null; lengthM?: number | null; widthCm?: number | null; filmYears?: number | null; installYears?: number | null;
+  vlt?: number | null; tser?: number | null; uv?: number | null; irr?: number | null; thicknessMil?: number | null; void?: boolean;
+}
 export function portalBoxes() { return apiFetch<{ boxes: HeldBox[]; outgoing: BoxTransfer[] }>("/api/portal/boxes"); }
-export function portalTransfer(data: { serials: string[]; toPhone: string; toName?: string | null; note?: string | null }) {
+/** Who a mobile or email belongs to. registered=false: a new mobile; the transfer creates the account. */
+export interface Recipient { registered: boolean; name: string | null; shopName: string | null; phone: string | null; email: string | null; partner: boolean }
+export function portalRecipient(by: { phone?: string; email?: string }) {
+  const q = by.email ? `email=${encodeURIComponent(by.email)}` : `phone=${encodeURIComponent(by.phone ?? "")}`;
+  return apiFetch<Recipient>(`/api/portal/recipient?${q}`);
+}
+export function portalTransfer(data: { serials: string[]; toPhone?: string | null; toEmail?: string | null; toName?: string | null; note?: string | null }) {
   return apiFetch<TransferResult>("/api/portal/boxes/transfer", { method: "POST", body: JSON.stringify(data) });
 }
 export function portalWarranties() { return apiFetch<{ warranties: WarrantyPublic[] }>("/api/portal/warranties"); }
@@ -695,6 +719,15 @@ export function adminReviewResendCard(ref: string) {
 /** The installation photos of one registration, by its opaque reference. */
 export function adminWarrantyPhotos(ref: string) {
   return apiFetch<{ items: { id: number; kind: PhotoKind; createdAt: string }[] }>(`/api/admin/review/photos?ref=${encodeURIComponent(ref)}`);
+}
+/** Installation photos of a warranty the signed-in customer owns or the installer registered. */
+export function portalWarrantyPhotos(code: string) {
+  return apiFetch<{ items: { id: number; kind: PhotoKind; createdAt: string }[] }>(`/api/portal/warranties/${encodeURIComponent(code)}/photos`);
+}
+export async function portalPhoto(id: number) {
+  const res = await fetch(`${BASE}/api/portal/photos/${id}`, { credentials: "include" });
+  if (!res.ok) throw new Error(`HTTP ${res.status}`);
+  return URL.createObjectURL(await res.blob());
 }
 /** Photos are fetched with the admin cookie and shown through object URLs. */
 export async function adminReviewPhoto(id: number) {

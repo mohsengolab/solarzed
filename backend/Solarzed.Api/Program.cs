@@ -73,6 +73,9 @@ builder.Services.AddRateLimiter(options =>
         ClientKey(context), _ => new FixedWindowRateLimiterOptions { PermitLimit = 10, Window = TimeSpan.FromMinutes(10), QueueLimit = 0 }));
     options.AddPolicy("portal-otp", context => RateLimitPartition.GetFixedWindowLimiter(
         ClientKey(context), _ => new FixedWindowRateLimiterOptions { PermitLimit = 20, Window = TimeSpan.FromMinutes(10), QueueLimit = 0 }));
+    // Receiver name lookup before a roll transfer: plenty for typing numbers, too slow to harvest names.
+    options.AddPolicy("recipient-lookup", context => RateLimitPartition.GetFixedWindowLimiter(
+        ClientKey(context), _ => new FixedWindowRateLimiterOptions { PermitLimit = 30, Window = TimeSpan.FromMinutes(1), QueueLimit = 0 }));
     options.AddPolicy("sms-test", context => RateLimitPartition.GetFixedWindowLimiter(
         ClientKey(context), _ => new FixedWindowRateLimiterOptions { PermitLimit = 5, Window = TimeSpan.FromMinutes(10), QueueLimit = 0 }));
 });

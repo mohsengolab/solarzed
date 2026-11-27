@@ -1,12 +1,15 @@
-/* Persian (/fa) and Arabic (/ar) landing pages. The legacy stylesheets were written for English (LTR);
+/* Persian and Arabic landing and product pages (any element with dir="rtl"). The legacy stylesheets were written for English (LTR);
    these rules only flip what does not follow dir="rtl" on its own and fit the type to Persian/Arabic script. */
-html[dir=rtl]{--sz-font:Vazirmatn,"Plus Jakarta Sans",Tahoma,sans-serif}
-html[dir=rtl] body{font-family:var(--sz-font)}
+[dir=rtl]{--sz-font:Vazirmatn,"Plus Jakarta Sans",Tahoma,sans-serif}
+[dir=rtl],[dir=rtl] body{font-family:var(--sz-font)}
 /* Letter-spacing pulls joined Persian/Arabic letters apart. */
-html[dir=rtl] .sv-home *{letter-spacing:normal!important}
-html[dir=rtl] .sz-hero-title{line-height:1.25;font-size:clamp(44px,5.4vw,88px)}
-html[dir=rtl] .sv-home h2{line-height:1.5}
-html[dir=rtl] .sv-brand small{font:500 9px Vazirmatn,sans-serif}
-html[dir=rtl] .sv-header nav>a::after,html[dir=rtl] .sv-dropdown summary::after{transform-origin:right}
-html[dir=rtl] .sv-header-actions{margin-left:0;margin-right:auto}
-html[dir=rtl] .sv-footer>div{margin-left:0;margin-right:auto}
+[dir=rtl] .sv-home *{letter-spacing:normal!important}
+[dir=rtl] .sz-hero-title{line-height:1.25;font-size:clamp(44px,5.4vw,88px)}
+[dir=rtl] .sv-home h2{line-height:1.5}
+[dir=rtl] .sv-brand small{font:500 9px Vazirmatn,sans-serif}
+[dir=rtl] .sv-header nav>a::after,[dir=rtl] .sv-dropdown summary::after{transform-origin:right}
+[dir=rtl] .sv-header-actions{margin-left:0;margin-right:auto}
+[dir=rtl] .sv-footer>div{margin-left:0;margin-right:auto}
+
+[dir=rtl] .series-page :is(h1,h2,h3,p,a,button,th,td,li,small,.eyebrow){letter-spacing:normal}
+[dir=rtl] .series-page :is(th,td){text-align:start}

@@ -1,5 +1,12 @@
 # Admin browser smoke test
 
+The independent public-site language checks run with `npm run test:i18n`.
+They start Next.js on port 3107 and a catalog fixture on 5107, with no database
+or SMS service. They cover EN/FA/AR, cookie persistence, public-page navigation,
+RTL mobile layouts, product selection and the Persian admin boundary. Screenshots
+and failure traces are saved under `test-results/i18n/`. Run
+`npm run check:translations` to check the Persian and Arabic dictionaries.
+
 Prerequisites: .NET 10, Node.js, SQL Server LocalDB (`MSSQLLocalDB`), Google
 Chrome, and restored backend/frontend dependencies.
 

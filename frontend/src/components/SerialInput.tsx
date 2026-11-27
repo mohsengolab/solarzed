@@ -2,6 +2,7 @@
 
 import { useRef, useState, KeyboardEvent } from "react";
 import { readRollNos, normalizeSerial, SERIAL } from "@/lib/readRollNos";
+import { useLang } from "@/lib/i18n/client";
 import css from "./SerialInput.module.css";
 
 const TEXT = {
@@ -11,6 +12,13 @@ const TEXT = {
     fromFile: (n: number, file: string) => `${n.toLocaleString("fa-IR")} ROLL NO از ${file} اضافه شد.`, none: "در این فایل ROLL NO معتبری پیدا نشد.",
     oldXls: "فایل .xls قدیمی پشتیبانی نمی‌شود؛ آن را به‌صورت .xlsx یا CSV ذخیره کنید.", unreadable: "این فایل خوانده نشد. فایل .xlsx یا CSV انتخاب کنید.",
     max: (n: number) => `حداکثر ${n.toLocaleString("fa-IR")} ROLL NO.`,
+  },
+  ar: {
+    placeholder: "امسح أو اكتب ROLL NO ثم اضغط Enter", add: "إضافة", upload: "ملف Excel", clear: "مسح الكل",
+    remove: "حذف", count: (n: number) => `${n} لفّة محددة`, empty: "لم تُضف أي لفّة بعد.", num: (n: number) => String(n), invalid: "غير صالح", duplicate: "موجود في القائمة ولم يُضف مرة أخرى",
+    fromFile: (n: number, file: string) => `أُضيف ${n} ROLL NO من ${file}.`, none: "لم يُعثر على ROLL NO صالح في هذا الملف.",
+    oldXls: "ملفات ‎.xls القديمة غير مدعومة؛ احفظه بصيغة ‎.xlsx أو CSV.", unreadable: "تعذّرت قراءة هذا الملف. اختر ملف ‎.xlsx أو CSV.",
+    max: (n: number) => `الحد الأقصى ${n} ROLL NO.`,
   },
   en: {
     placeholder: "Scan or type a ROLL NO and press Enter", add: "Add", upload: "Upload Excel", clear: "Clear all",
@@ -25,9 +33,11 @@ const TEXT = {
  * One-line carton serial entry: a barcode scanner types the Roll No and presses Enter, which adds it to the list.
  * Several numbers can be pasted at once, or read from an Excel/CSV file (Roll No column).
  */
-export default function SerialInput({ value, onChange, label, max = 200, lang = "fa" }:
-  { value: string[]; onChange: (next: string[]) => void; label: string; max?: number; lang?: "fa" | "en" }) {
-  const t = TEXT[lang];
+export default function SerialInput({ value, onChange, label, max = 200, lang }:
+  { value: string[]; onChange: (next: string[]) => void; label: string; max?: number; lang?: "fa" | "en" | "ar" }) {
+  // The page language by default (the admin panel provides Persian).
+  const pageLang = useLang();
+  const t = TEXT[lang ?? pageLang];
   const [text, setText] = useState("");
   const [note, setNote] = useState<{ error: boolean; text: string } | null>(null);
   const file = useRef<HTMLInputElement>(null);

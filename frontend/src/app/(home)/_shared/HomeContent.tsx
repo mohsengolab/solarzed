@@ -3,6 +3,8 @@ import { Fragment } from "react";
 import Link from "next/link";
 import HomeMotion from "../HomeMotion";
 import UvRays from "../UvRays";
+import { makeT } from "@/lib/i18n";
+import { RememberLang } from "@/components/LanguageSwitch";
 import SiteHeader, { SiteFooter } from "./SiteHeader";
 import { LANDING, type LandingLang } from "./landingCopy";
 
@@ -46,6 +48,7 @@ const ACTION_HREFS = ["/activate", "/warranty", "/account"];
 /** The landing page body, shared by "/" (English), "/fa" and "/ar". */
 export default function HomeContent({ lang }: { lang: LandingLang }) {
   const t = LANDING[lang];
+  const tr = makeT(lang);
   const { hero, intro, facts, warranties, story, registration, contact } = t;
   return (
     <div className="sv-home">
@@ -53,6 +56,7 @@ export default function HomeContent({ lang }: { lang: LandingLang }) {
         <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: JSON.stringify(organizationSchema) }} />
         <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: JSON.stringify(websiteSchema) }} />
       </>}
+      {lang !== "en" && <RememberLang lang={lang} />}
       <SiteHeader lang={lang} />
 
       <main>
@@ -134,7 +138,7 @@ export default function HomeContent({ lang }: { lang: LandingLang }) {
               const style = CARD_STYLE[i];
               return (
                 <article className={`sv-photo-card ${style.className}`} key={style.className}>
-                  <img src={style.img} alt={style.alt} loading="lazy" />
+                  <img src={style.img} alt={tr(style.alt)} loading="lazy" />
                   {i === 2 && (
                     <div className="sv-digital-badge">
                       <img className="brand-photo-logo" src="/assets/solarzed-original.png" alt="SOLARZED" />

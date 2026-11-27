@@ -298,3 +298,8 @@
 @media print {
   .header, .footer, .form, .helpText, .tabs, .divider, .terms, .cardLink { display: none !important; }
 }
+
+/* The owner's name above their vehicles and cards. */
+.ownerHead { display: flex; flex-direction: column; gap: 2px; padding: 14px 18px; border-radius: 14px; background: rgb(var(--sz-tint) / 0.06); border: 1px solid rgb(var(--sz-tint) / 0.12); text-align: start; }
+.ownerHead span { font-size: 11px; font-weight: 700; letter-spacing: .14em; text-transform: uppercase; color: var(--sz-fg-3); }
+.ownerHead b { font-size: 20px; color: var(--sz-fg-1, inherit); }

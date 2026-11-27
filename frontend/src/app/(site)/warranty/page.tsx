@@ -2,12 +2,16 @@
 
 import { useState, useEffect, FormEvent } from "react";
 import Link from "next/link";
-import { lookupWarranty, lookupByVinAndMobile, WarrantyCheck, WarrantyCard } from "@/lib/api";
+import { lookupWarranty, lookupOwner, WarrantyCheck, WarrantyCard } from "@/lib/api";
 import GoldCard from "@/components/GoldCard";
 import VehicleCoverage, { byVehicle } from "@/components/VehicleCoverage";
+import { useT } from "@/lib/i18n/client";
 import styles from "./warranty.module.css";
 
+const STATUS = { active: "Active warranty", pending: "In review", rejected: "Not active" } as const;
+
 function CertificateCard({ w }: { w: WarrantyCheck }) {
+  const t = useT();
   const statusColor = {
     active: "#1fc3cf",
     pending: "#f59e0b",
@@ -19,27 +23,27 @@ function CertificateCard({ w }: { w: WarrantyCheck }) {
       <div className={styles.certHeader}>
         <span className={styles.certCode}>{w.code}</span>
         <span className={styles.certBadge} style={{ background: statusColor + "22", color: statusColor, border: `1px solid ${statusColor}55` }}>
-          {w.statusLabel}
+          {t(STATUS[w.status] ?? w.statusLabel)}
         </span>
       </div>
       <div className={styles.certGrid}>
-        <div><span>Vehicle</span><b>{w.make} {w.model}</b></div>
-        <div><span>Type</span><b>{w.type === "ppf" ? "Paint protection film" : "Window film"}</b></div>
-        <div><span>Installed</span><b>{w.installed}</b></div>
+        <div><span>{t("Vehicle")}</span><b>{w.make} {w.model}</b></div>
+        <div><span>{t("Type")}</span><b>{w.type === "ppf" ? t("Paint protection film") : t("Window film")}</b></div>
+        <div><span>{t("Installed")}</span><b>{w.installed}</b></div>
       </div>
       {w.coverage && (
         <div className={styles.certCoverage}>
-          <span>Coverage</span>
+          <span>{t("Coverage")}</span>
           <div>
-            {w.coverage.filmEnds && <p>Film warranty ends: <b>{w.coverage.filmEnds}</b></p>}
-            {w.coverage.installEnds && <p>Installation warranty ends: <b>{w.coverage.installEnds}</b></p>}
-            {!w.coverage.filmEnds && !w.coverage.installEnds && <p>Per approved product terms</p>}
+            {w.coverage.filmEnds && <p>{t("Film warranty ends")}: <b>{w.coverage.filmEnds}</b></p>}
+            {w.coverage.installEnds && <p>{t("Installation warranty ends")}: <b>{w.coverage.installEnds}</b></p>}
+            {!w.coverage.filmEnds && !w.coverage.installEnds && <p>{t("Per approved product terms")}</p>}
           </div>
         </div>
       )}
       {w.statusNote && (
         <div className={styles.certNote}>
-          <b>Note:</b> {w.statusNote}
+          <b>{t("Note")}:</b> {w.statusNote}
         </div>
       )}
     </div>
@@ -47,21 +51,21 @@ function CertificateCard({ w }: { w: WarrantyCheck }) {
 }
 
 export default function WarrantyPage() {
+  const t = useT();
   const [q, setQ] = useState("");
   const [records, setRecords] = useState<WarrantyCheck[] | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  // "owner": VIN + the mobile the installer registered the warranty to → the full gold card.
+  // "owner": the VIN, the mobile the installer registered the warranty to, or the owner's email → the gold cards.
   const [mode, setMode] = useState<"code" | "owner">("owner");
-  const [vin, setVin] = useState("");
-  const [mobile, setMobile] = useState("");
+  const [who, setWho] = useState("");
   const [cards, setCards] = useState<WarrantyCard[] | null>(null);
 
   async function ownerLookup(e: FormEvent) {
     e.preventDefault();
     setLoading(true); setError(null); setCards(null);
-    try { setCards((await lookupByVinAndMobile(vin.trim(), mobile.trim())).cards); }
-    catch (ex: unknown) { setError(ex instanceof Error ? ex.message : "Lookup failed"); }
+    try { setCards((await lookupOwner(who.trim())).cards); }
+    catch (ex: unknown) { setError(ex instanceof Error ? t(ex.message) : t("Lookup failed")); }
     finally { setLoading(false); }
   }
 
@@ -85,7 +89,7 @@ export default function WarrantyPage() {
       const res = await lookupWarranty(value);
       setRecords(res.records);
     } catch (e: unknown) {
-      setError(e instanceof Error ? e.message : "Lookup failed");
+      setError(e instanceof Error ? t(e.message) : t("Lookup failed"));
     } finally {
       setLoading(false);
     }
@@ -97,25 +101,6 @@ export default function WarrantyPage() {
     doLookup(q.trim());
   }
 
-  async function showSample() {
-    setQ("SZ-DEMO-0001");
-    setLoading(true);
-    setError(null);
-    // mock sample
-    setRecords([{
-      code: "SZ-DEMO-0001",
-      type: "tint",
-      make: "Toyota",
-      model: "Camry",
-      installed: "2026-03-15",
-      areas: ["left-front", "right-front", "left-rear", "right-rear", "rear"],
-      status: "active",
-      statusLabel: "Active warranty",
-      coverage: { filmEnds: "2031-03-14", installEnds: "2028-03-14" },
-    }]);
-    setLoading(false);
-  }
-
   return (
     <div className={styles.page}>
       <header className={styles.header}>
@@ -123,45 +108,45 @@ export default function WarrantyPage() {
           {/* eslint-disable-next-line @next/next/no-img-element */}
           <img src="/assets/solarzed-original.png" width={190} height={38} alt="SOLARZED" />
         </Link>
-        <Link href="/contact" className={styles.support}>Support</Link>
+        <Link href="/contact" className={styles.support}>{t("Support")}</Link>
       </header>
 
       <main className={styles.hero}>
         <div className={styles.inner}>
-          <h1>WARRANTY INQUIRY</h1>
-          <p className={styles.sub}>Window film and paint protection film</p>
+          <h1>{t("WARRANTY INQUIRY")}</h1>
+          <p className={styles.sub}>{t("Window film and paint protection film")}</p>
 
           <div className={styles.tabs} role="tablist">
-            <button type="button" role="tab" aria-selected={mode === "owner"} onClick={() => { setMode("owner"); setError(null); }}>VIN + mobile</button>
-            <button type="button" role="tab" aria-selected={mode === "code"} onClick={() => { setMode("code"); setError(null); }}>Warranty number</button>
+            <button type="button" role="tab" aria-selected={mode === "owner"} onClick={() => { setMode("owner"); setError(null); }}>{t("VIN, mobile or email")}</button>
+            <button type="button" role="tab" aria-selected={mode === "code"} onClick={() => { setMode("code"); setError(null); }}>{t("Warranty number")}</button>
           </div>
 
           {mode === "owner" && <form onSubmit={ownerLookup} className={styles.form}>
-            <label htmlFor="inquiry-vin" className="visually-hidden">VIN</label>
-            <input id="inquiry-vin" value={vin} onChange={e => setVin(e.target.value.toUpperCase())} required minLength={17} maxLength={20}
-              autoComplete="off" spellCheck={false} autoCapitalize="characters" dir="ltr" placeholder="VIN (17 characters)" />
-            <label htmlFor="inquiry-mobile" className="visually-hidden">Mobile number</label>
-            <input id="inquiry-mobile" value={mobile} onChange={e => setMobile(e.target.value)} required maxLength={20}
-              type="tel" inputMode="tel" autoComplete="tel" dir="ltr" placeholder="Mobile number (09…)" />
-            <button type="submit" disabled={loading}>{loading ? "Searching…" : "Show my warranty card"}</button>
-            <p className={styles.helpText}>Enter your vehicle&apos;s VIN and the mobile number your installer registered the warranty to.
-              If different films were used on different windows, you will see the warranty of each window.
-              Have more than one vehicle? Look up each VIN, or <Link href="/account">sign in to your account</Link> to see all of them.</p>
+            <label htmlFor="inquiry-who" className="visually-hidden">{t("VIN, mobile or email")}</label>
+            <input id="inquiry-who" value={who} onChange={e => setWho(e.target.value)} required maxLength={254}
+              autoComplete="off" spellCheck={false} dir="ltr" placeholder={t("VIN, mobile (09…) or email")} />
+            <button type="submit" disabled={loading}>{loading ? t("Searching…") : t("Show my warranty card")}</button>
+            <p className={styles.helpText}>{t("Enter only one of: your vehicle's VIN, the mobile number your installer registered the warranty to, or the email of your Solarzed account. If different films were used on different windows, you will see the warranty of each window.")}{" "}
+              <Link href="/account">{t("Sign in to your account")}</Link></p>
           </form>}
 
           {mode === "owner" && cards !== null && <div className={`${styles.results} ${styles.cards}`} aria-live="polite">
             {cards.length === 0
-              ? <p className={styles.noResult}>No warranty found for this VIN and mobile number.</p>
-              : byVehicle(cards).map(car => <div key={car[0].code} className={styles.cards}>
+              ? <p className={styles.noResult}>{t("No warranty found for that input.")}</p>
+              : <>{[...new Set(cards.map(c => c.owner).filter(Boolean))].length > 0 && <div className={styles.ownerHead}>
+                <span>{t("Warranty owner")}</span>
+                <b>{[...new Set(cards.map(c => c.owner).filter(Boolean))].join(" · ")}</b>
+              </div>}
+              {byVehicle(cards).map(car => <div key={car[0].code} className={styles.cards}>
                 <VehicleCoverage title={`${car[0].make} ${car[0].model} · ${car[0].plate}`}
                   items={car.map(c => ({ ...c, film: c.product }))} />
                 {car.map(c => <GoldCard key={c.code} card={c} />)}
-              </div>)}
+              </div>)}</>}
           </div>}
 
           {mode === "code" && <form onSubmit={onSubmit} className={styles.form}>
             <label htmlFor="inquiry-q" className="visually-hidden">
-              Warranty number or VIN
+              {t("Warranty number or VIN")}
             </label>
             <input
               id="inquiry-q"
@@ -172,17 +157,10 @@ export default function WarrantyPage() {
               autoComplete="off"
               spellCheck={false}
               autoCapitalize="characters"
-              placeholder="Warranty number / VIN"
+              placeholder={t("Warranty number / VIN")}
             />
             <button type="submit" disabled={loading}>
-              {loading ? "Searching…" : "Query"}
-            </button>
-            <p className={styles.helpText}>
-              Enter your warranty number (the 7 digits on your warranty card, or SZ-…) or the 17-character VIN.
-              To see every warranty registered to your mobile, <Link href="/account">sign in to your account</Link>.
-            </p>
-            <button type="button" className={styles.sampleBtn} onClick={showSample}>
-              See a sample certificate
+              {loading ? t("Searching…") : t("Query")}
             </button>
           </form>}
 
@@ -191,14 +169,14 @@ export default function WarrantyPage() {
           {mode === "code" && records !== null && (
             <div className={styles.results} aria-live="polite">
               {records.length === 0 ? (
-                <p className={styles.noResult}>No warranty found for that input.</p>
+                <p className={styles.noResult}>{t("No warranty found for that input.")}</p>
               ) : (
                 records.map(w => <CertificateCard key={w.code} w={w} />)
               )}
             </div>
           )}
 
-          <div className={styles.divider}><span>Description</span></div>
+          <div className={styles.divider}><span>{t("Description")}</span></div>
 
           <div className={styles.terms}>
             {[
@@ -224,8 +202,8 @@ export default function WarrantyPage() {
               },
             ].map(item => (
               <details key={item.title}>
-                <summary>{item.title}</summary>
-                <p>{item.body}</p>
+                <summary>{t(item.title)}</summary>
+                <p>{t(item.body)}</p>
               </details>
             ))}
           </div>
@@ -234,8 +212,8 @@ export default function WarrantyPage() {
 
       <footer className={styles.footer}>
         <span>© SOLARZED</span>
-        <Link href="/coverage">Warranty guide</Link>
-        <Link href="/contact">Support</Link>
+        <Link href="/coverage">{t("Warranty guide")}</Link>
+        <Link href="/contact">{t("Support")}</Link>
       </footer>
     </div>
   );

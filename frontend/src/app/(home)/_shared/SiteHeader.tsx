@@ -3,12 +3,14 @@ import type { CSSProperties } from "react";
 import Link from "next/link";
 import { CATEGORIES, seriesHref } from "@/lib/catalog";
 import { getCatalog } from "@/lib/liveCatalog";
-import { LANDING, LANDING_LANGS, LANG_NAMES, LANG_SHORT, landingHref, type LandingLang } from "./landingCopy";
+import LanguageSwitch from "@/components/LanguageSwitch";
+import { makeT } from "@/lib/i18n";
+import { LANDING, landingHref, type LandingLang } from "./landingCopy";
 import mega from "./mega-menu.module.css";
 
 export function Brand({ lang = "en" }: { lang?: LandingLang }) {
   return (
-    <Link href={landingHref(lang)} className="logo sv-brand" aria-label="Solarzed home">
+    <Link href={landingHref(lang)} className="logo sv-brand" aria-label={makeT(lang)("Solarzed home")}>
       <img src="/assets/solarzed-original.png" width="220" height="27" alt="SOLARZED" />
       <small>{LANDING[lang].header.tagline}</small>
     </Link>
@@ -50,31 +52,12 @@ async function ProductsMenu({ lang }: { lang: LandingLang }) {
   );
 }
 
-/** EN / فا / ع links between the three landing pages. */
-function LanguageSwitch({ lang }: { lang: LandingLang }) {
-  return (
-    <div className="sv-lang" role="group" aria-label={LANDING[lang].header.language}>
-      {LANDING_LANGS.map(code => (
-        <Link
-          key={code}
-          href={landingHref(code)}
-          hrefLang={code}
-          lang={code}
-          title={LANG_NAMES[code]}
-          aria-label={LANG_NAMES[code]}
-          aria-current={code === lang ? "page" : undefined}
-        >{LANG_SHORT[code]}</Link>
-      ))}
-    </div>
-  );
-}
-
-/** The site header. Pass `lang` on the landing pages: it translates the labels and shows the language switch. */
+/** The site header. Pass `lang` to translate the labels and show the language switch (landing and product pages). */
 export default function SiteHeader({ lang }: { lang?: LandingLang }) {
   const t = LANDING[lang ?? "en"].header;
   return (
     <header className="sv-header">
-      <nav id="navigation" aria-label="Main navigation">
+      <nav id="navigation" aria-label={makeT(lang ?? "en")("Main navigation")}>
         <ProductsMenu lang={lang ?? "en"} />
         <details className="sv-dropdown">
           <summary>{t.warranty} <span>▾</span></summary>
@@ -89,7 +72,7 @@ export default function SiteHeader({ lang }: { lang?: LandingLang }) {
       </nav>
       <Brand lang={lang} />
       <div className="sv-header-actions">
-        {lang && <LanguageSwitch lang={lang} />}
+        {lang && <LanguageSwitch className="sv-lang" label={t.language} current={lang} />}
         <Link className="sv-dealer" href="/account">{t.dealer}</Link>
         <Link className="sv-button" href="/contact">{t.contacts}</Link>
       </div>

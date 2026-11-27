@@ -1,11 +1,13 @@
 "use client";
 
 import { useEffect } from "react";
+import { useT } from "@/lib/i18n/client";
 
 // Port of the static site's motion.js, presentation.js reveals, reference-home.js and the
 // menu toggle from solarzed.js. It drives the server-rendered markup through the same
 // classes the original stylesheets expect.
 export default function HomeMotion() {
+  const t = useT();
   useEffect(() => {
     const root = document.documentElement;
     const cleanups: (() => void)[] = [];
@@ -27,7 +29,7 @@ export default function HomeMotion() {
       const setOpen = (open: boolean) => {
         nav.classList.toggle("open", open);
         menu.setAttribute("aria-expanded", String(open));
-        menu.setAttribute("aria-label", open ? "Close menu" : "Open menu");
+        menu.setAttribute("aria-label", open ? t("Close menu") : t("Open menu"));
       };
       menu.onclick = () => setOpen(!nav.classList.contains("open"));
       nav.querySelectorAll("a").forEach(a => (a.onclick = () => setOpen(false)));
@@ -197,7 +199,7 @@ export default function HomeMotion() {
     cleanups.push(() => { vo.disconnect(); cancelAnimationFrame(raf); });
 
     return () => cleanups.forEach(c => c());
-  }, []);
+  }, [t]);
 
   return null;
 }

@@ -65,6 +65,9 @@ public class WarrantyRegistration
     public string AreasJson { get; set; } = "[]";    // string[] of window or panel keys
 
     [Column(TypeName = "nvarchar(max)")]
+    public string? GlassSizesJson { get; set; }      // window film: { glass: { lengthCm, widthCm } }
+
+    [Column(TypeName = "nvarchar(max)")]
     public string FlagsJson { get; set; } = "[]";    // string[] flag codes
 
     public WarrantyStatus Status { get; set; } = WarrantyStatus.Pending;

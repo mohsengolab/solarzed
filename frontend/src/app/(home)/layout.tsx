@@ -1,5 +1,8 @@
 import type { Metadata, Viewport } from "next";
 import LegacyHead from "./_shared/LegacyHead";
+import { LangProvider } from "@/lib/i18n/client";
+import { dirOf } from "@/lib/i18n";
+import { getLang } from "@/lib/i18n/server";
 
 export const metadata: Metadata = {
   metadataBase: new URL("https://solarzed.com"),
@@ -55,11 +58,12 @@ export const metadata: Metadata = {
 
 export const viewport: Viewport = { themeColor: "#102a43" };
 
-export default function HomeLayout({ children }: { children: React.ReactNode }) {
+export default async function HomeLayout({ children }: { children: React.ReactNode }) {
+  const lang = await getLang();
   return (
-    <html lang="en" dir="ltr">
+    <html data-scroll-behavior="smooth" lang={lang} dir={dirOf(lang)}>
       <LegacyHead />
-      <body>{children}</body>
+      <body><LangProvider lang={lang}>{children}</LangProvider></body>
     </html>
   );
 }

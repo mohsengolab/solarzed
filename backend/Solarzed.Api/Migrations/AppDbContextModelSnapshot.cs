@@ -674,6 +674,9 @@ namespace Solarzed.Api.Migrations
                     b.Property<DateTime>("CreatedAt")
                         .HasColumnType("datetime2");
 
+                    b.Property<int>("Department")
+                        .HasColumnType("int");
+
                     b.Property<string>("FirstName")
                         .HasMaxLength(100)
                         .HasColumnType("nvarchar(100)");
@@ -958,6 +961,9 @@ namespace Solarzed.Api.Migrations
 
                     b.Property<string>("FlagsJson")
                         .IsRequired()
+                        .HasColumnType("nvarchar(max)");
+
+                    b.Property<string>("GlassSizesJson")
                         .HasColumnType("nvarchar(max)");
 
                     b.Property<DateOnly?>("InstallEnds")

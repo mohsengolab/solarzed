@@ -15,7 +15,9 @@
 @media (prefers-reduced-motion: reduce) { .shine { animation: none; opacity: 0; } }
 .head { position: relative; display: flex; justify-content: space-between; align-items: center; gap: 12px; }
 .brand { font-weight: 800; letter-spacing: .18em; font-size: 18px; }
-.brand b { font-weight: 800; color: #5a3d00; }
+.brand { display: inline-flex; align-items: center; padding: 6px 10px; border-radius: 8px; background: #fff; box-shadow: 0 1px 4px rgba(90, 61, 0, .25); }
+.brand img { display: block; width: 130px; height: auto; }
+.specs { position: relative; display: block; margin: 3px 0 0; font-size: 12px; font-weight: 700; letter-spacing: .03em; }
 .badge { padding: 4px 10px; border-radius: 999px; font-size: 11px; font-weight: 700; letter-spacing: .1em; background: rgba(59, 42, 5, .85); color: #ffe7a0; }
 .chip { position: relative; width: 44px; height: 32px; margin: 18px 0 10px; border-radius: 6px; background: linear-gradient(135deg, #fff6d0, #c99a2e); box-shadow: inset 0 0 0 1px rgba(90, 61, 0, .35); }
 .kind { position: relative; margin: 0; font-size: 13px; font-weight: 600; letter-spacing: .04em; text-transform: uppercase; }

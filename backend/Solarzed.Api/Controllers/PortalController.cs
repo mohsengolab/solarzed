@@ -90,7 +90,9 @@ public class PortalController(PortalService portal, BoxTransferService transfers
     public async Task<IActionResult> Profile([FromBody] PortalProfileRequest request)
     {
         var me = await Me();
+        var shop = me.ShopName;
         PortalService.ApplyProfile(me, request);
+        if (shop != me.ShopName) AuditLog.Add(db, "portal:" + me.Phone, "partner", me.Phone ?? me.Email ?? "", "renamed", AuditLog.Diff(("shop", shop, me.ShopName)));
         try { await db.SaveChangesAsync(); }
         catch (DbUpdateConcurrencyException) { return Conflict(new { error = "Please retry saving your profile." }); }
         return Ok(PortalService.Shape(me));
@@ -154,11 +156,15 @@ public class PortalController(PortalService portal, BoxTransferService transfers
         var message = (request.Message ?? "").Trim();
         if (subject.Length is 0 or > 200) return BadRequest(new { error = "Enter a subject of up to 200 characters." });
         if (message.Length is 0 or > 4000) return BadRequest(new { error = "Write your question (up to 4000 characters)." });
+        var department = TicketDepartment.Support;
+        if (!string.IsNullOrWhiteSpace(request.Department) &&
+            (!Enum.TryParse(request.Department.Trim(), true, out department) || !Enum.IsDefined(department)))
+            return BadRequest(new { error = "Choose a department: sales or support." });
         var me = await Me();
         var ticket = new Ticket
         {
             Code = "TK-" + Convert.ToHexString(System.Security.Cryptography.RandomNumberGenerator.GetBytes(4)),
-            Subject = subject, UserId = me.Id,
+            Subject = subject, Department = department, UserId = me.Id,
             UserPhone = me.Phone, UserEmail = me.Email,
             FirstName = me.FirstName, LastName = me.LastName,
             Country = me.Country, City = me.City, Job = me.Job,
@@ -167,7 +173,7 @@ public class PortalController(PortalService portal, BoxTransferService transfers
         db.TicketReplies.Add(new TicketReply { Ticket = ticket, Author = "user", Message = message });
         try { await db.SaveChangesAsync(); }
         catch (DbUpdateException) { ticket.Code = "TK-" + Convert.ToHexString(System.Security.Cryptography.RandomNumberGenerator.GetBytes(4)); await db.SaveChangesAsync(); }
-        return Ok(new { ticket = new { ticket.Id, ticket.Code, ticket.Subject, Status = ticket.Status.ToString().ToLower(), ticket.CreatedAt, ticket.UpdatedAt, Replies = 1 } });
+        return Ok(new { ticket = new { ticket.Id, ticket.Code, ticket.Subject, Status = ticket.Status.ToString().ToLower(), Department = ticket.Department.ToString().ToLower(), ticket.CreatedAt, ticket.UpdatedAt, Replies = 1 } });
     }
 
     [HttpGet("tickets")]
@@ -176,7 +182,7 @@ public class PortalController(PortalService portal, BoxTransferService transfers
         var me = await Me();
         var tickets = await db.Tickets.AsNoTracking().Where(t => t.UserId == me.Id)
             .OrderByDescending(t => t.UpdatedAt).Take(100)
-            .Select(t => new { t.Id, t.Code, t.Subject, t.Status, t.CreatedAt, t.UpdatedAt, Replies = db.TicketReplies.Count(r => r.TicketId == t.Id) })
+            .Select(t => new { t.Id, t.Code, t.Subject, t.Status, t.Department, t.CreatedAt, t.UpdatedAt, Replies = db.TicketReplies.Count(r => r.TicketId == t.Id) })
             .ToListAsync();
         return Ok(new { tickets });
     }
@@ -189,7 +195,7 @@ public class PortalController(PortalService portal, BoxTransferService transfers
         if (ticket == null) return NotFound(new { error = "Ticket not found." });
         var replies = await db.TicketReplies.AsNoTracking().Where(r => r.TicketId == id)
             .OrderBy(r => r.CreatedAt).ThenBy(r => r.Id).ToListAsync();
-        return Ok(new { ticket = new { ticket.Id, ticket.Code, ticket.Subject, Status = ticket.Status.ToString().ToLower(), ticket.CreatedAt, ticket.UpdatedAt },
+        return Ok(new { ticket = new { ticket.Id, ticket.Code, ticket.Subject, Status = ticket.Status.ToString().ToLower(), Department = ticket.Department.ToString().ToLower(), ticket.CreatedAt, ticket.UpdatedAt },
             replies = replies.Select(r => new { r.Id, author = r.Author, authorLabel = r.AuthorLabel, r.Message, r.CreatedAt }) });
     }
 
@@ -222,7 +228,19 @@ public class PortalController(PortalService portal, BoxTransferService transfers
         var me = await Me();
         if (me.Phone is not { } phone)
             return BadRequest(new { error = "Add and verify your mobile number first; cartons are handed over by mobile number." });
-        try { return Ok(await transferSms.Notify(await transfers.TransferAsHolder(request, phone), HttpContext.RequestAborted)); }
+        try { return Ok(await transferSms.Notify(await transfers.TransferAsHolderTo(request, phone), HttpContext.RequestAborted)); }
+        catch (ActivationError ex) { return StatusCode(ex.Status, new { error = ex.Message }); }
+    }
+
+    /// <summary>The receiver's name for a mobile or email, shown before the sender confirms a transfer.</summary>
+    [HttpGet("recipient"), EnableRateLimiting("recipient-lookup")]
+    public async Task<IActionResult> Recipient([FromQuery] string? phone, [FromQuery] string? email)
+    {
+        var me = await Me();
+        if (me.Phone is not { } mine)
+            return BadRequest(new { error = "Add and verify your mobile number first; cartons are handed over by mobile number." });
+        if (string.IsNullOrWhiteSpace(phone) && string.IsNullOrWhiteSpace(email)) return BadRequest(new { error = "Enter the receiver's mobile number or email." });
+        try { return Ok(await transfers.Recipient(phone, email, mine)); }
         catch (ActivationError ex) { return StatusCode(ex.Status, new { error = ex.Message }); }
     }
 
@@ -257,11 +275,34 @@ public class PortalController(PortalService portal, BoxTransferService transfers
         var me = await Me();
         return Ok(new { warranties = me.Phone is { } phone ? await portal.Warranties(phone) : Array.Empty<WarrantyPublic>() });
     }
+
+    // ── Installation photos: the vehicle's owner and the installer who registered it can see them ──
+
+    /// <summary>The installation photos of a warranty the signed-in user owns or installed.</summary>
+    [HttpGet("warranties/{code}/photos")]
+    public async Task<IActionResult> WarrantyPhotos(string code, CancellationToken ct)
+    {
+        var me = await Me();
+        if (me.Phone is not { } phone || !await portal.CanSeePhotos(phone, code, ct)) return NotFound(new { error = "Warranty not found." });
+        var items = await db.WarrantyPhotos.AsNoTracking().Where(p => p.WarrantyCode == code).OrderBy(p => p.Id)
+            .Select(p => new { p.Id, p.Kind, p.CreatedAt }).ToListAsync(ct);
+        return Ok(new { items });
+    }
+
+    [HttpGet("photos/{id:long}")]
+    public async Task<IActionResult> Photo(long id, CancellationToken ct)
+    {
+        var me = await Me();
+        var photo = await db.WarrantyPhotos.AsNoTracking().FirstOrDefaultAsync(p => p.Id == id, ct);
+        if (photo == null || me.Phone is not { } phone || !await portal.CanSeePhotos(phone, photo.WarrantyCode, ct)) return NotFound();
+        Response.Headers.CacheControl = "private, max-age=600";
+        return File(photo.Data, photo.ContentType);
+    }
 }
 
 public record PortalOtpRequest(string? Phone, string? Email, string? Channel);
 public record PortalLoginRequest(string ChallengeId, string Code);
 public record PortalBindRequest(string Identifier);
 public record PortalBindVerifyRequest(string ChallengeId, string Code);
-public record PortalTicketRequest(string? Subject, string? Message);
+public record PortalTicketRequest(string? Subject, string? Message, string? Department = null);
 public record PortalTicketReplyRequest(string? Message);

@@ -13,7 +13,8 @@ public class WarrantyTests
 {
     static RegisterRequest Request() => new("tint", "Toyota", "Camry", "Sample Customer",
         "09121111111", "DEMO123", "JTDBE32K123456789", "UNKNOWN-ROLL", "INV1", "2026-01-15",
-        "Sample Seller", "09123456789", "Sample Shop", ["left-front", "right-front", "rear"], null);
+        "Sample Seller", "09123456789", "Sample Shop", ["left-front", "right-front", "rear"], null,
+        new() { ["left-front"] = new(80, 50), ["right-front"] = new(85, 55), ["rear"] = new(100, 40) });
 
     static AppDbContext Database() => new(new DbContextOptionsBuilder<AppDbContext>()
         .UseInMemoryDatabase(Guid.NewGuid().ToString()).Options);
@@ -51,6 +52,23 @@ public class WarrantyTests
         var result = WarrantyService.Validate(Request() with { Type = "ppf", Panels = ["hood", "mirrors"] });
         Assert.Null(result.Error);
         Assert.Equal(WarrantyType.Ppf, result.Entity!.Type);
+    }
+
+    [Fact]
+    public void RejectsFilmCutsBelowTheMinimumForEachGlass()
+    {
+        var sizes = Request().GlassSizes!;
+        Assert.NotNull(WarrantyService.Validate(Request() with { GlassSizes = null }).Error);
+        Assert.NotNull(WarrantyService.Validate(Request() with { GlassSizes = new(sizes) { ["left-front"] = new(79, 50) } }).Error);
+        Assert.NotNull(WarrantyService.Validate(Request() with { GlassSizes = new(sizes) { ["right-front"] = new(80, 49) } }).Error);
+        Assert.NotNull(WarrantyService.Validate(Request() with { GlassSizes = new(sizes) { ["rear"] = new(99, 60) } }).Error);
+        var windshield = Request() with { Windows = ["windshield", "sunroof"], GlassSizes = new() { ["windshield"] = new(100, 99), ["sunroof"] = new(30, 20) } };
+        Assert.NotNull(WarrantyService.Validate(windshield).Error);
+        var ok = WarrantyService.Validate(windshield with { GlassSizes = new() { ["windshield"] = new(100, 100), ["sunroof"] = new(30, 20) } });
+        Assert.Null(ok.Error);
+        Assert.Contains("windshield", ok.Entity!.GlassSizesJson);
+        // Staff typing in old paperwork may leave the sizes out.
+        Assert.Null(WarrantyService.Validate(Request() with { GlassSizes = null }, requireGlassSizes: false).Error);
     }
 
     [Theory]

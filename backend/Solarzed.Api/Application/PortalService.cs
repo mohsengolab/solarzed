@@ -229,6 +229,8 @@ public class PortalService(AppDbContext db, IActivationSmsSender sms, IEmailSend
         user.Country = Clean(req.Country, 100);
         user.City = Clean(req.City, 100);
         user.Job = Clean(req.Job, 100);
+        // The company (shop / workshop name) is defined by an admin in Partners; once it exists the user may rename it, never remove it.
+        if (user.ShopName != null && Clean(req.Company, 200) is { } company) user.ShopName = company;
         var name = (req.Name ?? "").Trim();
         if (name.Length > 0) user.Name = name.Length > 200 ? name[..200] : name;
     }
@@ -249,6 +251,13 @@ public class PortalService(AppDbContext db, IActivationSmsSender sms, IEmailSend
             .Select(g => new { g.Key, Count = g.Count() }).ToDictionaryAsync(x => x.Key, x => x.Count);
         return rows.Select(x => new InstallerWarranty(WarrantyService.ToPublic(x), MaskPhone(x.Phone), x.Country,
             photos.GetValueOrDefault(x.Code), x.CreatedAt)).ToArray();
+    }
+
+    /// <summary>Installation photos are shown to the vehicle's owner (warranty mobile) and to the installer who registered it.</summary>
+    public Task<bool> CanSeePhotos(string phone, string code, CancellationToken ct = default)
+    {
+        var variants = PhoneVariants(phone);
+        return db.WarrantyRegistrations.AsNoTracking().AnyAsync(x => x.Code == code && (variants.Contains(x.Phone) || x.InstallerPhone == phone), ct);
     }
 
     public static string MaskPhone(string phone) => phone.Length > 6 ? phone[..4] + "•••" + phone[^4..] : "•••";
@@ -278,4 +287,4 @@ public class PortalService(AppDbContext db, IActivationSmsSender sms, IEmailSend
 public record InstallerWarranty(WarrantyPublic Warranty, string OwnerPhoneMasked, string? Country, int Photos, DateTime CreatedAt);
 
 public record PartnerApplyRequest(string? ShopName, string? Country, string? City);
-public record PortalProfileRequest(string? FirstName, string? LastName, string? Country, string? City, string? Job, string? Name);
+public record PortalProfileRequest(string? FirstName, string? LastName, string? Country, string? City, string? Job, string? Name, string? Company = null);

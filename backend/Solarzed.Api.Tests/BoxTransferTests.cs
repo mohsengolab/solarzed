@@ -101,6 +101,39 @@ public class BoxTransferTests
     }
 
     [Fact]
+    public async Task SenderSeesTheReceiversNameAndCanTransferByEmail()
+    {
+        using var f = new Fixture();
+        var ids = await f.Issue(2);
+        await f.Transfers.Transfer(To(RepA, ids), "admin");
+        f.Db.PortalUsers.Add(new PortalUser { Phone = Shop, Email = "shop@example.com", FirstName = "Ali", LastName = "Rezaei", ShopName = "Ali Tint" });
+        await f.Db.SaveChangesAsync();
+
+        // A known mobile shows the name; an unknown one is fine (the transfer creates the account).
+        var byPhone = await f.Transfers.Recipient("+989123333333", null, RepA);
+        Assert.True(byPhone.Registered);
+        Assert.Equal("Ali Rezaei", byPhone.Name);
+        Assert.Equal(Shop, byPhone.Phone);
+        Assert.False((await f.Transfers.Recipient(RepB, null, RepA)).Registered);
+        await Error(400, () => f.Transfers.Recipient(RepA, null, RepA));
+
+        // By email the mobile is masked, and an unknown email is an error.
+        var byEmail = await f.Transfers.Recipient(null, " SHOP@example.com ", RepA);
+        Assert.Equal("Ali Rezaei", byEmail.Name);
+        Assert.DoesNotContain("3333333", byEmail.Phone);
+        await Error(404, () => f.Transfers.Recipient(null, "nobody@example.com", RepA));
+
+        var result = await f.Transfers.TransferAsHolderTo(new([ids[0]], null, null, null, "shop@example.com"), RepA);
+        Assert.Equal(Shop, result.ToPhone);
+
+        // The held rolls carry their features.
+        var box = Assert.Single((await f.Transfers.Mine(RepA)).Boxes);
+        Assert.Equal(150, box.LengthM);
+        Assert.Equal(5, box.FilmYears);
+        Assert.False(box.Void);
+    }
+
+    [Fact]
     public async Task RepresentativeCanOnlyMoveBoxesInTheirOwnAccount()
     {
         using var f = new Fixture();

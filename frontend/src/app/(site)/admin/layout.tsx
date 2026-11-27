@@ -1,4 +1,5 @@
 import type { Metadata } from "next";
+import { LangProvider } from "@/lib/i18n/client";
 
 export const metadata: Metadata = {
   title: "مدیریت | Solarzed",
@@ -6,5 +7,6 @@ export const metadata: Metadata = {
 };
 
 export default function AdminLayout({ children }: { children: React.ReactNode }) {
-  return <div lang="fa" dir="rtl">{children}</div>;
+  // Admin is Persian only, whatever language the visitor chose for the public site.
+  return <LangProvider lang="fa"><div lang="fa" dir="rtl">{children}</div></LangProvider>;
 }

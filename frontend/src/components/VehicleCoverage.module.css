@@ -9,7 +9,8 @@
 .row[data-status="none"] { opacity: .6; }
 .part { font-weight: 700; font-size: 14px; }
 .film { display: flex; flex-direction: column; min-width: 0; }
-.film b { font-size: 14px; overflow-wrap: anywhere; }
+.film b { font-size: 12.5px; letter-spacing: .02em; overflow-wrap: anywhere; }
+.film .specs { font-size: 12px; font-weight: 600; color: var(--sz-fg-2); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .film small, .dates small { font-size: 12px; color: var(--sz-fg-3); }
 .film code { color: var(--sz-accent-fg); }
 .dates { display: flex; flex-direction: column; text-align: right; }

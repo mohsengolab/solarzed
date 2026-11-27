@@ -21,7 +21,7 @@ public class RegistrationController(AppDbContext db) : ControllerBase
     public async Task<IActionResult> Register([FromBody] RegisterRequest req)
     {
         var setting = await db.CoverageSettings.AsNoTracking().FirstOrDefaultAsync();
-        var (err, entity) = WarrantyService.Validate(req, setting?.WarrantyCodeLength ?? 16);
+        var (err, entity) = WarrantyService.Validate(req, setting?.WarrantyCodeLength ?? 16, requireGlassSizes: false);
         if (err != null) return BadRequest(new { error = err });
 
         // Duplicate serial+invoice guard

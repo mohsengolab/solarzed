@@ -15,7 +15,12 @@ namespace Solarzed.Api.Application;
 /// <param name="WarehouseId">With <paramref name="ToWarehouse"/>: the warehouse («انبارها») the rolls go back to.</param>
 public record TransferRequest(string[] Serials, string? ToHolder, string? ToPhone, string? Note, string? ExpectedFrom, bool ToWarehouse = false,
     int? WarehouseId = null);
-public record PortalTransferRequest(string[] Serials, string? ToPhone, string? ToName, string? Note);
+/// <param name="ToEmail">Instead of <paramref name="ToPhone"/>: the receiver's account email; the rolls go to that account's mobile.</param>
+public record PortalTransferRequest(string[] Serials, string? ToPhone, string? ToName, string? Note, string? ToEmail = null);
+/// <summary>Who a mobile or email belongs to, so the sender sees the receiver's name before confirming a transfer.</summary>
+/// <param name="Registered">False when no account has this mobile yet: the transfer creates it and the receiver signs in with the mobile.</param>
+/// <param name="Phone">Masked when the receiver was found by email.</param>
+public record RecipientView(bool Registered, string? Name, string? ShopName, string? Phone, string? Email, bool Partner);
 public record TransferView(long Id, string LabelId, string BatchId, string? FromHolder, string? FromPhone, string? ToHolder, string? ToPhone, string? Note, string Actor, DateTime At);
 /// <param name="Sms">What happened to the receiver's SMS: "sent", "off" (no pattern / sending paused) or the failure.</param>
 public record TransferResult(string BatchId, string? ToHolder, string? ToPhone, TransferView[] Transfers, string? Sms = null);
@@ -25,7 +30,10 @@ public record HolderSummary(string? Holder, string? Phone, int Boxes);
 public record HolderRow(string? Phone, string? Name, string? FirstName, string? LastName, string? ShopName, int Boxes, DateTime? LastAt);
 public record HolderDetail(string? Phone, string? Name, string? FirstName, string? LastName, string? ShopName, string? City, int Boxes,
     HeldBox[] Held, TransferView[] Transfers);
-public record HeldBox(string Id, string Product, string Type, string? RollId, DateTime? HeldSince);
+/// <summary>A roll someone holds, with what the roll is: product, size, warranty years and film specs.</summary>
+public record HeldBox(string Id, string Product, string Type, string? RollId, DateTime? HeldSince,
+    string? ProductName = null, decimal? LengthM = null, decimal? WidthCm = null, int? FilmYears = null, int? InstallYears = null,
+    int? Vlt = null, int? Tser = null, int? Uv = null, int? Irr = null, decimal? ThicknessMil = null, bool Void = false);
 public record MyBoxes(HeldBox[] Boxes, TransferView[] Outgoing);
 
 /// <summary>
@@ -92,6 +100,62 @@ public class BoxTransferService(AppDbContext db)
         // Boxes held by someone else are reported as "not in your account" so serials of other holders reveal nothing.
         return Move(serials, to, NormalizeHolder(req.ToName), req.Note, "mobile:" + myPhone,
             label => label.HolderPhone == myPhone ? null : "not in your account", hideMissing: true);
+    }
+
+    /// <summary>A transfer addressed by email goes to the mobile of the account with that email.</summary>
+    public async Task<TransferResult> TransferAsHolderTo(PortalTransferRequest req, string myPhone)
+    {
+        if (string.IsNullOrWhiteSpace(req.ToPhone) && !string.IsNullOrWhiteSpace(req.ToEmail))
+            req = req with { ToPhone = (await ByEmail(req.ToEmail)).Phone };
+        return await TransferAsHolder(req, myPhone);
+    }
+
+    async Task<PortalUser> ByEmail(string raw)
+    {
+        var email = PortalService.CanonicalEmail(raw);
+        var user = await db.PortalUsers.AsNoTracking().FirstOrDefaultAsync(u => u.Email == email && u.Active)
+            ?? throw new ActivationError(404, "No Solarzed account has this email.");
+        if (user.Phone == null) throw new ActivationError(409, "This account has no mobile number yet. Ask the receiver to add their mobile in their profile.");
+        return user;
+    }
+
+    /// <summary>
+    /// The name behind a mobile or email, shown to a signed-in holder before they confirm a transfer. An unknown
+    /// mobile is fine (the transfer creates the account); an unknown email is not, since rolls are held by mobile.
+    /// </summary>
+    public async Task<RecipientView> Recipient(string? rawPhone, string? rawEmail, string myPhone)
+    {
+        PortalUser? user;
+        string? phone = null;
+        if (!string.IsNullOrWhiteSpace(rawPhone))
+        {
+            phone = PortalService.CanonicalPhone(rawPhone);
+            user = await db.PortalUsers.AsNoTracking().FirstOrDefaultAsync(u => u.Phone == phone);
+        }
+        else user = await ByEmail(rawEmail ?? "");
+        if ((phone ?? user?.Phone) == myPhone) throw new ActivationError(400, "You already hold these rolls.");
+        if (user == null) return new(false, null, null, phone, null, false);
+        var name = NormalizeHolder($"{user.FirstName} {user.LastName}") ?? NormalizeHolder(user.Name);
+        return new(true, name, user.ShopName, phone ?? PortalService.MaskPhone(user.Phone!), phone == null ? user.Email : null,
+            user.Partner == PartnerStatus.Approved);
+    }
+
+    /// <summary>Adds each roll's size and its product's warranty and film specs to the held cartons.</summary>
+    async Task<HeldBox[]> Held(List<BoxLabel> boxes)
+    {
+        var rollIds = boxes.Where(x => x.RollId != null).Select(x => x.RollId!).Distinct().ToList();
+        var rolls = await db.Rolls.AsNoTracking().Where(r => rollIds.Contains(r.Id))
+            .Select(r => new { r.Id, r.WidthCm, r.LengthM, r.Status }).ToDictionaryAsync(r => r.Id);
+        var codes = boxes.Select(x => x.Product).Distinct().ToList();
+        var products = await db.Products.AsNoTracking().Where(p => codes.Contains(p.Code)).ToDictionaryAsync(p => p.Code);
+        return boxes.Select(x =>
+        {
+            var roll = x.RollId != null && rolls.TryGetValue(x.RollId, out var r) ? r : null;
+            var p = products.GetValueOrDefault(x.Product);
+            return new HeldBox(x.Id, x.Product, x.Type.ToString().ToLowerInvariant(), x.RollId, x.HeldSince,
+                NormalizeHolder(p?.Name), x.RemainingLengthM ?? roll?.LengthM, roll?.WidthCm, x.FilmYears, x.InstallYears,
+                p?.Vlt, p?.Tser, p?.Uv, p?.Irr, p?.ThicknessMil, roll?.Status == RollStatus.Void);
+        }).ToArray();
     }
 
     async Task<TransferResult> Move(string[] serials, string? toPhone, string? toName, string? rawNote, string actor,
@@ -320,8 +384,7 @@ public class BoxTransferService(AppDbContext db)
         var full = NormalizeHolder($"{user?.FirstName} {user?.LastName}");
         return new(phone, full ?? NormalizeHolder(user?.Name) ?? name ?? boxes.Select(x => x.Holder).FirstOrDefault(x => x != phone), user?.FirstName, user?.LastName, user?.ShopName,
             user?.City, count,
-            boxes.Select(x => new HeldBox(x.Id, x.Product, x.Type.ToString().ToLowerInvariant(), x.RollId, x.HeldSince)).ToArray(),
-            transfers.Select(View).ToArray());
+            await Held(boxes), transfers.Select(View).ToArray());
     }
 
     /// <summary>What a signed-in representative holds now, and what they recently passed on.</summary>
@@ -331,8 +394,7 @@ public class BoxTransferService(AppDbContext db)
             .OrderByDescending(x => x.HeldSince).Take(1000).ToListAsync();
         var outgoing = await db.BoxTransfers.AsNoTracking().Where(x => x.FromPhone == phone)
             .OrderByDescending(x => x.At).ThenByDescending(x => x.Id).Take(200).ToListAsync();
-        return new(boxes.Select(x => new HeldBox(x.Id, x.Product, x.Type.ToString().ToLowerInvariant(), x.RollId, x.HeldSince)).ToArray(),
-            outgoing.Select(View).ToArray());
+        return new(await Held(boxes), outgoing.Select(View).ToArray());
     }
 
     sealed class NoSms : IActivationSmsSender

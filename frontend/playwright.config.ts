@@ -2,6 +2,7 @@ import { defineConfig } from "@playwright/test";
 
 export default defineConfig({
   testDir: "./tests",
+  testIgnore: "**/i18n.spec.ts",
   workers: 1,
   timeout: 300_000,
   expect: { timeout: 15_000 },

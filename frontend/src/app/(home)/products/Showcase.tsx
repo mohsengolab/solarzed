@@ -4,6 +4,7 @@
 import { useRef, useState, type CSSProperties } from "react";
 import Link from "next/link";
 import type { Product, Series } from "@/lib/catalog";
+import { useLang, useT } from "@/lib/i18n/client";
 
 // A product visual: the supplied photo, or a film roll in the product's shade beside the car.
 function Stage({ product, large, categoryLabel }: { product: Product; large: boolean; categoryLabel: string }) {
@@ -28,6 +29,8 @@ function Stage({ product, large, categoryLabel }: { product: Product; large: boo
 }
 
 export default function Showcase({ series, categoryLabel, start }: { series: Series; categoryLabel: string; start: number }) {
+  const t = useT();
+  const rtl = useLang() !== "en";
   const [index, setIndex] = useState(start);
   const thumbs = useRef<HTMLDivElement>(null);
   const buttons = useRef<(HTMLButtonElement | null)[]>([]);
@@ -40,7 +43,7 @@ export default function Showcase({ series, categoryLabel, start }: { series: Ser
     url.searchParams.set("model", series.products[i].model);
     history.replaceState(history.state, "", url);
   }
-  const scroll = (dir: number) => thumbs.current?.scrollBy({ left: dir * thumbs.current.clientWidth * .8, behavior: "smooth" });
+  const scroll = (dir: number) => thumbs.current?.scrollBy({ left: dir * (rtl ? -1 : 1) * thumbs.current.clientWidth * .8, behavior: "smooth" });
 
   return (
     <>
@@ -51,31 +54,31 @@ export default function Showcase({ series, categoryLabel, start }: { series: Ser
         <div className="showcase-info">
           <span className="eyebrow">{categoryLabel.toUpperCase()}</span>
           <h2>{product.name}</h2>
-          <p className="product-model"><small>MODEL</small><b>{product.model}</b></p>
-          <p className="showcase-text">{product.description || `${product.name} from the ${series.name}.`}</p>
+          <p className="product-model"><small>{t("MODEL")}</small><b>{product.model}</b></p>
+          <p className="showcase-text">{product.description || t("{product} from the {series}.", { product: product.name, series: series.name })}</p>
           <ul className="showcase-points">
-            <li>Unique roll serial and production batch</li>
-            <li>Registered to the vehicle by VIN</li>
-            <li>Digital warranty certificate for the customer</li>
+            <li>{t("Unique roll serial and production batch")}</li>
+            <li>{t("Registered to the vehicle by VIN")}</li>
+            <li>{t("Digital warranty certificate for the customer")}</li>
           </ul>
           <div className="showcase-actions">
-            <Link className="button dark" href="/contact">Find an installer <span>↗</span></Link>
-            <Link className="secondary-action" href="/warranty">Check a warranty</Link>
+            <Link className="button dark" href="/contact">{t("Find an installer")} <span>↗</span></Link>
+            <Link className="secondary-action" href="/warranty">{t("Check a warranty")}</Link>
           </div>
         </div>
       </div>
       <div className="thumbs-wrap">
-        <button type="button" className="thumbs-arrow" aria-label="Previous products" onClick={() => scroll(-1)}>‹</button>
-        <div className="thumbs" ref={thumbs} aria-label="Select product">
+        <button type="button" className="thumbs-arrow" aria-label={t("Previous products")} onClick={() => scroll(-1)}>{rtl ? "›" : "‹"}</button>
+        <div className="thumbs" ref={thumbs} aria-label={t("Select product")}>
           {series.products.map((p, i) => (
             <button key={p.model} type="button" className="thumb" ref={el => { buttons.current[i] = el; }}
-              aria-label={`${p.name}, model ${p.model}`} aria-pressed={i === index} onClick={() => select(i)}>
+              aria-label={t("{name}, model {model}", { name: p.name, model: p.model })} aria-pressed={i === index} onClick={() => select(i)}>
               <Stage product={p} large={false} categoryLabel={categoryLabel} />
               <span className="thumb-meta"><b>{p.model}</b><span>{p.name}</span></span>
             </button>
           ))}
         </div>
-        <button type="button" className="thumbs-arrow" aria-label="Next products" onClick={() => scroll(1)}>›</button>
+        <button type="button" className="thumbs-arrow" aria-label={t("Next products")} onClick={() => scroll(1)}>{rtl ? "‹" : "›"}</button>
       </div>
     </>
   );

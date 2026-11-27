@@ -1,0 +1,11 @@
+.wrap { margin-top: 10px; }
+.toggle { background: none; border: 1px solid rgb(var(--sz-tint) / 0.2); border-radius: 8px; padding: 6px 12px; font: inherit; font-size: 13px; color: inherit; cursor: pointer; }
+.toggle:hover { background: rgb(var(--sz-tint) / 0.05); }
+.note { font-size: 13px; color: var(--sz-fg-3); margin: 8px 0 0; }
+.grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(140px, 1fr)); gap: 10px; margin-top: 10px; }
+.thumb { position: relative; aspect-ratio: 4 / 3; border: 1px solid rgb(var(--sz-tint) / 0.15); border-radius: 10px; overflow: hidden; padding: 0; background: rgb(var(--sz-tint) / 0.03); cursor: zoom-in; color: var(--sz-fg-3); font-size: 12px; }
+.thumb img { width: 100%; height: 100%; object-fit: cover; display: block; }
+.thumb small { position: absolute; bottom: 6px; inset-inline-start: 6px; background: #000a; color: #fff; font-size: 11px; padding: 2px 8px; border-radius: 6px; }
+.lightbox { position: fixed; inset: 0; z-index: 100; background: #000d; display: flex; align-items: center; justify-content: center; padding: 16px; cursor: zoom-out; }
+.lightbox img { max-width: 100%; max-height: 100%; object-fit: contain; border-radius: 8px; }
+.lightbox button { position: absolute; top: 16px; inset-inline-end: 16px; width: 40px; height: 40px; border-radius: 50%; border: 0; background: #fff2; color: #fff; font-size: 22px; cursor: pointer; }

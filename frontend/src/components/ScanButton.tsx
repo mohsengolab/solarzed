@@ -3,6 +3,7 @@
 import { useEffect, useRef, useState } from "react";
 import css from "./ScanButton.module.css";
 import { backdropProps } from "./backdrop";
+import { useT } from "@/lib/i18n/client";
 
 type Detector = { detect(source: HTMLVideoElement): Promise<{ rawValue: string }[]> };
 type DetectorClass = new (options: { formats: string[] }) => Detector;
@@ -12,7 +13,8 @@ type DetectorClass = new (options: { formats: string[] }) => Detector;
  * Uses the browser's BarcodeDetector where it exists (Android Chrome, also 1D barcodes) and jsQR otherwise (iPhone).
  * The camera needs HTTPS (or localhost).
  */
-export default function ScanButton({ onScan, label = "Scan", disabled }: { onScan: (text: string) => void; label?: string; disabled?: boolean }) {
+export default function ScanButton({ onScan, label, disabled }: { onScan: (text: string) => void; label?: string; disabled?: boolean }) {
+  const t = useT();
   const [open, setOpen] = useState(false);
   const [error, setError] = useState("");
   const video = useRef<HTMLVideoElement>(null);
@@ -24,7 +26,7 @@ export default function ScanButton({ onScan, label = "Scan", disabled }: { onSca
     const stop = () => { stopped = true; window.clearTimeout(timer); stream?.getTracks().forEach(t => t.stop()); };
     (async () => {
       try {
-        if (!navigator.mediaDevices?.getUserMedia) throw new Error("This browser cannot use the camera here. Type the ROLL NO instead.");
+        if (!navigator.mediaDevices?.getUserMedia) throw new Error(t("This browser cannot use the camera here. Type the ROLL NO instead."));
         stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: { ideal: "environment" } }, audio: false });
         if (stopped || !video.current) { stop(); return; }
         video.current.srcObject = stream;
@@ -51,24 +53,24 @@ export default function ScanButton({ onScan, label = "Scan", disabled }: { onSca
         };
         void tick();
       } catch (ex) {
-        setError(ex instanceof DOMException && ex.name === "NotAllowedError" ? "Camera access was refused. Allow the camera or type the ROLL NO."
-          : ex instanceof Error ? ex.message : "The camera could not start.");
+        setError(ex instanceof DOMException && ex.name === "NotAllowedError" ? t("Camera access was refused. Allow the camera or type the ROLL NO.")
+          : ex instanceof Error ? t(ex.message) : t("The camera could not start."));
       }
     })();
     return stop;
-  }, [open, onScan]);
+  }, [open, onScan, t]);
 
   return <>
     <button type="button" className={css.button} disabled={disabled} onClick={() => { setError(""); setOpen(true); }}>
       <svg viewBox="0 0 24 24" width="18" height="18" aria-hidden="true" fill="none" stroke="currentColor" strokeWidth="2"><path d="M4 8V5a1 1 0 0 1 1-1h3M16 4h3a1 1 0 0 1 1 1v3M20 16v3a1 1 0 0 1-1 1h-3M8 20H5a1 1 0 0 1-1-1v-3M7 12h10" /></svg>
-      {label}
+      {label ?? t("Scan")}
     </button>
-    {open && <div className={css.overlay} role="dialog" aria-modal="true" aria-label="Scan the ROLL NO" {...backdropProps(() => setOpen(false))}>
+    {open && <div className={css.overlay} role="dialog" aria-modal="true" aria-label={t("Scan the ROLL NO")} {...backdropProps(() => setOpen(false))}>
       <div className={css.sheet}>
         <video ref={video} className={css.video} playsInline muted />
         <div className={css.frame} aria-hidden="true" />
-        <p>{error || "Point the camera at the QR on the warranty card."}</p>
-        <button type="button" className={css.close} onClick={() => setOpen(false)}>Cancel</button>
+        <p>{error || t("Point the camera at the QR on the warranty card.")}</p>
+        <button type="button" className={css.close} onClick={() => setOpen(false)}>{t("Cancel")}</button>
       </div>
     </div>}
   </>;
