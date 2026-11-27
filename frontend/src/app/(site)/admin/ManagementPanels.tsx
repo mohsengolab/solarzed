@@ -60,7 +60,7 @@ export function ProductsPanel() {
       </div>
       <datalist id="series-options">{seriesList.map(x => <option key={x} value={x} />)}</datalist>
       <label>توضیحات<textarea maxLength={2000} disabled={editing} value={form.description} onChange={e => setForm({ ...form, description: e.target.value })} /></label>
-      <details style={{ marginTop: 8 }}><summary style={{ cursor: "pointer", fontWeight: 600 }}>مشخصات فنی (اختیاری)</summary>
+      <h3 style={{ marginTop: 8, fontWeight: 600 }}>مشخصات فنی</h3>
       <div className={s.row2} style={{ marginTop: 8 }}>
         <label>ضخامت (Mil)<input type="number" step="0.1" min="0" max="20" disabled={editing} placeholder="مثلاً ۲" value={form.thicknessMil ?? ""} onChange={e => setForm({ ...form, thicknessMil: e.target.value ? Number(e.target.value) : null })} dir="ltr" /></label>
         <label>VLT%<input type="number" min="0" max="100" disabled={editing} placeholder="درصد عبور نور مرئی" value={form.vlt ?? ""} onChange={e => setForm({ ...form, vlt: e.target.value ? Number(e.target.value) : null })} dir="ltr" /></label>
@@ -68,7 +68,7 @@ export function ProductsPanel() {
         <label>UV%<input type="number" min="0" max="100" disabled={editing} placeholder="درصد رد UV" value={form.uv ?? ""} onChange={e => setForm({ ...form, uv: e.target.value ? Number(e.target.value) : null })} dir="ltr" /></label>
         <label>TSER%<input type="number" min="0" max="100" disabled={editing} placeholder="رد کل انرژی خورشیدی" value={form.tser ?? ""} onChange={e => setForm({ ...form, tser: e.target.value ? Number(e.target.value) : null })} dir="ltr" /></label>
         <label>گارانتی (سال)<input type="number" min="1" max="30" disabled={editing} placeholder="مثلاً ۷" value={form.warrantyYears ?? ""} onChange={e => setForm({ ...form, warrantyYears: e.target.value ? Number(e.target.value) : null })} dir="ltr" /></label>
-      </div></details>
+      </div>
       {editing
         ? <p className={s.empty}>در حالت ویرایش فقط نام ذخیره می‌شود. برای تغییر بقیه مشخصات، محصول را حذف و دوباره بسازید.</p>
         : <label>وضعیت عرضه<select value={String(form.archived)} onChange={e => setForm({ ...form, archived: e.target.value === "true" })}><option value="false">فعال</option><option value="true">بایگانی — برای موجودی جدید در دسترس نیست</option></select></label>}
