@@ -219,6 +219,7 @@ builder.Services.AddCors(o => o.AddDefaultPolicy(p =>
 builder.Services.AddHsts(o => { o.MaxAge = TimeSpan.FromDays(365); o.IncludeSubDomains = true; });
 
 var app = builder.Build();
+Solarzed.Api.Application.Confidential.Use(app.Services.GetRequiredService<Microsoft.AspNetCore.DataProtection.IDataProtectionProvider>());
 
 // ── Auto-migrate + seed admin ─────────────────────────────────────────────────
 using (var scope = app.Services.CreateScope())

@@ -201,7 +201,7 @@ public class WarrantyTests
     }
 
     [Fact]
-    public async Task PublicLookupByCodeOrVinReturnsOnlyCertificateFields()
+    public async Task PublicLookupIsByVinOnlyAndHidesTheWarrantyNumber()
     {
         using var db = Database();
         var row = WarrantyService.Validate(Request()).Entity!;
@@ -211,19 +211,17 @@ public class WarrantyTests
         db.WarrantyRegistrations.Add(card);
         await db.SaveChangesAsync();
         var controller = new WarrantyController(db);
-        foreach (var (by, query, code) in new[] {
-            ("code", row.Code, row.Code), ("vin", row.Vin.ToLowerInvariant(), row.Code), ((string?)null, row.Code, row.Code),
-            (null, "4827153", "4827153"), (null, "CPT30614374-4827153", "4827153"), (null, "CPT30614374-4827153-ABC", "4827153") })
-        {
-            var response = Assert.IsType<OkObjectResult>(await controller.Lookup(by, query));
-            var json = JsonSerializer.Serialize(response.Value);
-            using var doc = JsonDocument.Parse(json);
-            var record = Assert.Single(doc.RootElement.GetProperty("records").EnumerateArray());
-            Assert.Equal(code, record.GetProperty("Code").GetString());
-            foreach (var hidden in new[] { "Owner", "Plate", "VinMasked", "InvoiceNumber", "Installer", "SellerName", "FilmSerial" })
-                Assert.False(record.TryGetProperty(hidden, out _), hidden);
-            Assert.DoesNotContain(row.Plate, json);
-        }
+        // Customers and installers can never look a warranty up by its number.
+        foreach (var query in new[] { row.Code, "4827153", "CPT30614374-4827153", "CPT30614374-4827153-ABC" })
+            Assert.IsType<BadRequestObjectResult>(await controller.Lookup(query));
+        var response = Assert.IsType<OkObjectResult>(await controller.Lookup(row.Vin.ToLowerInvariant()));
+        var json = JsonSerializer.Serialize(response.Value);
+        using var doc = JsonDocument.Parse(json);
+        var record = Assert.Single(doc.RootElement.GetProperty("records").EnumerateArray());
+        foreach (var hidden in new[] { "Code", "Ref", "Owner", "Plate", "VinMasked", "InvoiceNumber", "Installer", "SellerName", "FilmSerial" })
+            Assert.False(record.TryGetProperty(hidden, out _), hidden);
+        Assert.DoesNotContain(row.Plate, json);
+        Assert.DoesNotContain(row.Code, json);
     }
 
     [Fact]
@@ -273,8 +271,7 @@ public class WarrantyTests
         db.WarrantyRegistrations.Add(row);
         await db.SaveChangesAsync();
         var controller = new WarrantyController(db);
-        Assert.IsType<BadRequestObjectResult>(await controller.Lookup("phone", row.Phone));
-        Assert.IsType<BadRequestObjectResult>(await controller.Lookup(null, row.Phone));
+        Assert.IsType<BadRequestObjectResult>(await controller.Lookup(row.Phone));
     }
 
     [Fact]

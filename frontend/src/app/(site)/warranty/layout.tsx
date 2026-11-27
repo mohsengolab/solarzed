@@ -6,13 +6,13 @@ export async function generateMetadata(): Promise<Metadata> {
   return {
   title: t("Warranty Inquiry"),
   description:
-    t("Look up your Solarzed window film or paint protection film warranty certificate by warranty number, VIN or mobile number."),
+    t("Look up your Solarzed window film or paint protection film warranty card by VIN or mobile number."),
   keywords: ["warranty lookup", "window tint certificate", "PPF warranty check", "Solarzed warranty inquiry"],
   alternates: { canonical: "https://solarzed.com/warranty" },
   openGraph: {
     url: "https://solarzed.com/warranty",
     title: t("Warranty Inquiry"),
-    description: t("Look up your Solarzed window film or paint protection film warranty certificate by warranty number, VIN or mobile number."),
+    description: t("Look up your Solarzed window film or paint protection film warranty card by VIN or mobile number."),
   },
 };
 }

@@ -7,7 +7,8 @@ import css from "./VehicleCoverage.module.css";
 
 /** One warranty on a vehicle: each roll used on the car is its own warranty with its own glasses and coverage dates. */
 export interface CoverageItem {
-  code: string;
+  /** Opaque handle (never the warranty number). */
+  ref: string;
   type: "tint" | "ppf";
   /** Product name, or the ROLL NO when the product is not known. */
   film?: string | null;
@@ -44,7 +45,7 @@ function Rows({ items, parts, uncovered }: { items: CoverageItem[]; parts: [stri
       <span className={css.film}>
         <b>{w.film ?? (w.type === "ppf" ? t("Paint protection film") : t("Window film"))}</b>
         <FilmSpecsLine specs={w.specs} className={css.specs} />
-        <small>{t("Warranty")} <code dir="ltr">{w.code}</code> · {t("installed {date}", { date: w.installed })}{earlier > 0 && ` · ${t("{n} earlier", { n: earlier })}`}</small>
+        <small>{t("installed {date}", { date: w.installed })}{earlier > 0 && ` · ${t("{n} earlier", { n: earlier })}`}</small>
       </span>
       <span className={css.dates}>
         {w.status === "active"
@@ -61,7 +62,7 @@ export default function VehicleCoverage({ items, title }: { items: CoverageItem[
   const t = useT();
   const tint = items.filter(w => w.type === "tint");
   const ppf = items.filter(w => w.type === "ppf");
-  const films = new Set(items.map(w => w.film ?? w.code)).size;
+  const films = new Set(items.map(w => w.film ?? w.ref)).size;
   return <section className={css.box} aria-label={title ?? t("Coverage by glass")}>
     {title && <h3 className={css.title}>{title}</h3>}
     <p className={css.lead}>{t(items.length === 1 ? "{n} warranty on this vehicle." : "{n} warranties on this vehicle.", { n: items.length })}{films > 1 ? ` ${t("{n} different films.", { n: films })}` : ""} {t("Each glass shows the warranty that covers it.")}</p>

@@ -24,7 +24,7 @@ function Thumb({ id, alt, onOpen }: { id: number; alt: string; onOpen: (url: str
 }
 
 /** The installation photos of one warranty, for its owner and its installer; loaded only when opened. */
-export default function InstallationPhotos({ code }: { code: string }) {
+export default function InstallationPhotos({ reference }: { reference: string }) {
   const t = useT();
   const [open, setOpen] = useState(false);
   const [items, setItems] = useState<{ id: number; kind: string }[] | null>(null);
@@ -34,9 +34,9 @@ export default function InstallationPhotos({ code }: { code: string }) {
   useEffect(() => {
     if (!open || items || error) return;
     let alive = true;
-    portalWarrantyPhotos(code).then(r => alive && setItems(r.items)).catch(() => alive && setError(true));
+    portalWarrantyPhotos(reference).then(r => alive && setItems(r.items)).catch(() => alive && setError(true));
     return () => { alive = false; };
-  }, [open, items, error, code]);
+  }, [open, items, error, reference]);
 
   return <div className={css.wrap}>
     <button type="button" className={css.toggle} aria-expanded={open} onClick={() => setOpen(o => !o)}>

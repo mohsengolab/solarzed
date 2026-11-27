@@ -279,11 +279,12 @@ public class PortalController(PortalService portal, BoxTransferService transfers
     // ── Installation photos: the vehicle's owner and the installer who registered it can see them ──
 
     /// <summary>The installation photos of a warranty the signed-in user owns or installed.</summary>
-    [HttpGet("warranties/{code}/photos")]
-    public async Task<IActionResult> WarrantyPhotos(string code, CancellationToken ct)
+    [HttpGet("warranties/{reference}/photos")]
+    public async Task<IActionResult> WarrantyPhotos(string reference, CancellationToken ct)
     {
         var me = await Me();
-        if (me.Phone is not { } phone || !await portal.CanSeePhotos(phone, code, ct)) return NotFound(new { error = "Warranty not found." });
+        var code = Confidential.Unref(reference);
+        if (code == null || me.Phone is not { } phone || !await portal.CanSeePhotos(phone, code, ct)) return NotFound(new { error = "Warranty not found." });
         var items = await db.WarrantyPhotos.AsNoTracking().Where(p => p.WarrantyCode == code).OrderBy(p => p.Id)
             .Select(p => new { p.Id, p.Kind, p.CreatedAt }).ToListAsync(ct);
         return Ok(new { items });

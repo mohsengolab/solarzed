@@ -8,7 +8,7 @@ using Solarzed.Api.Infrastructure;
 namespace Solarzed.Api.Application;
 
 /// <summary>The gold warranty card the owner opens from the SMS link or the VIN + mobile inquiry.</summary>
-public record WarrantyCardView(string Code, string Owner, string Type, string? Product, string Make, string Model, string Plate,
+public record WarrantyCardView(string Ref, string Owner, string Type, string? Product, string Make, string Model, string Plate,
     string VinMasked, DateOnly Installed, string Installer, string? Country, string[] Areas, string Status, string StatusLabel,
     CoveragePublic? Coverage, string Link, FilmSpecs? Specs = null);
 
@@ -16,9 +16,9 @@ public record WarrantyCardView(string Code, string Owner, string Type, string? P
 public record FilmSpecs(int? Vlt, int? Irr, int? Uvr, decimal? ThicknessMil);
 
 /// <summary>
-/// Gold cards: each warranty gets a random key, and {site}/card#{Code}.{Key} opens its card without signing in.
+/// Gold cards: each warranty gets a random key, and {site}/card#{Key} opens its card without signing in.
 /// When a warranty becomes active (customer activation, or the counter approving an installer's photos) the owner
-/// gets one SMS with the warranty number and that link.
+/// gets one SMS with that link (never the warranty number).
 /// </summary>
 public class WarrantyCards(AppDbContext db, IActivationSmsSender? sms = null, SmsLog? log = null, ILogger<WarrantyCards>? logger = null)
 {
@@ -48,8 +48,8 @@ public class WarrantyCards(AppDbContext db, IActivationSmsSender? sms = null, Sm
         var specs = product == null ? null : await db.Products.AsNoTracking().Where(x => x.Code == product)
             .Select(x => new FilmSpecs(x.Vlt, x.Irr, x.Uv, x.ThicknessMil)).FirstOrDefaultAsync();
         if (specs is { Vlt: null, Irr: null, Uvr: null, ThicknessMil: null }) specs = null;
-        return new(w.Code, w.Owner, p.Type, product, w.Make, w.Model, w.Plate, p.VinMasked, w.Installed, w.Installer, w.Country,
-            JsonSerializer.Deserialize<string[]>(w.AreasJson) ?? [], p.Status, p.StatusLabel, p.Coverage, $"{site}/card#{w.Code}.{w.CardKey}", specs);
+        return new(p.Ref, w.Owner, p.Type, product, w.Make, w.Model, w.Plate, p.VinMasked, w.Installed, w.Installer, w.Country,
+            JsonSerializer.Deserialize<string[]>(w.AreasJson) ?? [], p.Status, p.StatusLabel, p.Coverage, $"{site}/card#{w.CardKey}", specs);
     }
 
     /// <summary>
@@ -63,7 +63,7 @@ public class WarrantyCards(AppDbContext db, IActivationSmsSender? sms = null, Sm
         if (w.Status != WarrantyStatus.Active) return "The warranty is not active yet.";
         if (w.CardSentAt != null && !force) return null;
         EnsureKey(w);
-        var link = $"{await Site()}/card#{w.Code}.{w.CardKey}";
+        var link = $"{await Site()}/card#{w.CardKey}";
         var phone = w.Phone;
         try { phone = PortalService.CanonicalPhone(w.Phone); } catch (ActivationError) { }
         string? error = null;
@@ -72,7 +72,7 @@ public class WarrantyCards(AppDbContext db, IActivationSmsSender? sms = null, Sm
             if (!sms.WarrantyConfigured) error = "The warranty SMS pattern is not set.";
             else
             {
-                await sms.SendWarranty(phone, w.Code, link, ct);
+                await sms.SendWarranty(phone, link, ct);
                 w.CardSentAt = DateTime.UtcNow;
             }
         }

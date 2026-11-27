@@ -7,16 +7,20 @@ import GoldCard from "@/components/GoldCard";
 import { useT } from "@/lib/i18n/client";
 import styles from "../warranty/warranty.module.css";
 
-/** Opened from the "warranty active" SMS: /card#{warranty number}.{card key}. The key stays in the hash, never in server logs. */
+/** Opened from the "warranty active" SMS or the printed QR: /card#{card key}. The key stays in the hash, never in server logs. */
 export default function CardPage() {
   const t = useT();
   const [card, setCard] = useState<WarrantyCard | null>(null);
   const [error, setError] = useState("");
 
   useEffect(() => {
-    const [code, key] = decodeURIComponent(window.location.hash.slice(1)).trim().split(".");
-    const load = !code || !key ? Promise.reject(new Error(t("This warranty card link is not complete. Open it again from the SMS.")))
-      : warrantyCard(code, key);
+    // Older SMS links put the warranty number before the key (#number.key): only the key is used, and the number is
+    // dropped from the address bar so it is never shown.
+    const parts = decodeURIComponent(window.location.hash.slice(1)).trim().split(".");
+    const key = parts.at(-1) ?? "";
+    if (parts.length > 1 && key) window.history.replaceState(null, "", `#${key}`);
+    const load = !key ? Promise.reject(new Error(t("This warranty card link is not complete. Open it again from the SMS.")))
+      : warrantyCard(key);
     load.then(setCard).catch(ex => setError(ex instanceof Error ? t(ex.message) : t("Could not open the warranty card.")));
   }, [t]);
 

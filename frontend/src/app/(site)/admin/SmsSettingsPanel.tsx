@@ -8,7 +8,7 @@ import { useCan } from "./RolesPanel";
 type Policy = { enabled: boolean; otpMinutes: number; resendSeconds: number; dailyLimit: number };
 type EmailStatus = { configured: boolean; host: string; port: number; from: string; senderName: string; user: string; passwordStored: boolean };
 type Status = { configured: boolean; connected: boolean; keyStored: boolean; mode: string; pattern: string; codeVariable: string; line: string; endpoint: string | null; updatedAt: string | null; policy: Policy; email: EmailStatus;
-  warranty: { pattern: string; codeVariable: string; linkVariable: string; configured: boolean };
+  warranty: { pattern: string; linkVariable: string; configured: boolean };
   transfer?: { pattern: string; countVariable: string; linkVariable: string; configured: boolean } };
 type LogEntry = { at: string; phone: string; purpose: string; ok: boolean; error: string | null };
 type Note = { ok: boolean; text: string } | null;
@@ -23,7 +23,7 @@ export default function SmsSettingsPanel() {
   const [form, setForm] = useState({ mode: "soap", endpoint: "http://185.112.33.61/wbs/send.php", token: "", pattern: "2675", line: "21000051112", codeVariable: "code1" });
   const [policy, setPolicy] = useState<Policy>({ enabled: true, otpMinutes: 5, resendSeconds: 60, dailyLimit: 10 });
   const [phone, setPhone] = useState("");
-  const [warranty, setWarranty] = useState({ pattern: "", codeVariable: "code", linkVariable: "link" });
+  const [warranty, setWarranty] = useState({ pattern: "", linkVariable: "link" });
   const [transfer, setTransfer] = useState({ pattern: "", countVariable: "count", linkVariable: "link" });
   const [emailForm, setEmailForm] = useState({ host: "", port: "587", from: "", name: "", user: "", password: "", enableSsl: true });
   const [testEmail, setTestEmail] = useState("");
@@ -34,7 +34,7 @@ export default function SmsSettingsPanel() {
 
   const apply = useCallback(([r, entries]: [Status, LogEntry[]]) => {
     setStatus(r); setLog(entries); setPolicy(r.policy);
-    if (r.warranty) setWarranty({ pattern: r.warranty.pattern, codeVariable: r.warranty.codeVariable, linkVariable: r.warranty.linkVariable });
+    if (r.warranty) setWarranty({ pattern: r.warranty.pattern, linkVariable: r.warranty.linkVariable });
     if (r.transfer) setTransfer({ pattern: r.transfer.pattern, countVariable: r.transfer.countVariable, linkVariable: r.transfer.linkVariable });
     setForm(f => ({ ...f, pattern: r.pattern, line: r.line || f.line, codeVariable: r.codeVariable,
       ...(r.mode === "rest" || r.mode === "soap" ? { mode: r.mode } : {}), ...(r.endpoint ? { endpoint: r.endpoint } : {}) }));
@@ -130,10 +130,9 @@ export default function SmsSettingsPanel() {
 
         <form onSubmit={saveWarranty} className={`${s.card} ${s.adminForm}`}>
           <h2>پیامک فعال شدن گارانتی (کارت طلایی)</h2>
-          <p className={s.empty}>وقتی گارانتی فعال می‌شود (تأیید عکس‌ها توسط کانتر)، یک پیامک با شماره گارانتی و لینک کارت طلایی به موبایل مشتری می‌رود. یک الگوی جدا در پنل فراز بسازید با دو متغیر: شماره گارانتی و لینک کارت.
+          <p className={s.empty}>وقتی گارانتی فعال می‌شود (تأیید عکس‌ها توسط کانتر)، یک پیامک با لینک کارت طلایی به موبایل مشتری می‌رود (شماره گارانتی هرگز ارسال نمی‌شود). یک الگوی جدا در پنل فراز بسازید با یک متغیر: لینک کارت.
             {status && <> وضعیت: <b>{status.warranty?.configured ? "فعال" : "تنظیم نشده"}</b></>}</p>
           <label>شناسه الگوی گارانتی<input maxLength={100} pattern="[A-Za-z0-9_\-]+" value={warranty.pattern} onChange={e => setWarranty({ ...warranty, pattern: e.target.value })} dir="ltr" placeholder="خالی = ارسال نشود" /></label>
-          <label>متغیر شماره گارانتی<input required maxLength={50} pattern="[A-Za-z][A-Za-z0-9_]*" value={warranty.codeVariable} onChange={e => setWarranty({ ...warranty, codeVariable: e.target.value })} dir="ltr" /></label>
           <label>متغیر لینک کارت<input required maxLength={50} pattern="[A-Za-z][A-Za-z0-9_]*" value={warranty.linkVariable} onChange={e => setWarranty({ ...warranty, linkVariable: e.target.value })} dir="ltr" /></label>
           <button disabled={!!busy} className={s.btnPrimary}>{busy === "warranty" ? "در حال ذخیره…" : "ذخیره الگوی گارانتی"}</button>
           <Msg note={notes.warranty ?? null} />

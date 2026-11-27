@@ -186,6 +186,16 @@ public class AdminController(AppDbContext db, IConfiguration cfg, Microsoft.AspN
 
         var page = new PageQuery(f.Page, f.PageSize, f.Sort, f.Dir);
         var result = await query.OrderBy(f.Sort, page.Desc, WarrantySort, "createdAt").ToPage(page, ct);
+        // The printed warranty QR opens the gold card by its key (never by the warranty number): give older rows one.
+        var keyless = result.Items.Where(w => w.CardKey == null).Select(w => w.Code).ToList();
+        if (keyless.Count > 0)
+        {
+            var tracked = await db.WarrantyRegistrations.Where(w => keyless.Contains(w.Code)).ToListAsync(ct);
+            foreach (var w in tracked) WarrantyCards.EnsureKey(w);
+            await db.SaveChangesAsync(ct);
+            var keys = tracked.ToDictionary(w => w.Code, w => w.CardKey);
+            foreach (var w in result.Items) if (w.CardKey == null) w.CardKey = keys.GetValueOrDefault(w.Code);
+        }
         // Every row carries a reference to act on it; other staff see the code masked and no roll ID.
         var refs = result.Items.Select(w => Confidential.Ref(w.Code, protection)).ToList();
         if (!SeesCodes)

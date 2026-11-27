@@ -2,104 +2,42 @@
 
 import { useState, useEffect, FormEvent } from "react";
 import Link from "next/link";
-import { lookupWarranty, lookupOwner, WarrantyCheck, WarrantyCard } from "@/lib/api";
+import { lookupOwner, WarrantyCard } from "@/lib/api";
 import GoldCard from "@/components/GoldCard";
 import VehicleCoverage, { byVehicle } from "@/components/VehicleCoverage";
 import { useT } from "@/lib/i18n/client";
 import styles from "./warranty.module.css";
 
-const STATUS = { active: "Active warranty", pending: "In review", rejected: "Not active" } as const;
-
-function CertificateCard({ w }: { w: WarrantyCheck }) {
-  const t = useT();
-  const statusColor = {
-    active: "#1fc3cf",
-    pending: "#f59e0b",
-    rejected: "#ef4444",
-  }[w.status] ?? "#93aac0";
-
-  return (
-    <div className={styles.certificate}>
-      <div className={styles.certHeader}>
-        <span className={styles.certCode}>{w.code}</span>
-        <span className={styles.certBadge} style={{ background: statusColor + "22", color: statusColor, border: `1px solid ${statusColor}55` }}>
-          {t(STATUS[w.status] ?? w.statusLabel)}
-        </span>
-      </div>
-      <div className={styles.certGrid}>
-        <div><span>{t("Vehicle")}</span><b>{w.make} {w.model}</b></div>
-        <div><span>{t("Type")}</span><b>{w.type === "ppf" ? t("Paint protection film") : t("Window film")}</b></div>
-        <div><span>{t("Installed")}</span><b>{w.installed}</b></div>
-      </div>
-      {w.coverage && (
-        <div className={styles.certCoverage}>
-          <span>{t("Coverage")}</span>
-          <div>
-            {w.coverage.filmEnds && <p>{t("Film warranty ends")}: <b>{w.coverage.filmEnds}</b></p>}
-            {w.coverage.installEnds && <p>{t("Installation warranty ends")}: <b>{w.coverage.installEnds}</b></p>}
-            {!w.coverage.filmEnds && !w.coverage.installEnds && <p>{t("Per approved product terms")}</p>}
-          </div>
-        </div>
-      )}
-      {w.statusNote && (
-        <div className={styles.certNote}>
-          <b>{t("Note")}:</b> {w.statusNote}
-        </div>
-      )}
-    </div>
-  );
-}
-
 export default function WarrantyPage() {
   const t = useT();
-  const [q, setQ] = useState("");
-  const [records, setRecords] = useState<WarrantyCheck[] | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  // "owner": the VIN, the mobile the installer registered the warranty to, or the owner's email → the gold cards.
-  const [mode, setMode] = useState<"code" | "owner">("owner");
+  // The VIN, the mobile the installer registered the warranty to, or the owner's email → the gold cards.
+  // The warranty number is never searchable.
   const [who, setWho] = useState("");
   const [cards, setCards] = useState<WarrantyCard[] | null>(null);
 
-  async function ownerLookup(e: FormEvent) {
-    e.preventDefault();
+  async function find(value: string) {
     setLoading(true); setError(null); setCards(null);
-    try { setCards((await lookupOwner(who.trim())).cards); }
+    try { setCards((await lookupOwner(value)).cards); }
     catch (ex: unknown) { setError(ex instanceof Error ? t(ex.message) : t("Lookup failed")); }
     finally { setLoading(false); }
   }
 
-  // Deep-link support: ?q=... or ?code=... or ?vin=...
-  useEffect(() => {
-    if (typeof window === "undefined") return;
-    const params = new URLSearchParams(window.location.search);
-    const val = params.get("q") ?? params.get("code") ?? params.get("vin");
-    if (val) Promise.resolve().then(() => {
-      setMode("code");
-      setQ(val);
-      doLookup(val);
-    });
-  }, []);
-
-  async function doLookup(value: string) {
-    setLoading(true);
-    setError(null);
-    setRecords(null);
-    try {
-      const res = await lookupWarranty(value);
-      setRecords(res.records);
-    } catch (e: unknown) {
-      setError(e instanceof Error ? t(e.message) : t("Lookup failed"));
-    } finally {
-      setLoading(false);
-    }
-  }
-
-  function onSubmit(e: FormEvent) {
+  function ownerLookup(e: FormEvent) {
     e.preventDefault();
-    if (!q.trim()) return;
-    doLookup(q.trim());
+    if (who.trim()) void find(who.trim());
   }
+
+  // Deep-link support: ?vin=... or ?q=... (a VIN, mobile or email). A warranty number is never accepted: old
+  // ?code=... links are stripped from the address bar and ignored.
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    if (params.has("code")) { params.delete("code"); window.history.replaceState(null, "", `${window.location.pathname}${params.size ? `?${params}` : ""}`); }
+    const val = params.get("vin") ?? params.get("q");
+    if (val) Promise.resolve().then(() => { setWho(val); void find(val); });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   return (
     <div className={styles.page}>
@@ -116,65 +54,31 @@ export default function WarrantyPage() {
           <h1>{t("WARRANTY INQUIRY")}</h1>
           <p className={styles.sub}>{t("Window film and paint protection film")}</p>
 
-          <div className={styles.tabs} role="tablist">
-            <button type="button" role="tab" aria-selected={mode === "owner"} onClick={() => { setMode("owner"); setError(null); }}>{t("VIN, mobile or email")}</button>
-            <button type="button" role="tab" aria-selected={mode === "code"} onClick={() => { setMode("code"); setError(null); }}>{t("Warranty number")}</button>
-          </div>
 
-          {mode === "owner" && <form onSubmit={ownerLookup} className={styles.form}>
+          <form onSubmit={ownerLookup} className={styles.form}>
             <label htmlFor="inquiry-who" className="visually-hidden">{t("VIN, mobile or email")}</label>
             <input id="inquiry-who" value={who} onChange={e => setWho(e.target.value)} required maxLength={254}
               autoComplete="off" spellCheck={false} dir="ltr" placeholder={t("VIN, mobile (09…) or email")} />
             <button type="submit" disabled={loading}>{loading ? t("Searching…") : t("Show my warranty card")}</button>
             <p className={styles.helpText}>{t("Enter only one of: your vehicle's VIN, the mobile number your installer registered the warranty to, or the email of your Solarzed account. If different films were used on different windows, you will see the warranty of each window.")}{" "}
               <Link href="/account">{t("Sign in to your account")}</Link></p>
-          </form>}
+          </form>
 
-          {mode === "owner" && cards !== null && <div className={`${styles.results} ${styles.cards}`} aria-live="polite">
+          {cards !== null && <div className={`${styles.results} ${styles.cards}`} aria-live="polite">
             {cards.length === 0
               ? <p className={styles.noResult}>{t("No warranty found for that input.")}</p>
               : <>{[...new Set(cards.map(c => c.owner).filter(Boolean))].length > 0 && <div className={styles.ownerHead}>
                 <span>{t("Warranty owner")}</span>
                 <b>{[...new Set(cards.map(c => c.owner).filter(Boolean))].join(" · ")}</b>
               </div>}
-              {byVehicle(cards).map(car => <div key={car[0].code} className={styles.cards}>
+              {byVehicle(cards).map((car, i) => <div key={i} className={styles.cards}>
                 <VehicleCoverage title={`${car[0].make} ${car[0].model} · ${car[0].plate}`}
                   items={car.map(c => ({ ...c, film: c.product }))} />
-                {car.map(c => <GoldCard key={c.code} card={c} />)}
+                {car.map((c, j) => <GoldCard key={j} card={c} />)}
               </div>)}</>}
           </div>}
 
-          {mode === "code" && <form onSubmit={onSubmit} className={styles.form}>
-            <label htmlFor="inquiry-q" className="visually-hidden">
-              {t("Warranty number or VIN")}
-            </label>
-            <input
-              id="inquiry-q"
-              value={q}
-              onChange={e => setQ(e.target.value)}
-              required
-              maxLength={40}
-              autoComplete="off"
-              spellCheck={false}
-              autoCapitalize="characters"
-              placeholder={t("Warranty number / VIN")}
-            />
-            <button type="submit" disabled={loading}>
-              {loading ? t("Searching…") : t("Query")}
-            </button>
-          </form>}
-
           {error && <p className={styles.errorMsg}>{error}</p>}
-
-          {mode === "code" && records !== null && (
-            <div className={styles.results} aria-live="polite">
-              {records.length === 0 ? (
-                <p className={styles.noResult}>{t("No warranty found for that input.")}</p>
-              ) : (
-                records.map(w => <CertificateCard key={w.code} w={w} />)
-              )}
-            </div>
-          )}
 
           <div className={styles.divider}><span>{t("Description")}</span></div>
 

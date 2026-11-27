@@ -37,7 +37,9 @@ test("warranty QR: admin prints a decodable code that opens the public warranty 
     return { width: canvas.width, height: canvas.height, data: Array.from(ctx.getImageData(0, 0, canvas.width, canvas.height).data) };
   });
   const decoded = jsQR(new Uint8ClampedArray(pixels.data), pixels.width, pixels.height);
-  expect(decoded?.data).toBe(`https://solarzed.com/warranty?code=${code}`);
+  // The QR opens the owner's gold card by its key; the warranty number is never in it.
+  expect(decoded?.data).toMatch(/^https:\/\/solarzed\.com\/card#[a-z0-9]{10}$/);
+  expect(decoded?.data).not.toContain(code);
   await expect(page.getByText("Film warranty until 2031-01-14")).toBeVisible();
   await page.screenshot({ path: testInfo.outputPath("warranty-qr-admin.png"), fullPage: true });
 
@@ -45,13 +47,14 @@ test("warranty QR: admin prints a decodable code that opens the public warranty 
   await page.getByRole("button", { name: "Print warranty QR (1)" }).click();
   const popup = await popupPromise;
   await expect(popup.locator(".label")).toHaveCount(1);
-  await expect(popup.locator(".label code")).toHaveText(code);
+  await expect(popup.locator(".label")).not.toContainText(code);
   expect(await popup.locator("style").textContent()).toContain("size:80mm 50mm");
   await popup.setViewportSize({ width: 650, height: 400 });
   await popup.screenshot({ path: testInfo.outputPath("warranty-qr-print.png") });
   await popup.close();
 
-  // The decoded link resolves on the local copy of the public warranty check.
-  await page.goto(`/warranty?code=${encodeURIComponent(code)}`);
-  await expect(page.getByText(code).first()).toBeVisible();
+  // The decoded link opens the gold card on the local copy, without the warranty number.
+  await page.goto(new URL(decoded!.data).hash ? `/card${new URL(decoded!.data).hash}` : "/card");
+  await expect(page.getByText("QR Test Owner")).toBeVisible();
+  await expect(page.getByText(code)).toHaveCount(0);
 });

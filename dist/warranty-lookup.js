@@ -38,6 +38,6 @@
  form.addEventListener('submit',e=>{e.preventDefault();search();});
  document.querySelector('#inquiry-sample')?.addEventListener('click',()=>{input.value=sample.code;show([sample]);});
  addEventListener('afterprint',()=>document.querySelectorAll('.certificate.is-printing').forEach(c=>c.classList.remove('is-printing')));
- // Links from the installer SMS or a QR code: warranty.html?code=… / ?vin=… / ?phone=… / ?q=…
- const params=new URLSearchParams(location.search);for(const key of ['code','vin','phone','q'])if(params.get(key)){input.value=params.get(key);search();break;}
+ // Links: warranty.html?vin=… / ?phone=… / ?q=… (never a warranty number)
+ const params=new URLSearchParams(location.search);for(const key of ['vin','phone','q'])if(params.get(key)){input.value=params.get(key);search();break;}
 })();

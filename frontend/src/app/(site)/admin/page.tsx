@@ -601,10 +601,12 @@ function ReportRolls() {
 
 // ── Warranties ───────────────────────────────────────────────────────────────
 
-type WRow = { code: string; owner: string; phone: string; make: string; model: string; vin: string; plate: string; type: string; installer: string;
+type WRow = { code: string; cardKey?: string | null; owner: string; phone: string; make: string; model: string; vin: string; plate: string; type: string; installer: string;
   installed: string; status: string; flagsJson: string; filmEnds: string | null; createdAt: string; filmSerial: string; invoiceNumber: string } & Record<string, unknown>;
 
 const FLAGS = ["roll_unknown", "roll_not_approved", "roll_not_distributed", "roll_void", "type_mismatch", "vin_repeat", "roll_high_count", "roll_burst", "roll_overuse"];
+// The printed warranty QR opens the owner's gold card by its key; the warranty number is never printed for the customer.
+const cardUrl = (site: string, key?: string | null) => `${site.replace(/\/+$/, "")}/card#${key ?? ""}`;
 const W_EMPTY = { q: "", type: "", flagged: "", flag: "", make: "", installer: "", installedFrom: "", installedTo: "", createdFrom: "", createdTo: "", expiringDays: "" };
 
 // Rows carry `ref`, an opaque handle for decisions; «مدیر» sees the code masked (last four characters).
@@ -638,13 +640,13 @@ function WarrantiesPanel() {
   }, []);
 
   const printable = Object.values(checked).filter(w => w.status !== "rejected");
-  const printableKey = printable.map(w => w.code).join("|");
+  const printableKey = printable.map(w => `${w.code}=${w.cardKey ?? ""}`).join("|");
 
   useEffect(() => {
     if (!site) return;
     let cancelled = false;
-    Promise.all(printableKey.split("|").filter(Boolean).map(async code =>
-      [code, await QRCode.toDataURL(`${site.replace(/\/+$/, "")}/warranty?code=${encodeURIComponent(code)}`, { errorCorrectionLevel: "M", margin: 4, scale: 8 })] as const,
+    Promise.all(printableKey.split("|").filter(Boolean).map(entry => entry.split("=")).map(async ([code, key]) =>
+      [code, await QRCode.toDataURL(cardUrl(site, key), { errorCorrectionLevel: "M", margin: 4, scale: 8 })] as const,
     )).then(entries => { if (!cancelled) setQrs(Object.fromEntries(entries)); })
       .catch(ex => { if (!cancelled) setQrError(fa(errorText(ex, "ساخت QR ناموفق بود."))); });
     return () => { cancelled = true; };
@@ -680,7 +682,7 @@ function WarrantiesPanel() {
       qr: qrs[w.code],
       alt: `تأیید گارانتی ${w.code}`,
       title: "برای تأیید گارانتی اسکن کنید",
-      lines: [w.code, `${w.make} ${w.model} · ${w.type === "ppf" ? "PPF" : "فیلم شیشه"}`, `نصب ${w.installed}`,
+      lines: [`${w.make} ${w.model} · ${w.type === "ppf" ? "PPF" : "فیلم شیشه"}`, `نصب ${w.installed}`,
         ...(w.status === "active" && w.filmEnds ? [`گارانتی فیلم تا ${w.filmEnds}`] : [`وضعیت: ${fa(w.status)}`])],
       footer: new URL(site).host,
     })));
@@ -777,9 +779,8 @@ function WarrantiesPanel() {
           <div>
             <b>SOLARZED</b>
             <p>{w.make} {w.model} · {w.type === "ppf" ? "PPF" : "فیلم شیشه"}</p>
-            <code dir="ltr">{w.code}</code>
             <p>{w.status === "active" && w.filmEnds ? `گارانتی فیلم تا ${w.filmEnds}` : `وضعیت: ${fa(w.status)}`}</p>
-            <a href={`/warranty?code=${encodeURIComponent(w.code)}`} target="_blank" rel="noreferrer">پیش‌نمایش بررسی محلی ↗</a>
+            {w.cardKey && <a href={`/card#${w.cardKey}`} target="_blank" rel="noreferrer">پیش‌نمایش کارت طلایی ↗</a>}
           </div>
         </article>
       ))}</div>

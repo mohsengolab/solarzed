@@ -14,7 +14,7 @@ public interface IActivationSmsSender
     Task Send(string phone, string code, string reference, CancellationToken cancellationToken);
     /// <summary>True when the "warranty active" pattern (warranty number + gold card link) is set and sending is on.</summary>
     bool WarrantyConfigured => false;
-    Task SendWarranty(string phone, string warrantyCode, string link, CancellationToken cancellationToken) => Task.CompletedTask;
+    Task SendWarranty(string phone, string link, CancellationToken cancellationToken) => Task.CompletedTask;
     /// <summary>True when the "rolls received" pattern (roll count + sign-in link) is set and sending is on.</summary>
     bool TransferConfigured => false;
     Task SendTransfer(string phone, int count, string link, CancellationToken cancellationToken) => Task.CompletedTask;
@@ -114,15 +114,14 @@ public class ActivationSmsSender(HttpClient http, IConfiguration configuration, 
     string? WarrantyPattern => configuration["Faraz:WarrantyPattern"];
     public bool WarrantyConfigured => Configured && (!(Rest || FarazConfigured) || !string.IsNullOrWhiteSpace(WarrantyPattern));
 
-    /// <summary>"Warranty active" message: the warranty number and the link to its gold card, through its own approved pattern.</summary>
-    public Task SendWarranty(string phone, string warrantyCode, string link, CancellationToken cancellationToken)
+    /// <summary>"Warranty active" message: only the link to the gold card, through its own approved pattern. The warranty number is never sent.</summary>
+    public Task SendWarranty(string phone, string link, CancellationToken cancellationToken)
     {
         if (!WarrantyConfigured) throw new ActivationError(503, "The warranty SMS pattern is not set.");
         return SendPattern(phone, WarrantyPattern, new Dictionary<string, string>
         {
-            [configuration["Faraz:WarrantyCodeVariable"] ?? "code"] = warrantyCode,
             [configuration["Faraz:WarrantyLinkVariable"] ?? "link"] = link,
-        }, $"Your Solarzed warranty {warrantyCode} is active. Your warranty card: {link}", "warranty-" + warrantyCode,
+        }, $"Your Solarzed warranty is active. Your warranty card: {link}", "warranty-card",
             "Faraz did not accept the warranty message.", "The warranty message could not be submitted.", cancellationToken);
     }
 

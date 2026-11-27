@@ -276,7 +276,8 @@ export function qs(params: Record<string, string | number | boolean | null | und
 // ── Public ───────────────────────────────────────────────────────────────────
 
 export interface WarrantyPublic {
-  code: string;
+  /** Opaque handle for this warranty. The warranty number is never sent to customers or installers. */
+  ref: string;
   type: "tint" | "ppf";
   make: string;
   model: string;
@@ -295,11 +296,12 @@ export interface WarrantyPublic {
   statusNote?: string;
   coverage?: { filmEnds?: string; installEnds?: string };
   flags: string[];
+  /** The owner's gold card (/card#key), on the owner's own warranties once the card exists. */
+  cardLink?: string | null;
 }
 
 /** Public certificate check: no plate, VIN, invoice, installer or seller. Owners see full records in /account. */
 export interface WarrantyCheck {
-  code: string;
   type: "tint" | "ppf";
   make: string;
   model: string;
@@ -343,13 +345,15 @@ export function verifyRollNo(rollNo: string) {
   return apiFetch<RollVerification>(`/api/warranty/verify?rollNo=${encodeURIComponent(rollNo)}`);
 }
 
+/** Public certificate check by VIN only; the warranty number is never searchable. */
 export function lookupWarranty(q: string): Promise<LookupResult> {
   return apiFetch(`/api/warranty?q=${encodeURIComponent(q)}`);
 }
 
 /** The gold warranty card: what the owner sees from the SMS link or the VIN + mobile inquiry. */
 export interface WarrantyCard {
-  code: string;
+  /** Opaque handle for this warranty (never the warranty number). */
+  ref: string;
   owner: string;
   type: "tint" | "ppf";
   product?: string | null;
@@ -381,8 +385,9 @@ export function lookupOwner(q: string) {
   return apiFetch<{ cards: WarrantyCard[] }>(`/api/warranty/owner?q=${encodeURIComponent(q)}`);
 }
 
-export function warrantyCard(code: string, key: string) {
-  return apiFetch<WarrantyCard>(`/api/warranty/card?code=${encodeURIComponent(code)}&key=${encodeURIComponent(key)}`);
+/** The card behind the SMS link or printed QR: {site}/card#{key}. The warranty number is never part of a link. */
+export function warrantyCard(key: string) {
+  return apiFetch<WarrantyCard>(`/api/warranty/card?key=${encodeURIComponent(key)}`);
 }
 
 // ── Admin ────────────────────────────────────────────────────────────────────
@@ -662,8 +667,8 @@ export function installerActivation(token: string, registration: Record<string, 
   form.append("data", JSON.stringify({ token, registration, usedLengthM, customerPhone, country }));
   return apiUpload<ActivationResult>("/api/activation/installer", form);
 }
-export function installerResendPhotos(code: string, photos: PhotoSet) {
-  return apiUpload<{ status: string }>(`/api/activation/installer/${encodeURIComponent(code)}/photos`, photoForm(photos));
+export function installerResendPhotos(ref: string, photos: PhotoSet) {
+  return apiUpload<{ status: string }>(`/api/activation/installer/${encodeURIComponent(ref)}/photos`, photoForm(photos));
 }
 export function portalApplyPartner(data: { shopName: string; country?: string; city?: string }) {
   return apiFetch<PortalUser>("/api/portal/partner/apply", { method: "POST", body: JSON.stringify(data) });
@@ -721,8 +726,8 @@ export function adminWarrantyPhotos(ref: string) {
   return apiFetch<{ items: { id: number; kind: PhotoKind; createdAt: string }[] }>(`/api/admin/review/photos?ref=${encodeURIComponent(ref)}`);
 }
 /** Installation photos of a warranty the signed-in customer owns or the installer registered. */
-export function portalWarrantyPhotos(code: string) {
-  return apiFetch<{ items: { id: number; kind: PhotoKind; createdAt: string }[] }>(`/api/portal/warranties/${encodeURIComponent(code)}/photos`);
+export function portalWarrantyPhotos(ref: string) {
+  return apiFetch<{ items: { id: number; kind: PhotoKind; createdAt: string }[] }>(`/api/portal/warranties/${encodeURIComponent(ref)}/photos`);
 }
 export async function portalPhoto(id: number) {
   const res = await fetch(`${BASE}/api/portal/photos/${id}`, { credentials: "include" });

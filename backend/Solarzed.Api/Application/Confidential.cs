@@ -11,7 +11,10 @@ public static class Confidential
 {
     const string Purpose = "Solarzed.WarrantyRef.v1";
     // Used when no provider is injected (tests), so a reference is never the plain code.
-    static readonly IDataProtectionProvider Fallback = new EphemeralDataProtectionProvider();
+    static IDataProtectionProvider Fallback = new EphemeralDataProtectionProvider();
+
+    /// <summary>Uses the app's persistent key ring, so references handed to customers survive restarts.</summary>
+    public static void Use(IDataProtectionProvider provider) => Fallback = provider;
 
     /// <summary>True for the super administrator, or a role granted «codes.view». A request with no signed-in user (internal calls, tests) sees everything.</summary>
     public static bool SeesCodes(ClaimsPrincipal? user) =>
@@ -23,6 +26,14 @@ public static class Confidential
     /// <summary>An opaque handle for a warranty code, valid only on this server.</summary>
     public static string Ref(string code, IDataProtectionProvider? protection) =>
         (protection ?? Fallback).CreateProtector(Purpose).Protect(code);
+
+    /// <summary>The warranty code behind a reference from <see cref="Ref"/>, or null. Never accepts a plain code.</summary>
+    public static string? Unref(string? handle)
+    {
+        if (string.IsNullOrWhiteSpace(handle) || handle.Length > 400) return null;
+        try { return Fallback.CreateProtector(Purpose).Unprotect(handle); }
+        catch (System.Security.Cryptography.CryptographicException) { return null; }
+    }
 
     /// <summary>The warranty code behind a handle: a reference from <see cref="Ref"/>, or the code itself for the super administrator.</summary>
     public static string? Resolve(string handle, ClaimsPrincipal? user, IDataProtectionProvider? protection)

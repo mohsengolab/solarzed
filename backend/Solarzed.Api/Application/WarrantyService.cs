@@ -18,12 +18,13 @@ public record RegisterRequest(
 /// <summary>The size of the film cut for one glass, in centimetres.</summary>
 public record GlassSize(decimal LengthCm, decimal WidthCm);
 
+/// <summary>What the owner and installer see of a warranty. <c>Ref</c> is an opaque handle: the warranty number itself is never shown to them.</summary>
 public record WarrantyPublic(
-    string Code, string Type, string Make, string Model, string VinMasked,
+    string Ref, string Type, string Make, string Model, string VinMasked,
     string Plate, string FilmSerial, string InvoiceNumber, DateOnly Installed,
     string SellerName, string SellerPhoneMasked, string Installer,
     string[] Areas, string Status, string StatusLabel,
-    string? StatusNote, CoveragePublic? Coverage, string[] Flags, decimal? UsedLengthM = null);
+    string? StatusNote, CoveragePublic? Coverage, string[] Flags, decimal? UsedLengthM = null, string? CardLink = null);
 
 public record WarrantyLimitedPublic(
     string Type, string Make, string Model, string Plate, string FilmSerial,
@@ -31,7 +32,7 @@ public record WarrantyLimitedPublic(
 
 /// <summary>Public certificate check: enough to confirm coverage, nothing that identifies the owner or the vehicle.</summary>
 public record WarrantyCheckPublic(
-    string Code, string Type, string Make, string Model, DateOnly Installed, string[] Areas,
+    string Type, string Make, string Model, DateOnly Installed, string[] Areas,
     string Status, string StatusLabel, string? StatusNote, CoveragePublic? Coverage);
 
 public record CoveragePublic(DateOnly? FilmEnds, DateOnly? InstallEnds);
@@ -223,7 +224,7 @@ public static class WarrantyService
             statusNote = w.ReviewNote;
 
         return new WarrantyPublic(
-            Code: w.Code, Type: w.Type.ToString().ToLower(),
+            Ref: Confidential.Ref(w.Code, null), Type: w.Type.ToString().ToLower(),
             Make: w.Make, Model: w.Model, VinMasked: vinMasked, Plate: w.Plate,
             FilmSerial: w.FilmSerial, InvoiceNumber: w.InvoiceNumber, Installed: w.Installed,
             SellerName: w.SellerName, SellerPhoneMasked: spMasked, Installer: w.Installer,
@@ -234,7 +235,7 @@ public static class WarrantyService
     public static WarrantyCheckPublic ToCheck(WarrantyRegistration w)
     {
         var full = ToPublic(w);
-        return new WarrantyCheckPublic(full.Code, full.Type, full.Make, full.Model, full.Installed, full.Areas,
+        return new WarrantyCheckPublic(full.Type, full.Make, full.Model, full.Installed, full.Areas,
             full.Status, full.StatusLabel, full.StatusNote, full.Coverage);
     }
 

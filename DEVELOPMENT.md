@@ -58,7 +58,7 @@ frontend/
 | Method | Path | Auth | Description |
 |--------|------|------|-------------|
 | POST | /api/registrations | — | Submit warranty registration |
-| GET | /api/warranty?q= | — | Customer lookup (code/VIN/phone) |
+| GET | /api/warranty?q= | — | Certificate check by VIN only (never by warranty number) |
 | GET | /api/registrations/:code | — | Get by code |
 | POST | /api/admin/login | — | Get JWT token |
 | GET | /api/admin/overview | JWT | Dashboard stats |

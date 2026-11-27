@@ -40,7 +40,7 @@ export function toCars(rows: InstallerWarranty[]): Car[] {
 }
 
 const text = (c: Car) => c.rows.flatMap(({ warranty: w, ownerPhoneMasked, country }) =>
-  [w.code, w.make, w.model, w.plate, w.vinMasked, w.filmSerial, w.invoiceNumber, w.installed, ownerPhoneMasked, country ?? ""]).join(" ");
+  [w.make, w.model, w.plate, w.vinMasked, w.filmSerial, w.invoiceNumber, w.installed, ownerPhoneMasked, country ?? ""]).join(" ");
 const statusOf = (c: Car): Status => c.status;
 
 /** Installer partners (همکار): apply in the profile, and follow every vehicle they installed with the warranty of each roll used. */
@@ -71,10 +71,10 @@ export default function InstallerSection({ user, onUser, view, rows = [], reload
     finally { setBusy(false); }
   }
 
-  async function resend(code: string) {
+  async function resend(reference: string) {
     if (!photosComplete(photos)) { setMsg(t("Add a photo of the vehicle with its plate and of the installed film.")); return; }
     setBusy(true); setMsg("");
-    try { await installerResendPhotos(code, photos); setFixing(null); setPhotos({}); setMsg(t("New photos sent to the counter.")); await reload?.(); }
+    try { await installerResendPhotos(reference, photos); setFixing(null); setPhotos({}); setMsg(t("New photos sent to the counter.")); await reload?.(); }
     catch (ex) { setMsg(ex instanceof Error ? t(ex.message) : t("Could not send the photos.")); }
     finally { setBusy(false); }
   }
@@ -87,7 +87,7 @@ export default function InstallerSection({ user, onUser, view, rows = [], reload
         {onRegister && <button type="button" className={styles.button} onClick={onRegister}>{t("+ Register installation")}</button>}
       </div>
       {msg && <p role="status" className={own.notice}>{msg}</p>}
-      {cars.length > 0 && <ListToolbar view={list} placeholder={t("Search plate, vehicle, ROLL NO, warranty code…")} filters={filters} />}
+      {cars.length > 0 && <ListToolbar view={list} placeholder={t("Search plate, vehicle, ROLL NO…")} filters={filters} />}
       {!cars.length ? <Empty title={t("No installations registered yet")}>
         <span>{t("Scan the QR on the warranty card inside a carton to register the first vehicle.")}</span>
       </Empty> : !list.matches.length ? <Empty title={t("Nothing matches your search")} /> : <>
@@ -114,13 +114,12 @@ export default function InstallerSection({ user, onUser, view, rows = [], reload
               <h3 className={own.subhead}>{t("Rolls used on this vehicle")}</h3>
               <ul className={own.rolls}>{car.rows.map(r => {
                 const w = r.warranty;
-                return <li key={w.code} className={own.roll}>
+                return <li key={w.ref} className={own.roll}>
                   <div className={own.rollHead}>
                     <b>ROLL NO <code dir="ltr">{w.filmSerial}</code></b>
                     <span className={`${own.status} ${own[`s_${w.status}`]}`}>{t(STATUS[w.status])}</span>
                   </div>
                   <dl className={own.facts}>
-                    <dt>{t("Warranty code")}</dt><dd><code dir="ltr">{w.code}</code></dd>
                     <dt>{t("Film")}</dt><dd>{w.type === "ppf" ? t("Paint protection film") : t("Window film")}{w.usedLengthM != null && ` · ${t("{n} m", { n: w.usedLengthM })}`}</dd>
                     <dt>{t("Installed")}</dt><dd>{w.installed}</dd>
                     <dt>{t("Covers")}</dt><dd>{w.areas.length ? w.areas.map(a => t(AREA_LABELS[a] ?? a)).join(" · ") : "—"}</dd>
@@ -131,14 +130,14 @@ export default function InstallerSection({ user, onUser, view, rows = [], reload
                     {r.country && <><dt>{t("Country")}</dt><dd>{r.country}</dd></>}
                     <dt>{t("Photos")}</dt><dd>{t(r.photos === 1 ? "{n} photo" : "{n} photos", { n: r.photos })}</dd>
                   </dl>
-                  {r.photos > 0 && <InstallationPhotos code={w.code} />}
+                  {r.photos > 0 && <InstallationPhotos reference={w.ref} />}
                   {w.status === "rejected" && w.statusNote && <small className={own.reason}>{t("Reason: {note}", { note: w.statusNote })}</small>}
-                  {w.status !== "active" && <button type="button" className={own.ghost} onClick={() => { setFixing(fixing === w.code ? null : w.code); setPhotos({}); }}>
-                    {fixing === w.code ? t("Cancel") : t("New photos")}
+                  {w.status !== "active" && <button type="button" className={own.ghost} onClick={() => { setFixing(fixing === w.ref ? null : w.ref); setPhotos({}); }}>
+                    {fixing === w.ref ? t("Cancel") : t("New photos")}
                   </button>}
-                  {fixing === w.code && <div className={own.form}>
+                  {fixing === w.ref && <div className={own.form}>
                     <PhotoPicker value={photos} onChange={setPhotos} disabled={busy} />
-                    <button type="button" className={styles.button} disabled={busy} onClick={() => resend(w.code)}>{busy ? t("Uploading…") : t("Send new photos")}</button>
+                    <button type="button" className={styles.button} disabled={busy} onClick={() => resend(w.ref)}>{busy ? t("Uploading…") : t("Send new photos")}</button>
                   </div>}
                 </li>;
               })}</ul>

@@ -51,7 +51,7 @@ public static class PhotoRules
         return result.ToArray();
     }
 }
-public record ActivationResult(WarrantyPublic Warranty, decimal? RemainingLengthM);
+public record ActivationResult(WarrantyPublic Warranty, decimal? RemainingLengthM, [property: System.Text.Json.Serialization.JsonIgnore] string Code = "");
 
 /// <summary>
 /// Every carton is identified by the roll number already printed (with its barcode) on the box, e.g. CPT30614374,
@@ -409,6 +409,6 @@ public class BoxLabelService(AppDbContext db, IDataProtectionProvider protection
         // A concurrent winner trips either the label revision guard or the unique serial/warranty indexes.
         catch (DbUpdateException) { throw new ActivationError(409, "The roll balance or warranty just changed. Refresh and try again."); }
         // EF's single SaveChanges transaction commits the label, transfer and warranty atomically.
-        return new(WarrantyService.ToPublic(registration), label.RemainingLengthM);
+        return new(WarrantyService.ToPublic(registration), label.RemainingLengthM, registration.Code);
     }
 }

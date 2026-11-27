@@ -36,7 +36,7 @@ public class ActivationController(BoxLabelService labels, AppDbContext db, Warra
         try
         {
             var result = await labels.Activate(request, phone);
-            if (await db.WarrantyRegistrations.FirstOrDefaultAsync(w => w.Code == result.Warranty.Code) is { } saved) await cards.Notify(saved);
+            if (await db.WarrantyRegistrations.FirstOrDefaultAsync(w => w.Code == result.Code) is { } saved) await cards.Notify(saved);
             return Ok(result);
         }
         catch (ActivationError ex) { return StatusCode(ex.Status, new { error = ex.Message }); }
@@ -82,14 +82,15 @@ public class ActivationController(BoxLabelService labels, AppDbContext db, Warra
     }
 
     /// <summary>Replaces the photos of a registration the installer made that is still pending or was sent back; it returns to the counter.</summary>
-    [HttpPost("installer/{code}/photos"), Authorize(Policy = "PortalPolicy"), RequestSizeLimit(UploadLimit), RequestFormLimits(MultipartBodyLengthLimit = UploadLimit)]
-    public async Task<IActionResult> ResendPhotos(string code, CancellationToken ct)
+    [HttpPost("installer/{reference}/photos"), Authorize(Policy = "PortalPolicy"), RequestSizeLimit(UploadLimit), RequestFormLimits(MultipartBodyLengthLimit = UploadLimit)]
+    public async Task<IActionResult> ResendPhotos(string reference, CancellationToken ct)
     {
+        var code = Confidential.Unref(reference);
         var id = PortalAuth.Id(User);
         var partner = id == null ? null : await db.PortalUsers.FirstOrDefaultAsync(u => u.Id == id && u.Active, ct);
         if (partner?.Phone is not { } phone || partner.Partner != PartnerStatus.Approved)
             return StatusCode(403, new { error = "Your installer account is not approved." });
-        var w = await db.WarrantyRegistrations.FirstOrDefaultAsync(x => x.Code == code && x.InstallerPhone == phone, ct);
+        var w = await db.WarrantyRegistrations.FirstOrDefaultAsync(x => code != null && x.Code == code && x.InstallerPhone == phone, ct);
         if (w == null) return NotFound(new { error = "Registration not found." });
         if (w.Status == WarrantyStatus.Active) return Conflict(new { error = "This warranty is already approved." });
         if (!Request.HasFormContentType) return BadRequest(new { error = "Send the photos." });

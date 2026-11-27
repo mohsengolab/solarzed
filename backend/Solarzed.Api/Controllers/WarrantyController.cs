@@ -14,43 +14,19 @@ namespace Solarzed.Api.Controllers;
 [Route("api/warranty")]
 public class WarrantyController(AppDbContext db, WarrantyCards? warrantyCards = null) : ControllerBase
 {
-    static readonly Regex CardToken = new(@"\A[A-Za-z0-9]{1,40}-(\d{7})(?:-[A-Za-z]{3})?\z", RegexOptions.Compiled);
-    static readonly Regex SevenDigits = new(@"\A\d{7}\z", RegexOptions.Compiled);
-
     /// <summary>
-    /// Public warranty check by warranty number (also the number on the card, alone or as RollNo-1234567[-ABC]) or VIN.
-    /// It returns only what a certificate check needs: no plate, VIN, invoice, installer or seller. Owners see the
-    /// full record in their account after SMS sign-in, so lookup by mobile number is not offered here.
+    /// Public warranty check by VIN only. The warranty number is never searchable by customers or installers.
+    /// It returns only what a certificate check needs: no warranty number, plate, VIN, invoice, installer or seller.
     /// </summary>
     [HttpGet, EnableRateLimiting("warranty-lookup")]
-    public async Task<IActionResult> Lookup([FromQuery] string? by, [FromQuery] string? q)
+    public async Task<IActionResult> Lookup([FromQuery] string? q)
     {
         if (string.IsNullOrWhiteSpace(q)) return BadRequest(new { error = "q required" });
-        q = q.Trim();
-        if (q.Length > 60) return BadRequest(new { error = "Enter a warranty number or a 17-character VIN." });
-
-        var mode = by switch
-        {
-            "code" or "vin" => by,
-            "phone" => "phone",
-            _ => q.StartsWith("SZ-", StringComparison.OrdinalIgnoreCase) || SevenDigits.IsMatch(q) || CardToken.IsMatch(q) ? "code"
-                : q.Length == 17 ? "vin" : "phone",
-        };
-        var query = db.WarrantyRegistrations.AsNoTracking();
-
-        if (mode == "code")
-        {
-            var code = CardToken.Match(q) is { Success: true } m && !q.StartsWith("SZ-", StringComparison.OrdinalIgnoreCase) ? m.Groups[1].Value : q;
-            var r = await query.FirstOrDefaultAsync(w => w.Code == code);
-            return Ok(new { records = r == null ? [] : new[] { WarrantyService.ToCheck(r) } });
-        }
-        if (mode == "vin")
-        {
-            var vin = q.ToUpperInvariant();
-            var list = await query.Where(w => w.Vin == vin).OrderByDescending(w => w.Installed).Take(20).ToListAsync();
-            return Ok(new { records = list.Select(WarrantyService.ToCheck) });
-        }
-        return BadRequest(new { error = "Search by warranty number or VIN. To see every warranty on your mobile number, sign in to your account." });
+        var vin = WarrantyService.NormalizePhone(q).Trim().ToUpperInvariant().Replace(" ", "");
+        if (!VinPattern.IsMatch(vin)) return BadRequest(new { error = "Enter the 17-character VIN." });
+        var list = await db.WarrantyRegistrations.AsNoTracking().Where(w => w.Vin == vin)
+            .OrderByDescending(w => w.Installed).Take(20).ToListAsync();
+        return Ok(new { records = list.Select(WarrantyService.ToCheck) });
     }
 
     static readonly Regex RollNoPattern = new(@"\A[A-Z0-9][A-Z0-9-]{2,31}\z", RegexOptions.Compiled);
@@ -179,15 +155,16 @@ public class WarrantyController(AppDbContext db, WarrantyCards? warrantyCards = 
         return Ok(new { cards = list });
     }
 
-    /// <summary>The gold card behind the SMS link: {site}/card#{code}.{key}.</summary>
+    /// <summary>The gold card behind the SMS link or printed QR: {site}/card#{key}. The warranty number is never part of a link.</summary>
     [HttpGet("card"), EnableRateLimiting("warranty-lookup")]
-    public async Task<IActionResult> Card([FromQuery] string? code, [FromQuery] string? key)
+    public async Task<IActionResult> Card([FromQuery] string? key)
     {
         Response.Headers.CacheControl = "no-store";
-        if (string.IsNullOrWhiteSpace(code) || code.Length > 32 || string.IsNullOrWhiteSpace(key) || key.Length > 16)
-            return NotFound(new { error = "This warranty card link is not valid." });
-        var w = await db.WarrantyRegistrations.AsNoTracking().FirstOrDefaultAsync(x => x.Code == code.Trim());
-        if (w == null || !WarrantyCards.KeyMatches(w, key)) return NotFound(new { error = "This warranty card link is not valid." });
-        return Ok(await cards.View(w));
+        var invalid = NotFound(new { error = "This warranty card link is not valid." });
+        if (string.IsNullOrWhiteSpace(key) || key.Length > 16) return invalid;
+        var k = key.Trim().ToLowerInvariant();
+        var matches = await db.WarrantyRegistrations.AsNoTracking().Where(x => x.CardKey == k).Take(2).ToListAsync();
+        if (matches.Count != 1 || !WarrantyCards.KeyMatches(matches[0], key)) return invalid;
+        return Ok(await cards.View(matches[0]));
     }
 }

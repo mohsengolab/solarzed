@@ -116,7 +116,7 @@ export default async function SeriesPage({ params, searchParams }: Props) {
           <div className="why-grid">
             <article><b>01</b><h3>{t("Checked every batch")}</h3><p>{t("Each production batch is verified against the approved specification before it carries a Solarzed product name.")}</p></article>
             <article><b>02</b><h3>{t("A serial for every roll")}</h3><p>{t("A unique roll ID and batch number connect each installation back to its source.")}</p></article>
-            <article><b>03</b><h3>{t("A digital warranty")}</h3><p>{t("Customers find their certificate by warranty number, VIN or mobile number — anytime.")}</p></article>
+            <article><b>03</b><h3>{t("A digital warranty")}</h3><p>{t("Customers find their warranty card by VIN or mobile number — anytime.")}</p></article>
             <article><b>04</b><h3>{t("Clear claims")}</h3><p>{t("Every claim is assessed on its cause and evidence, with a documented decision.")}</p></article>
           </div>
         </section>

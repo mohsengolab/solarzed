@@ -48,7 +48,7 @@ public class SmsSettingsController(IConfiguration config, IWebHostEnvironment en
             mode = config["Faraz:Mode"] ?? "unconfigured",
             pattern = config["Faraz:OtpPattern"] ?? "2675", codeVariable = config["Faraz:CodeVariable"] ?? "code1",
             line = config["Faraz:Sender"] ?? "",
-            warranty = new { pattern = config["Faraz:WarrantyPattern"] ?? "", codeVariable = config["Faraz:WarrantyCodeVariable"] ?? "code",
+            warranty = new { pattern = config["Faraz:WarrantyPattern"] ?? "",
                 linkVariable = config["Faraz:WarrantyLinkVariable"] ?? "link", configured = sender.WarrantyConfigured },
             transfer = new { pattern = config["Faraz:TransferPattern"] ?? "", countVariable = config["Faraz:TransferCountVariable"] ?? "count",
                 linkVariable = config["Faraz:TransferLinkVariable"] ?? "link", configured = sender.TransferConfigured },
@@ -117,14 +117,13 @@ public class SmsSettingsController(IConfiguration config, IWebHostEnvironment en
     {
         var pattern = (req.Pattern ?? "").Trim();
         if (pattern.Length > 0 && !Regex.IsMatch(pattern, "^[a-zA-Z0-9_-]{1,100}$") ||
-            !Regex.IsMatch(req.CodeVariable ?? "", "^[a-zA-Z][a-zA-Z0-9_]{0,49}$") ||
-            !Regex.IsMatch(req.LinkVariable ?? "", "^[a-zA-Z][a-zA-Z0-9_]{0,49}$") || req.CodeVariable == req.LinkVariable)
-            return BadRequest(new { error = "Enter the pattern ID and two different variable names (English letters, digits, _)." });
+            !Regex.IsMatch(req.LinkVariable ?? "", "^[a-zA-Z][a-zA-Z0-9_]{0,49}$"))
+            return BadRequest(new { error = "Enter the pattern ID and the link variable name (English letters, digits, _)." });
         await Update(root =>
         {
             var faraz = root["Faraz"] as JsonObject ?? new JsonObject();
             if (pattern.Length > 0) faraz["WarrantyPattern"] = pattern; else faraz.Remove("WarrantyPattern");
-            faraz["WarrantyCodeVariable"] = req.CodeVariable;
+            faraz.Remove("WarrantyCodeVariable");   // the warranty number is no longer sent
             faraz["WarrantyLinkVariable"] = req.LinkVariable;
             root["Faraz"] = faraz;
         }, ct);
@@ -277,7 +276,7 @@ static class FarazSection
         return next;
     }
 }
-public record SmsWarrantyRequest(string? Pattern, string? CodeVariable, string? LinkVariable);
+public record SmsWarrantyRequest(string? Pattern, string? LinkVariable, string? CodeVariable = null);
 public record SmsTransferRequest(string? Pattern, string? CountVariable, string? LinkVariable);
 public record SmsPolicyRequest(bool Enabled, int OtpMinutes, int ResendSeconds, int DailyLimit);
 public record SmsTestRequest(string Phone);

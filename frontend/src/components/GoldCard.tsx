@@ -11,7 +11,7 @@ const STATUS = { active: "ACTIVE", pending: "UNDER REVIEW", rejected: "NOT ACTIV
 export default function GoldCard({ card }: { card: WarrantyCard }) {
   const t = useT();
   const kind = card.type === "ppf" ? t("Paint Protection Film Warranty") : t("Window Film Warranty");
-  return <article className={css.card} data-status={card.status} aria-label={t("Solarzed warranty {code}", { code: card.code })}>
+  return <article className={css.card} data-status={card.status} aria-label={kind}>
     <div className={css.shine} aria-hidden="true" />
     <header className={css.head}>
       <span className={css.brand}>
@@ -23,7 +23,6 @@ export default function GoldCard({ card }: { card: WarrantyCard }) {
     <div className={css.chip} aria-hidden="true" />
     <p className={css.kind}>{kind}{card.product ? ` · ${card.product}` : ""}</p>
     <FilmSpecsLine specs={card.specs} className={css.specs} />
-    <p className={css.code} dir="ltr">{card.code}</p>
     <dl className={css.grid}>
       <div><dt>{t("Owner")}</dt><dd>{card.owner}</dd></div>
       <div><dt>{t("Vehicle")}</dt><dd>{card.make} {card.model}</dd></div>

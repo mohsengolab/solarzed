@@ -57,7 +57,7 @@ const WARRANTY_STATUS = { active: "Active", pending: "In review", rejected: "Sen
 // country holds the ISO code picked in the country list; a free-text country saved before the list existed stays in countryText.
 const emptyProfile = { firstName: "", lastName: "", company: "", country: "" as CountryCode | "", countryText: "", city: "", job: "" };
 
-const warrantyText = (w: WarrantyPublic) => [w.code, w.make, w.model, w.plate, w.filmSerial, w.invoiceNumber].join(" ");
+const warrantyText = (w: WarrantyPublic) => [w.make, w.model, w.plate, w.filmSerial, w.invoiceNumber].join(" ");
 const warrantyStatus = (w: WarrantyPublic) => w.status;
 const ticketText = (t: PortalTicket) => `${t.code} ${t.subject}`;
 const ticketStatus = (t: PortalTicket) => t.status;
@@ -465,23 +465,23 @@ export default function AccountPage() {
           {!user.phone && <p role="status" className={own.notice}>{t("Warranty card activation needs a verified mobile number — add one in your profile first.")} <button type="button" className={styles.linkButton} onClick={() => go("profile")}>{t("Go to profile")}</button></p>}
           {warranties.length > 0 && <div className={own.vehicles}>
             <h3>{t("Coverage by vehicle")}</h3>
-            {byVehicle(warranties).map(car => <VehicleCoverage key={car[0].code} title={`${car[0].make} ${car[0].model} · ${car[0].plate} · VIN ${car[0].vinMasked}`}
+            {byVehicle(warranties).map(car => <VehicleCoverage key={car[0].ref} title={`${car[0].make} ${car[0].model} · ${car[0].plate} · VIN ${car[0].vinMasked}`}
               items={car.map(w => ({ ...w, film: `ROLL NO ${w.filmSerial}` }))} />)}
           </div>}
-          {warranties.length > 0 && <ListToolbar view={warrantyList} placeholder={t("Search plate, vehicle, ROLL NO, warranty code…")} filters={warrantyFilters} />}
+          {warranties.length > 0 && <ListToolbar view={warrantyList} placeholder={t("Search plate, vehicle, ROLL NO…")} filters={warrantyFilters} />}
           {!warranties.length ? <Empty title={t("No warranties yet")}>
             <span>{installer ? t("Warranties you register for customers are listed under Installations.") : t("Your installer registers the warranty for your mobile and you receive your gold card by SMS.")}</span>
           </Empty> : !warrantyList.matches.length ? <Empty title={t("Nothing matches your search")} /> : <>
-            <ul className={own.cards}>{warrantyList.rows.map(w => <li key={w.code} className={own.item}>
+            <ul className={own.cards}>{warrantyList.rows.map(w => <li key={w.ref} className={own.item}>
               <div className={own.itemMain}>
                 <b>{w.make} {w.model} <span className={own.plate} dir="ltr">{w.plate}</span></b>
-                <small><code dir="ltr">{w.code}</code> · ROLL NO <code dir="ltr">{w.filmSerial}</code>{w.usedLengthM != null && ` · ${t("{n} m", { n: w.usedLengthM })}`}</small>
-                <InstallationPhotos code={w.code} />
+                <small>ROLL NO <code dir="ltr">{w.filmSerial}</code>{w.usedLengthM != null && ` · ${t("{n} m", { n: w.usedLengthM })}`}</small>
+                <InstallationPhotos reference={w.ref} />
               </div>
               <div className={own.itemSide}>
                 <span className={`${own.status} ${own[`s_${w.status}`]}`}>{t(WARRANTY_STATUS[w.status])}</span>
                 <small>{t("Film warranty until {date}", { date: w.coverage?.filmEnds ?? "—" })}</small>
-                <Link className={own.ghost} href={`/warranty?code=${encodeURIComponent(w.code)}`}>{t("View card")}</Link>
+                {w.cardLink && <Link className={own.ghost} href={w.cardLink}>{t("View card")}</Link>}
               </div>
             </li>)}</ul>
             <Pager page={warrantyList.page} pages={warrantyList.pages} setPage={warrantyList.setPage} shown={warrantyList.rows.length} matched={warrantyList.matches.length} />

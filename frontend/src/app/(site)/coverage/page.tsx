@@ -124,7 +124,7 @@ export default async function CoveragePage() {
               <span className={styles.stepNum}>01</span>
               <div>
                 <strong>{t("Look up your warranty")}</strong>
-                <p>{t("Go to the Warranty page and enter your warranty code, VIN, or phone number.")} <Link href="/warranty">{t("Warranty page")}</Link></p>
+                <p>{t("Go to the Warranty page and enter your VIN or mobile number.")} <Link href="/warranty">{t("Warranty page")}</Link></p>
               </div>
             </li>
             <li className={styles.step}>

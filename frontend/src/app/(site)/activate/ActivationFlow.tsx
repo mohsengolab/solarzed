@@ -120,8 +120,7 @@ export default function ActivationFlow({ user, checked, onUser, initialCode, emb
     <span className={styles.eyebrow}>{t("WARRANTY REGISTERED")}</span>
     {result.warranty.status === "pending"
       ? <><h2>{t("Sent for review")}</h2><p>{t("The installation and its photos were sent to the Solarzed counter. Once the photos are approved the warranty becomes active and the customer gets an SMS with their gold warranty card. You can follow it under Installations.")}</p></>
-      : <><h2>{t("Your warranty is active")}</h2><p>{t("Keep your warranty number for future reference. You can see it any time under Warranties in your account.")}</p></>}
-    <small className={styles.codeLabel}>{t("Warranty number")}</small><code className={styles.code} dir="ltr">{result.warranty.code}</code>
+      : <><h2>{t("Your warranty is active")}</h2><p>{t("You can see it any time under Warranties in your account.")}</p></>}
     <dl><dt>{t("Serial Number")}</dt><dd dir="ltr">{info?.id}</dd><dt>{t("Vehicle")}</dt><dd>{result.warranty.make} {result.warranty.model}</dd>{result.warranty.usedLengthM != null && <><dt>{t("Film used")}</dt><dd>{t("{n} m", { n: result.warranty.usedLengthM })}</dd><dt>{t("Remaining roll length")}</dt><dd>{t("{n} m", { n: result.remainingLengthM })}</dd></>}{result.warranty.coverage?.filmEnds && <><dt>{t("Film warranty ends")}</dt><dd>{result.warranty.coverage.filmEnds}</dd></>}{result.warranty.coverage?.installEnds && <><dt>{t("Installation warranty ends")}</dt><dd>{result.warranty.coverage.installEnds}</dd></>}</dl>
     <div style={{ display: "flex", gap: 10, flexWrap: "wrap" }}>
       {info?.canRegister && <button className={styles.button} type="button" onClick={() => reset(true)}>{t("Another vehicle from this roll")}</button>}

@@ -46,6 +46,6 @@ public class RegistrationController(AppDbContext db) : ControllerBase
     {
         var w = await db.WarrantyRegistrations.FirstOrDefaultAsync(x => x.Code == code);
         if (w == null) return NotFound();
-        return Ok(WarrantyService.ToPublic(w));
+        return Ok(new { code = w.Code, warranty = WarrantyService.ToPublic(w) });
     }
 }

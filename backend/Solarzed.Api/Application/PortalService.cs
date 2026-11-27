@@ -279,7 +279,8 @@ public class PortalService(AppDbContext db, IActivationSmsSender sms, IEmailSend
         var variants = PhoneVariants(phone);
         var rows = await db.WarrantyRegistrations.AsNoTracking().Where(x => variants.Contains(x.Phone))
             .OrderByDescending(x => x.CreatedAt).Take(100).ToListAsync();
-        return rows.Select(WarrantyService.ToPublic).ToArray();
+        // The owner opens their gold card by its key; the warranty number itself is never shown.
+        return rows.Select(w => WarrantyService.ToPublic(w) with { CardLink = w.CardKey is { } key ? $"/card#{key}" : null }).ToArray();
     }
 }
 
