@@ -276,6 +276,29 @@ public class BoxLabelTests
     }
 
     [Fact]
+    public async Task InstallationsIncludeOlderRegistrationsMadeFromTheInstallersMobile()
+    {
+        using var f = new Fixture();
+        static WarrantyRegistration Reg(string code, string phone, string? sellerPhone, string? installerPhone) => new()
+        {
+            Code = code, Vin = "V" + code, Owner = "O", Phone = phone, Plate = "P" + code, Make = "Kia", Model = "Rio", FilmSerial = "CPT1",
+            InvoiceNumber = "I" + code, SellerName = "S", SellerPhone = sellerPhone ?? "", Installer = "Shop", InstallerPhone = installerPhone,
+            Installed = new DateOnly(2026, 11, 7),
+        };
+        f.Db.WarrantyRegistrations.AddRange(
+            Reg("A1", Customer, Installer, Installer),          // registered through the installer form
+            Reg("A2", Installer, Installer, null),              // registered before the partner account was approved
+            Reg("A3", "09128888888", Installer, null),          // older registration naming the installer as seller
+            Reg("A4", "09128888888", "09126666666", "09127777777")); // another installer's work
+        await f.Db.SaveChangesAsync();
+        var portal = new PortalService(f.Db, f.Sms);
+        var refs = (await portal.Installed(Installer)).Select(x => x.Warranty.FilmSerial + ":" + x.Warranty.Plate).Order().ToArray();
+        Assert.Equal(["CPT1:PA1", "CPT1:PA2", "CPT1:PA3"], refs);
+        Assert.True(await portal.CanSeePhotos(Installer, "A3"));
+        Assert.False(await portal.CanSeePhotos(Installer, "A4"));
+    }
+
+    [Fact]
     public async Task ManyVehiclesOnOneRollAreFlaggedButNeverBlocked()
     {
         using var f = new Fixture();
