@@ -33,6 +33,9 @@ export default function LocationPicker({ value, onChange, country }: { value: La
       leaflet.current = L;
       const m = L.map(box.current, { scrollWheelZoom: false, worldCopyJump: true });
       L.tileLayer("https://tile.openstreetmap.org/{z}/{x}/{y}.png", {
+        // The account page sets referrer "no-referrer", and OSM blocks tile requests without a Referer.
+        // Send only our origin (never the page path) for the tiles.
+        referrerPolicy: "strict-origin-when-cross-origin",
         maxZoom: 19, attribution: '&copy; <a href="https://www.openstreetmap.org/copyright" target="_blank" rel="noopener">OpenStreetMap</a>',
       }).addTo(m);
       m.on("click", e => change.current({ lat: e.latlng.lat, lng: e.latlng.lng }));
