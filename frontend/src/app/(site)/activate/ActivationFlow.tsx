@@ -8,7 +8,7 @@ import PortalSignIn from "@/components/PortalSignIn";
 import ScanButton from "@/components/ScanButton";
 import { makeT, type T } from "@/lib/i18n";
 import { useLang, useT } from "@/lib/i18n/client";
-import CarWindows, { PANEL_LABELS, filmLengthProblem } from "./CarWindows";
+import CarWindows, { DEFAULT_WINDOWS, MIN_FILM_USED_M, PANEL_LABELS, filmLengthProblem } from "./CarWindows";
 import styles from "./activate.module.css";
 
 const panels = ["hood", "front-bumper", "roof", "trunk", "rear-bumper", "left-front-fender", "right-front-fender", "left-doors", "right-doors", "left-rear-quarter", "right-rear-quarter", "mirrors"];
@@ -71,7 +71,7 @@ export default function ActivationFlow({ user, checked, onUser, initialCode, emb
 
   const open = useCallback(async (code: string) => {
     setError(""); setInfo(null);
-    try { const data = await inspectBox(code); setToken(code); setInfo(data); setTyped(code.toUpperCase()); }
+    try { const data = await inspectBox(code); setToken(code); setInfo(data); setTyped(code.toUpperCase()); setAreas(data.type === "tint" ? DEFAULT_WINDOWS : []); }
     catch (ex) { setError(ex instanceof Error ? t(ex.message) : t("Could not read this Serial Number.")); }
   }, [t]);
 
@@ -81,7 +81,7 @@ export default function ActivationFlow({ user, checked, onUser, initialCode, emb
   }, [checked, initialCode, open]);
 
   function reset(keepRoll: boolean) {
-    setResult(null); setForm(initial); setAreas([]); setUsedLength(""); setCustomerPhone(""); setPhotos({}); setError("");
+    setResult(null); setForm(initial); setAreas(info?.type === "tint" ? DEFAULT_WINDOWS : []); setUsedLength(""); setCustomerPhone(""); setPhotos({}); setError("");
     if (!keepRoll) { setInfo(null); setToken(""); setTyped(""); }
   }
 
@@ -112,7 +112,7 @@ export default function ActivationFlow({ user, checked, onUser, initialCode, emb
       <dt>{t("Serial Number")}</dt><dd><code dir="ltr">{info.id}</code></dd>
       {info.remainingLengthM != null && <><dt>{t("Remaining roll length")}</dt><dd>{t("{n} m", { n: info.remainingLengthM })}</dd></>}
     </dl>
-    <span>{t("{n}-year film warranty", { n: info.filmYears })}{info.installYears ? ` · ${t("{n}-year installation warranty", { n: info.installYears })}` : ""}</span>
+    <span>{t("{n}-year film warranty", { n: info.filmYears })}</span>
   </div>;
 
   if (result) return <section aria-live="polite">
@@ -120,7 +120,7 @@ export default function ActivationFlow({ user, checked, onUser, initialCode, emb
     {result.warranty.status === "pending"
       ? <><h2>{t("Sent for review")}</h2><p>{t("The installation and its photos were sent to the Solarzed counter. Once the photos are approved the warranty becomes active and the customer gets an SMS with their gold warranty card. You can follow it under Installations.")}</p></>
       : <><h2>{t("Your warranty is active")}</h2><p>{t("You can see it any time under Warranties in your account.")}</p></>}
-    <dl><dt>{t("Serial Number")}</dt><dd dir="ltr">{info?.id}</dd><dt>{t("Vehicle")}</dt><dd>{result.warranty.make} {result.warranty.model}</dd>{result.warranty.usedLengthM != null && <><dt>{t("Film used")}</dt><dd>{t("{n} m", { n: result.warranty.usedLengthM })}</dd><dt>{t("Remaining roll length")}</dt><dd>{t("{n} m", { n: result.remainingLengthM })}</dd></>}{result.warranty.coverage?.filmEnds && <><dt>{t("Film warranty ends")}</dt><dd>{result.warranty.coverage.filmEnds}</dd></>}{result.warranty.coverage?.installEnds && <><dt>{t("Installation warranty ends")}</dt><dd>{result.warranty.coverage.installEnds}</dd></>}</dl>
+    <dl><dt>{t("Serial Number")}</dt><dd dir="ltr">{info?.id}</dd><dt>{t("Vehicle")}</dt><dd>{result.warranty.make} {result.warranty.model}</dd>{result.warranty.usedLengthM != null && <><dt>{t("Film used")}</dt><dd>{t("{n} m", { n: result.warranty.usedLengthM })}</dd><dt>{t("Remaining roll length")}</dt><dd>{t("{n} m", { n: result.remainingLengthM })}</dd></>}{result.warranty.coverage?.filmEnds && <><dt>{t("Film warranty ends")}</dt><dd>{result.warranty.coverage.filmEnds}</dd></>}</dl>
     <div style={{ display: "flex", gap: 10, flexWrap: "wrap" }}>
       {info?.canRegister && <button className={styles.button} type="button" onClick={() => reset(true)}>{t("Another vehicle from this roll")}</button>}
       {embedded
@@ -166,8 +166,8 @@ export default function ActivationFlow({ user, checked, onUser, initialCode, emb
         </div>}
         {installer && <p />}
         <div className={styles.grid}>{fields.filter(([key]) => !(installer && key === "installer")).map(([key, label, max]) => <label key={key}>{installer && key === "owner" ? t("Customer full name") : key === "invoiceNumber" ? t("Invoice number (optional)") : t(label)}<input required={key !== "invoiceNumber"} maxLength={max} value={form[key]} type={key === "installed" ? "date" : "text"} autoComplete={key === "owner" ? "name" : "off"} onChange={event => setForm(value => ({ ...value, [key]: event.target.value }))} /></label>)}</div>
-        <label className={styles.meters}>{info.type === "tint" ? t("Film used (m)") : t("Film used (m, optional)")}<input required={info.type === "tint"} type="number" inputMode="decimal" min="0.01" step="0.01" value={usedLength} onChange={event => setUsedLength(event.target.value)} /></label>
-        <fieldset><legend>{info.type === "tint" ? t("Installed windows") : t("Protected panels")}</legend>{info.type === "tint" ? <CarWindows value={areas} onChange={setAreas} /> : <div className={styles.areas}>{panels.map(area => <label key={area}><input type="checkbox" checked={areas.includes(area)} onChange={event => setAreas(current => event.target.checked ? [...current, area] : current.filter(item => item !== area))} />{t(PANEL_LABELS[area] ?? area.replaceAll("-", " "))}</label>)}</div>}</fieldset>
+        <label className={styles.meters}>{info.type === "tint" ? t("Film used (m)") : t("Film used (m, optional)")}<input required={info.type === "tint"} type="number" inputMode="decimal" min={info.type === "tint" ? MIN_FILM_USED_M : 0.01} step="0.01" placeholder={info.type === "tint" ? t("at least {n} m", { n: MIN_FILM_USED_M }) : undefined} value={usedLength} onChange={event => setUsedLength(event.target.value)} /></label>
+        <fieldset><legend>{info.type === "tint" ? t("Installed windows") : t("Protected panels")}</legend>{info.type === "tint" ? <CarWindows value={areas} onChange={next => { setAreas(next); setError(""); }} rollWidthCm={info.widthCm} /> : <div className={styles.areas}>{panels.map(area => <label key={area}><input type="checkbox" checked={areas.includes(area)} onChange={event => setAreas(current => event.target.checked ? [...current, area] : current.filter(item => item !== area))} />{t(PANEL_LABELS[area] ?? area.replaceAll("-", " "))}</label>)}</div>}</fieldset>
         {installer && <PhotoPicker value={photos} onChange={setPhotos} disabled={busy} />}
         {error && <p role="alert" className={styles.error}>{error}</p>}
         <button className={styles.button} type="submit" disabled={busy || !info.released}>{busy ? (installer ? t("Uploading…") : t("Checking…")) : installer ? t("Send for review") : t("Check & register warranty")}</button>

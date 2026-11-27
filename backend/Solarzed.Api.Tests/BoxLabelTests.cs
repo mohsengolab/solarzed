@@ -233,7 +233,7 @@ public class BoxLabelTests
         Assert.Equal(label.CardCode, first.Code);
         var stored = await f.Db.WarrantyRegistrations.SingleAsync();
         Assert.Equal(DateOnly.Parse("2031-01-14"), stored.FilmEnds);
-        Assert.Equal(DateOnly.Parse("2028-01-14"), stored.InstallEnds);
+        Assert.Null(stored.InstallEnds);   // one warranty only: no installation warranty
         Assert.Equal(Customer, stored.Phone);
         Assert.Equal(Serial, stored.RollId);
         var box = await f.Db.BoxLabels.AsNoTracking().SingleAsync();
@@ -558,17 +558,19 @@ public class BoxLabelTests
         // The owner finds the card with VIN + mobile; both must match. The SMS link opens it without signing in.
         var api = new Solarzed.Api.Controllers.WarrantyController(f.Db, cards) { ControllerContext = new() { HttpContext = new Microsoft.AspNetCore.Http.DefaultHttpContext() } };
         var found = Assert.IsType<Microsoft.AspNetCore.Mvc.OkObjectResult>(await api.Owner("jtdbe32k123456789", "+98 912 111 1111"));
-        Assert.Contains(w.Plate, System.Text.Json.JsonSerializer.Serialize(found.Value));
+        Assert.Contains(System.Text.Json.JsonSerializer.Serialize(WarrantyService.MaskPlate(w.Plate)).Trim('"'), System.Text.Json.JsonSerializer.Serialize(found.Value));
+        Assert.DoesNotContain(w.Plate, System.Text.Json.JsonSerializer.Serialize(found.Value));   // the plate is masked like the VIN
         Assert.DoesNotContain(w.Code, System.Text.Json.JsonSerializer.Serialize(found.Value));   // the warranty number is never shown
         var other = Assert.IsType<Microsoft.AspNetCore.Mvc.OkObjectResult>(await api.Owner("JTDBE32K123456789", "09129999999"));
         Assert.DoesNotContain(w.Plate, System.Text.Json.JsonSerializer.Serialize(other.Value));
         Assert.IsType<Microsoft.AspNetCore.Mvc.BadRequestObjectResult>(await api.Owner("SHORT", Customer));
+        var masked = System.Text.Json.JsonSerializer.Serialize(WarrantyService.MaskPlate(w.Plate)).Trim('"');
         // Any one of VIN, mobile or the owner's account email finds the cards on its own.
-        Assert.Contains(w.Plate, System.Text.Json.JsonSerializer.Serialize(Assert.IsType<Microsoft.AspNetCore.Mvc.OkObjectResult>(await api.Owner(null, null, q: "JTDBE32K123456789")).Value));
-        Assert.Contains(w.Plate, System.Text.Json.JsonSerializer.Serialize(Assert.IsType<Microsoft.AspNetCore.Mvc.OkObjectResult>(await api.Owner(null, null, q: "+98 912 111 1111")).Value));
+        Assert.Contains(masked, System.Text.Json.JsonSerializer.Serialize(Assert.IsType<Microsoft.AspNetCore.Mvc.OkObjectResult>(await api.Owner(null, null, q: "JTDBE32K123456789")).Value));
+        Assert.Contains(masked, System.Text.Json.JsonSerializer.Serialize(Assert.IsType<Microsoft.AspNetCore.Mvc.OkObjectResult>(await api.Owner(null, null, q: "+98 912 111 1111")).Value));
         f.Db.PortalUsers.Add(new PortalUser { Phone = Customer, Email = "owner@example.com" });
         await f.Db.SaveChangesAsync();
-        Assert.Contains(w.Plate, System.Text.Json.JsonSerializer.Serialize(Assert.IsType<Microsoft.AspNetCore.Mvc.OkObjectResult>(await api.Owner(null, null, q: "Owner@Example.com")).Value));
+        Assert.Contains(masked, System.Text.Json.JsonSerializer.Serialize(Assert.IsType<Microsoft.AspNetCore.Mvc.OkObjectResult>(await api.Owner(null, null, q: "Owner@Example.com")).Value));
         Assert.DoesNotContain(w.Plate, System.Text.Json.JsonSerializer.Serialize(Assert.IsType<Microsoft.AspNetCore.Mvc.OkObjectResult>(await api.Owner(null, null, q: "nobody@example.com")).Value));
         Assert.IsType<Microsoft.AspNetCore.Mvc.BadRequestObjectResult>(await api.Owner(null, null));
         var card = Assert.IsType<WarrantyCardView>(Assert.IsType<Microsoft.AspNetCore.Mvc.OkObjectResult>(await api.Card(w.CardKey)).Value);

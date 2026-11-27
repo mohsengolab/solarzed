@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useState, FormEvent, type ReactNode } from "react";
+import { useCallback, useEffect, useMemo, useState, FormEvent, type ReactNode } from "react";
 import Link from "next/link";
 import VehicleCoverage, { byVehicle } from "@/components/VehicleCoverage";
 import InstallationPhotos from "@/components/InstallationPhotos";
@@ -19,7 +19,7 @@ import ActivationFlow from "../activate/ActivationFlow";
 import InstallerSection, { toCars } from "./InstallerSection";
 import { Empty, ListToolbar, Pager, useListView } from "./ListTools";
 import RollCards from "./RollCards";
-import { LOCALES, formatDate, formatStamp, type T } from "@/lib/i18n";
+import { LOCALES, formatStamp, type T } from "@/lib/i18n";
 import { useLang, useT } from "@/lib/i18n/client";
 import styles from "../activate/activate.module.css";
 import own from "./account.module.css";
@@ -58,7 +58,7 @@ const WARRANTY_FILTERS = [["active", "Active"], ["pending", "In review"], ["reje
 const WARRANTY_STATUS = { active: "Active", pending: "In review", rejected: "Sent back" } as const;
 
 // country holds the ISO code picked in the country list; a free-text country saved before the list existed stays in countryText.
-const emptyProfile = { firstName: "", lastName: "", company: "", country: "" as CountryCode | "", countryText: "", city: "", job: "", contactEmail: "", location: null as LatLng | null };
+const emptyProfile = { firstName: "", lastName: "", company: "", country: "" as CountryCode | "", countryText: "", city: "", job: "", contactEmail: "", address: "", location: null as LatLng | null };
 
 const warrantyText = (w: WarrantyPublic) => [w.make, w.model, w.plate, w.filmSerial, w.invoiceNumber].join(" ");
 const warrantyStatus = (w: WarrantyPublic) => w.status;
@@ -70,16 +70,24 @@ const EMAIL_RX = /^[^@\s]{1,64}@[^@\s]{1,190}\.[A-Za-z]{2,63}$/;
 const rollSize = (b: HeldBox) => [b.widthCm != null ? `${b.widthCm} cm` : null, b.lengthM != null ? `${b.lengthM} m` : null].filter(Boolean).join(" × ") || "—";
 const rollSpecs = (b: HeldBox) => [b.vlt != null && `VLT ${b.vlt}%`, b.tser != null && `TSER ${b.tser}%`, b.uv != null && `UV ${b.uv}%`,
   b.irr != null && `IRR ${b.irr}%`, b.thicknessMil != null && `${b.thicknessMil} mil`].filter(Boolean).join(" · ") || "—";
-const rollYears = (t: T, b: HeldBox) => [b.filmYears ? t("Film {n} yr", { n: b.filmYears }) : null, b.installYears ? t("Install {n} yr", { n: b.installYears }) : null]
-  .filter(Boolean).join(" · ") || "—";
+const rollYears = (t: T, b: HeldBox) => b.filmYears ? t("Film {n} yr", { n: b.filmYears }) : "—";
 const boxType = (b: HeldBox) => b.type;
-const outText = (t: BoxTransfer) => `${t.labelId} ${t.toHolder ?? ""} ${t.toPhone ?? ""} ${t.note ?? ""}`;
+/** One transfer the account made: every roll sent to one receiver in one go. */
+interface Batch { id: string; at: string; toHolder: string | null; toPhone: string | null; note: string | null; rolls: string[] }
+const toBatches = (rows: BoxTransfer[]): Batch[] => {
+  const map = new Map<string, Batch>();
+  for (const x of rows) {
+    const b = map.get(x.batchId) ?? { id: x.batchId, at: x.at, toHolder: x.toHolder, toPhone: x.toPhone, note: x.note, rolls: [] };
+    b.rolls.push(x.labelId); map.set(x.batchId, b);
+  }
+  return [...map.values()].sort((a, b) => b.at.localeCompare(a.at));
+};
+const outText = (b: Batch) => `${b.id} ${b.rolls.join(" ")} ${b.toHolder ?? ""} ${b.toPhone ?? ""} ${b.note ?? ""}`;
 const none = () => null;
 
 export default function AccountPage() {
   const t = useT();
   const lang = useLang();
-  const date = (value: string | null) => formatDate(lang, value);
   const stamp = (value: string) => formatStamp(lang, value);
   const warrantyFilters = WARRANTY_FILTERS.map(([id, label]) => [id, t(label)] as const);
   const ticketFilters = TICKET_FILTERS.map(([id, label]) => [id, t(label)] as const);
@@ -88,6 +96,9 @@ export default function AccountPage() {
   const [boxes, setBoxes] = useState<HeldBox[]>([]);
   const [outgoing, setOutgoing] = useState<BoxTransfer[]>([]);
   const [usedBoxes, setUsedBoxes] = useState<HeldBox[]>([]);
+  // What each roll in the transfer history is (product, size, Serial Number).
+  const [sentBoxes, setSentBoxes] = useState<HeldBox[]>([]);
+  const [openBatch, setOpenBatch] = useState<string | null>(null);
   const [warranties, setWarranties] = useState<WarrantyPublic[]>([]);
   const [installs, setInstalls] = useState<InstallerWarranty[]>([]);
   const [list, setSerials] = useState<string[]>([]);
@@ -175,7 +186,8 @@ export default function AccountPage() {
   const warrantyList = useListView(warranties, warrantyText, warrantyStatus);
   const boxList = useListView(boxes, boxText, boxType);
   const usedList = useListView(usedBoxes, boxText, boxType);
-  const outList = useListView(outgoing, outText, none);
+  const batches = useMemo(() => toBatches(outgoing), [outgoing]);
+  const outList = useListView(batches, outText, none);
 
   // Keep the ticket list and the open conversation live: a staff reply shows up without a page reload.
   useEffect(() => {
@@ -211,14 +223,14 @@ export default function AccountPage() {
     if (u) setProfile({
       firstName: u.firstName ?? "", lastName: u.lastName ?? "", company: u.shopName ?? "",
       country: countryFromText(u.country)?.code ?? countryOfPhone(u.phone) ?? "", countryText: u.country ?? "",
-      city: u.city ?? "", job: u.job ?? "", contactEmail: u.contactEmail ?? u.email ?? "",
+      city: u.city ?? "", job: u.job ?? "", contactEmail: u.contactEmail ?? u.email ?? "", address: u.address ?? "",
       location: u.latitude != null && u.longitude != null ? { lat: u.latitude, lng: u.longitude } : null,
     });
   }
 
   async function load() {
     const [b, w, t] = await Promise.all([portalBoxes(), portalWarranties(), portalTickets()]);
-    setBoxes(b.boxes); setOutgoing(b.outgoing); setUsedBoxes(b.used ?? []); setWarranties(w.warranties); setTickets(t.tickets);
+    setBoxes(b.boxes); setOutgoing(b.outgoing); setUsedBoxes(b.used ?? []); setSentBoxes(b.sent ?? []); setWarranties(w.warranties); setTickets(t.tickets);
   }
 
   useEffect(() => {
@@ -418,7 +430,7 @@ export default function AccountPage() {
               : user.partner === "pending" ? <span className={own.badge}>{t("Installer application pending")}</span> : null}
           </div>
           <button type="button" className={own.menuToggle} aria-expanded={menuOpen} aria-controls="account-menu" onClick={() => setMenuOpen(o => !o)}>
-            {current.label} <span aria-hidden="true">▾</span>
+            <span aria-hidden="true">☰</span> {t("Menu")}
           </button>
         </div>
         <nav id="account-menu" className={`${own.nav} ${menuOpen ? own.navOpen : ""}`} aria-label={t("Account menu")}>
@@ -587,14 +599,39 @@ export default function AccountPage() {
               </>}
             </section>}
 
-            {view === "rolls" && outgoing.length > 0 && <section>
-              <h2>{t("Rolls you transferred")}</h2>
+            {view === "transfer" && outgoing.length > 0 && <section>
+              <h2>{t("Transfer history")}</h2>
+              <p>{t("Every transfer you made: who received the rolls and what each roll is. Open a transfer to see its rolls.")}</p>
               <ListToolbar view={outList} placeholder={t("Search ROLL NO, receiver, note…")} />
               {!outList.matches.length ? <Empty title={t("Nothing matches your search")} /> : <>
-                <div className={own.scroll}><table className={own.table}>
-                  <thead><tr><th>{t("Date")}</th><th>ROLL NO</th><th>{t("To")}</th><th>{t("Note")}</th></tr></thead>
-                  <tbody>{outList.rows.map(x => <tr key={x.id}><td>{date(x.at)}</td><td><code dir="ltr">{x.labelId}</code></td><td>{who(t, x.toHolder, x.toPhone)}</td><td>{x.note ?? "—"}</td></tr>)}</tbody>
-                </table></div>
+                <ul className={own.cards}>{outList.rows.map(b => {
+                  const isOpen = openBatch === b.id;
+                  return <li key={b.id} className={`${own.item} ${own.car}`}>
+                    <button type="button" className={own.carHead} aria-expanded={isOpen} onClick={() => setOpenBatch(isOpen ? null : b.id)}>
+                      <div className={own.itemMain}>
+                        <b>{b.toHolder && b.toHolder !== b.toPhone ? b.toHolder : t("Receiver")} {b.toPhone && <span dir="ltr" className={own.plate}>{b.toPhone}</span>}</b>
+                        <small>{stamp(b.at)} · {t("{n} roll(s)", { n: b.rolls.length })} · {t("Transfer")} <code dir="ltr">{b.id}</code></small>
+                      </div>
+                      <div className={own.itemSide}><span className={own.ghost}>{isOpen ? t("Hide details") : t("Show details")}</span></div>
+                    </button>
+                    {isOpen && <div className={`${own.itemExtra} ${own.carBody}`}>
+                      <dl className={own.facts}>
+                        <dt>{t("Receiver")}</dt><dd>{b.toHolder ?? "—"}</dd>
+                        <dt>{t("Mobile")}</dt><dd dir="ltr">{b.toPhone ?? "—"}</dd>
+                        <dt>{t("Date")}</dt><dd>{stamp(b.at)}</dd>
+                        {b.note && <><dt>{t("Note")}</dt><dd>{b.note}</dd></>}
+                      </dl>
+                      <div className={own.scroll}><table className={own.table}>
+                        <thead><tr><th>ROLL NO</th><th>{t("Serial Number")}</th><th>{t("Product")}</th><th>{t("Size")}</th><th>{t("Warranty")}</th><th>{t("Specs")}</th></tr></thead>
+                        <tbody>{b.rolls.map(id => { const r = sentBoxes.find(x => x.id === id); return <tr key={id}>
+                          <td><code dir="ltr">{id}</code></td>
+                          {r ? <><td><code dir="ltr">{r.rollId ?? "—"}</code></td><td>{r.productName ?? r.product} · {r.type.toUpperCase()}</td><td dir="ltr">{rollSize(r)}</td><td>{rollYears(t, r)}</td><td dir="ltr"><small>{rollSpecs(r)}</small></td></>
+                            : <td colSpan={5} className={own.muted}>—</td>}
+                        </tr>; })}</tbody>
+                      </table></div>
+                    </div>}
+                  </li>;
+                })}</ul>
                 <Pager page={outList.page} pages={outList.pages} setPage={outList.setPage} shown={outList.rows.length} matched={outList.matches.length} />
               </>}
             </section>}
@@ -682,6 +719,7 @@ export default function AccountPage() {
                 <label>{t("Job / business")}<input maxLength={100} placeholder={t("e.g. shop, installer, driver")} value={profile.job} onChange={e => setProfile({ ...profile, job: e.target.value })} /></label>
                 <label>{t("Email")}<input type="email" dir="ltr" maxLength={254} autoComplete="email" placeholder="you@example.com" value={profile.contactEmail} onChange={e => setProfile({ ...profile, contactEmail: e.target.value })} /></label>
               </div>
+              <label>{t("Address")}<input maxLength={500} autoComplete="street-address" placeholder={t("Street, building, unit…")} value={profile.address} onChange={e => setProfile({ ...profile, address: e.target.value })} /></label>
               <div className={own.field}>
                 <span>{t("Location on the map")}</span>
                 <LocationPicker value={profile.location} country={profile.country} onChange={location => setProfile(p => ({ ...p, location }))} />

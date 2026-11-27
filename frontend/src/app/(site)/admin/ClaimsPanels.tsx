@@ -182,7 +182,7 @@ function ClaimDialog({ id, onClose, onSaved }: { id: string; onClose: () => void
       {!detail ? <p className={s.loading}>{msg || "در حال بارگذاری…"}</p> : <>
         <dl>
           {[["کد گارانتی", w?.code], ["وضعیت گارانتی", w?.status], ["مالک", w?.owner], ["موبایل", w?.phone], ["خودرو", `${w?.make} ${w?.model}`],
-            ["VIN", w?.vin], ["پلاک", w?.plate], ["نصاب", w?.installer], ["تاریخ نصب", w?.installed], ["پایان گارانتی فیلم", w?.filmEnds], ["پایان گارانتی نصب", w?.installEnds],
+            ["VIN", w?.vin], ["پلاک", w?.plate], ["نصاب", w?.installer], ["تاریخ نصب", w?.installed], ["پایان گارانتی فیلم", w?.filmEnds],
             ["رول / Batch", detail.roll ? `${detail.roll.id} · ${detail.roll.batch} · ${detail.roll.supplier}` : "—"],
             ["کانال", CHANNELS[c!.channel]], ["ثبت", `${when(c!.createdAt)} · ${c!.createdBy}`]].map(([k, v]) => <div key={k}><dt>{k}</dt><dd>{v || "—"}</dd></div>)}
         </dl>

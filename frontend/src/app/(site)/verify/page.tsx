@@ -30,7 +30,6 @@ function fields(t: T, r: RollVerification): [string, string][] {
     ["Batch", r.batch],
     ["Received", r.receivedOn],
     ["Film warranty", has(r.filmYears) && r.filmYears! > 0 ? years(t, r.filmYears!) : null],
-    ["Installation warranty", has(r.installYears) && r.installYears! > 0 ? years(t, r.installYears!) : null],
     ["Warranty card", r.activated ? (r.activatedOn ? t("Activated ({date})", { date: r.activatedOn }) : t("Activated")) : t("Not activated yet")],
   ];
   return rows.filter(([, v]) => has(v)).map(([k, v]) => [t(k), String(v)]);

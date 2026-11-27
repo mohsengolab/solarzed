@@ -21,7 +21,8 @@ export default function GoldCard({ card }: { card: WarrantyCard }) {
       <span className={css.badge}>{t(STATUS[card.status])}</span>
     </header>
     <div className={css.chip} aria-hidden="true" />
-    <p className={css.kind}>{kind}{card.product ? ` · ${card.product}` : ""}</p>
+    <p className={css.kind}>{kind}</p>
+    {card.product && <p className={css.model}>{card.product}</p>}
     <FilmSpecsLine specs={card.specs} className={css.specs} />
     <dl className={css.grid}>
       <div><dt>{t("Owner")}</dt><dd>{card.owner}</dd></div>
@@ -31,7 +32,6 @@ export default function GoldCard({ card }: { card: WarrantyCard }) {
       <div><dt>{t("Installed")}</dt><dd>{card.installed}</dd></div>
       <div><dt>{t("Installer")}</dt><dd>{card.installer}{card.country ? ` · ${card.country}` : ""}</dd></div>
       {card.coverage?.filmEnds && <div><dt>{t("Film warranty until")}</dt><dd>{card.coverage.filmEnds}</dd></div>}
-      {card.coverage?.installEnds && <div><dt>{t("Installation warranty until")}</dt><dd>{card.coverage.installEnds}</dd></div>}
     </dl>
     {card.status !== "active" && <p className={css.note}>{card.status === "pending"
       ? t("The installation photos are being reviewed. The warranty becomes active once Solarzed approves them.")

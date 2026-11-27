@@ -107,7 +107,7 @@ function HolderDialog({ who, onClose }: { who: Who; onClose: () => void }) {
           </div>
           <div style={{ maxHeight: "60vh", overflow: "auto" }}>
             {tab === "held" ? (held.length ? <table className={s.table}>
-              <thead><tr><th>ROLL NO</th><th>محصول</th><th>نوع</th><th>شناسه رول</th><th>در دست از</th></tr></thead>
+              <thead><tr><th>ROLL NO</th><th>محصول</th><th>نوع</th><th>Serial Number</th><th>در دست از</th></tr></thead>
               <tbody>{held.map(b => <tr key={b.id}>
                 <td><code dir="ltr">{b.id}</code></td><td>{b.product}</td><td>{typeLabel(b.type)}</td>
                 <td><code dir="ltr">{b.rollId ?? "—"}</code></td><td>{date(b.heldSince)}</td>

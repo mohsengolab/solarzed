@@ -57,7 +57,7 @@ export default function Showcase({ series, categoryLabel, start }: { series: Ser
           <p className="product-model"><small>{t("MODEL")}</small><b>{product.model}</b></p>
           <p className="showcase-text">{product.description || t("{product} from the {series}.", { product: product.name, series: series.name })}</p>
           <ul className="showcase-points">
-            <li>{t("Unique roll serial and production batch")}</li>
+            <li>{t("Unique Serial Number and production batch")}</li>
             <li>{t("Registered to the vehicle by VIN")}</li>
             <li>{t("Digital warranty certificate for the customer")}</li>
           </ul>

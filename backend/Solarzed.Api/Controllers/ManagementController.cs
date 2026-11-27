@@ -220,6 +220,15 @@ public class ManagementController(AppDbContext db) : ControllerBase
         if (!string.IsNullOrEmpty(f.Type) && Enum.TryParse<WarrantyType>(f.Type, true, out var t) && Enum.IsDefined(t)) query = query.Where(w => w.Type == t);
         if (f.InstalledFrom is { } from) query = query.Where(w => w.Installed >= from);
         if (f.InstalledTo is { } to) query = query.Where(w => w.Installed <= to);
+        if (Paging.Term(f.Installer) is { } installer) query = query.Where(w => w.Installer.Contains(installer) || (w.InstallerPhone != null && w.InstallerPhone.Contains(installer)));
+        if (Paging.Term(f.Country) is { } country) query = query.Where(w => w.Country != null && w.Country.Contains(country));
+        if (f.CreatedFrom is { } cFrom) { var start = cFrom.ToDateTime(TimeOnly.MinValue, DateTimeKind.Utc); query = query.Where(w => w.CreatedAt >= start); }
+        if (f.CreatedTo is { } cTo) { var end = cTo.AddDays(1).ToDateTime(TimeOnly.MinValue, DateTimeKind.Utc); query = query.Where(w => w.CreatedAt < end); }
+        if (f.ExpiringDays is > 0 and <= 3650)
+        {
+            var today = DateOnly.FromDateTime(DateTime.UtcNow); var until = today.AddDays(f.ExpiringDays.Value);
+            query = query.Where(w => w.FilmEnds != null && w.FilmEnds >= today && w.FilmEnds <= until);
+        }
 
         // Page over distinct customers (mobile numbers), newest activity first; return each customer's full history.
         var grouped = query.GroupBy(w => w.Phone).Select(g => new { Phone = g.Key, Last = g.Max(w => w.CreatedAt) });
@@ -227,7 +236,8 @@ public class ManagementController(AppDbContext db) : ControllerBase
         var total = await grouped.CountAsync(ct);
         var phones = await grouped.OrderByDescending(g => g.Last).Skip((page.SafePage - 1) * page.SafeSize).Take(page.SafeSize).Select(g => g.Phone).ToListAsync(ct);
         var items = await db.WarrantyRegistrations.AsNoTracking().Where(w => phones.Contains(w.Phone))
-            .OrderByDescending(w => w.CreatedAt).Select(w => new { w.Code, w.Owner, w.Phone, w.Make, w.Model, w.Vin, w.Plate, w.Type, w.Installed, w.Status, w.FilmEnds }).ToListAsync(ct);
+            .OrderByDescending(w => w.CreatedAt).Select(w => new { w.Code, w.Owner, w.Phone, w.Make, w.Model, w.Vin, w.Plate, w.Type, w.Installed, w.Status, w.FilmEnds,
+                w.Installer, w.Country, w.FilmSerial, w.InvoiceNumber, w.CreatedAt }).ToListAsync(ct);
         return Ok(new { items, total, page = page.SafePage, pageSize = page.SafeSize, phones });
     }
 }
@@ -250,6 +260,11 @@ public class CustomerSearch
     public string? Type { get; set; }
     public DateOnly? InstalledFrom { get; set; }
     public DateOnly? InstalledTo { get; set; }
+    public string? Installer { get; set; }
+    public string? Country { get; set; }
+    public DateOnly? CreatedFrom { get; set; }
+    public DateOnly? CreatedTo { get; set; }
+    public int? ExpiringDays { get; set; }
     public int Page { get; set; } = 1;
     public int PageSize { get; set; } = 20;
 }

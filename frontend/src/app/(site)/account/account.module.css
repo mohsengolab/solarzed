@@ -6,11 +6,11 @@
 .ghost:hover{border-color:#1fc3cf}
 .notice{background:#1fc3cf12;border:1px solid #1fc3cf55;padding:14px;border-radius:10px;color:var(--sz-accent-fg)!important}
 .form{display:flex;flex-direction:column;gap:18px}
-.departments{display:flex;flex-wrap:wrap;gap:10px;border:0;margin:0;padding:0}
+.departments{display:flex;flex-wrap:wrap;gap:8px;border:0;margin:0;padding:0}
 .departments legend{width:100%;margin-bottom:8px}
-.departments label{display:inline-flex;align-items:center;gap:8px;padding:9px 16px;border:1px solid rgb(var(--sz-tint) / 0.161);border-radius:999px;cursor:pointer}
+.departments label{display:inline-flex;flex:0 0 auto;width:auto;align-items:center;gap:6px;padding:5px 12px;font-size:13px;line-height:1.4;border:1px solid rgb(var(--sz-tint) / 0.161);border-radius:999px;cursor:pointer}
 .departments label:has(input:checked){border-color:var(--sz-accent, #1fc3cf);background:rgb(var(--sz-tint) / 0.05)}
-.departments input{accent-color:var(--sz-accent, #1fc3cf);margin:0}
+.departments input{accent-color:var(--sz-accent, #1fc3cf);margin:0;width:14px;height:14px;min-height:0;padding:0;flex:none}
 .form textarea{width:100%;background:rgb(var(--sz-tint) / 0.02);border:1px solid rgb(var(--sz-tint) / 0.161);border-radius:9px;padding:13px;color:var(--sz-fg);font:inherit;box-sizing:border-box;color-scheme:var(--sz-scheme);resize:vertical}
 .scroll{overflow-x:auto;margin-bottom:18px}
 .table{width:100%;border-collapse:collapse;font-size:13px;min-width:480px}

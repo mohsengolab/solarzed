@@ -57,6 +57,9 @@ public static class WarrantyService
     /// <summary>The windshield needs film at least this wide (cm); a narrower roll cannot cover it.</summary>
     public const decimal WindshieldMinWidthCm = 100;
 
+    /// <summary>Least film any window-film installation uses: four side windows (user, 2026-11-28).</summary>
+    public const decimal MinFilmUsedM = 3.2m;
+
     /// <summary>
     /// Why the film used can't cover the selected glass, or null. The meters are required, must reach the sum of each
     /// glass's minimum length, and a windshield needs a roll at least 100 cm wide (when the roll's width is known).
@@ -66,7 +69,7 @@ public static class WarrantyService
         if (windows.Contains("windshield") && rollWidthCm is { } width && width < WindshieldMinWidthCm)
             return $"This roll is {width:0.##} cm wide; the windshield needs film at least {WindshieldMinWidthCm:0} cm wide.";
         if (usedM is not { } used || used <= 0) return "Enter the film used in meters.";
-        var needed = windows.Sum(w => MinGlassLengthCm.TryGetValue(w, out var cm) ? cm : 0) / 100m;
+        var needed = Math.Max(MinFilmUsedM, windows.Sum(w => MinGlassLengthCm.TryGetValue(w, out var cm) ? cm : 0) / 100m);
         if (used < needed)
             return $"{used:0.##} m of film cannot cover the {windows.Length} selected windows; they need at least {needed:0.##} m.";
         return null;
@@ -195,6 +198,15 @@ public static class WarrantyService
         return [.. flags];
     }
 
+    /// <summary>The plate as shown on the gold card: like the VIN, only its first and last characters stay readable.</summary>
+    public static string MaskPlate(string plate)
+    {
+        var p = plate.Trim();
+        if (p.Length <= 3) return new string('•', p.Length);
+        var keep = p.Length >= 7 ? 2 : 1;
+        return p[..keep] + "••••" + p[^keep..];
+    }
+
     public static WarrantyPublic ToPublic(WarrantyRegistration w)
     {
         var vin = w.Vin;
@@ -214,7 +226,7 @@ public static class WarrantyService
 
         CoveragePublic? coverage = null;
         if (w.Status == WarrantyStatus.Active)
-            coverage = new CoveragePublic(w.FilmEnds, w.InstallEnds);
+            coverage = new CoveragePublic(w.FilmEnds, null);   // one warranty only: no installation warranty
 
         string? statusNote = null;
         if (w.Status == WarrantyStatus.Rejected && !string.IsNullOrWhiteSpace(w.ReviewNote))

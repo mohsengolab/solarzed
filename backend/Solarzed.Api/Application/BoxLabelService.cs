@@ -183,7 +183,7 @@ public class BoxLabelService(AppDbContext db, IDataProtectionProvider protection
             var factory = RollService.SupplierCode(roll.Supplier) ?? throw new ActivationError(400, $"Supplier code must be exactly 3 English letters.{which}");
             if (roll.LengthM is not > 0) throw new ActivationError(400, $"Set the roll length before issuing labels.{which}");
             int? film = roll.Type == WarrantyType.Tint ? setting.TintFilmYears : setting.PpfFilmYears;
-            int? install = roll.Type == WarrantyType.Tint ? setting.TintInstallYears : setting.PpfInstallYears;
+            int? install = null;   // one warranty only: no installation warranty
             if (film is not (3 or 5 or 7 or 10) || install is not (null or 1 or 2 or 3))
                 throw new ActivationError(400, "Set the approved film and installation periods in Settings before issuing labels.");
             foreach (var serial in serials)
@@ -378,7 +378,8 @@ public class BoxLabelService(AppDbContext db, IDataProtectionProvider protection
             registration.ReviewNote = "Customer activation by a signed-in, SMS-verified mobile with the warranty card from the box.";
         }
         registration.FilmEnds = WarrantyService.AddYears(registration.Installed, label.FilmYears);
-        registration.InstallEnds = label.InstallYears is int years ? WarrantyService.AddYears(registration.Installed, years) : null;
+        // One warranty only (user, 2026-11-28): the film warranty. No separate installation warranty is given.
+        registration.InstallEnds = null;
         registration.FlagsJson = JsonSerializer.Serialize(await RollFlags(registration, label, roll, remaining, req.UsedLengthM));
         var now = DateTime.UtcNow;
         var actor = (partner != null ? "installer:" : "customer:") + phone;

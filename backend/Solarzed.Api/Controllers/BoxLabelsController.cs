@@ -35,6 +35,15 @@ public class BoxLabelsController(AppDbContext db, BoxLabelService labels, BoxTra
         catch (ActivationError ex) { return StatusCode(ex.Status, new { error = ex.Message }); }
     }
 
+    /// <summary>The account name behind a receiver's mobile, filled in on the transfer form before staff confirm.</summary>
+    [HttpGet("recipient"), Perm("labels.transfer", "rolls.transfer")]
+    public async Task<IActionResult> Recipient([FromQuery] string? phone)
+    {
+        if (string.IsNullOrWhiteSpace(phone)) return BadRequest(new { error = "Enter the receiver's mobile number." });
+        try { return Ok(await transfers.Recipient(phone, null, "")); }
+        catch (ActivationError ex) { return StatusCode(ex.Status, new { error = ex.Message }); }
+    }
+
     [HttpGet("{serial}/transfers"), Perm("labels.view", "labels.transfer", "rolls.transfer")]
     public async Task<IActionResult> History(string serial)
     {

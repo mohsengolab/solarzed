@@ -82,7 +82,7 @@ const en: LandingCopy = {
   intro: {
     title: ["Window films for your vehicle.", "A clear record for every installation."],
     features: [
-      ["Comfort and protection", "Explore automotive window tint and keep the film model, roll serial and installed glass documented for your vehicle."],
+      ["Comfort and protection", "Explore automotive window tint and keep the film model, Serial Number and installed glass documented for your vehicle."],
       ["Traceable installation", "From the left and right side windows to the rear windshield, record exactly where your Solarzed film was installed and who completed the work."],
     ],
     more: "Learn more", boxAlt: "Solarzed original product packaging", boxCaption: "Solarzed original packaging",
@@ -93,7 +93,7 @@ const en: LandingCopy = {
       ["3", "Warranty areas", "Film, installation and digital documentation"],
       ["5", "Windows", "Choose the exact glass that was tinted"],
       ["1", "Tracking code", "Find your registered installation record"],
-      ["2", "Coverage periods", "Film and installation terms defined separately"],
+      ["1", "Warranty", "One warranty for every roll, shown on one card"],
     ],
   },
   warranties: {
@@ -101,7 +101,7 @@ const en: LandingCopy = {
     text: ["Three connected parts.", "Clear terms for the film, the installation", "and the record that brings them together."],
     cards: [
       { tag: "01 / FILM", title: "Film Warranty", text: "For confirmed product defects under normal use, assessed against the applicable film model and approved warranty terms." },
-      { tag: "02 / INSTALLATION", title: "Installation Warranty", text: "For verified workmanship issues, with conditions and coverage periods separate from the film itself." },
+      { tag: "02 / INSTALLATION", title: "Authorised Installation", text: "Every installation is registered by an approved Solarzed installer, with photos reviewed before the warranty becomes active." },
       { tag: "03 / DIGITAL", title: "Digital Warranty", text: "A connected certificate for the product, vehicle, original customer and warranty status — with one place to find the details." },
     ],
     learnMore: "LEARN MORE",
@@ -154,11 +154,11 @@ const fa: LandingCopy = {
     stats: [["3", "بخش گارانتی"], ["5", "شیشه ثبت‌شده"], ["1", "کد پیگیری"], ["24/7", "استعلام آنلاین"]],
     scroll: "رفتن به محتوا",
   },
-  marquee: ["گارانتی فیلم", "گارانتی نصب", "گواهی دیجیتال", "رول‌های قابل ردیابی", "نقشه پنج شیشه", "شبکه نمایندگان"],
+  marquee: ["گارانتی فیلم", "نصب مجاز", "گواهی دیجیتال", "رول‌های قابل ردیابی", "نقشه پنج شیشه", "شبکه نمایندگان"],
   intro: {
     title: ["فیلم شیشه برای خودروی شما.", "سابقه‌ای شفاف برای هر نصب."],
     features: [
-      ["آسایش و محافظت", "فیلم‌های شیشه خودرو را بشناسید و مدل فیلم، شماره رول و شیشه‌های فیلم‌شده خودروی خود را ثبت‌شده نگه دارید."],
+      ["آسایش و محافظت", "فیلم‌های شیشه خودرو را بشناسید و مدل فیلم، Serial Number و شیشه‌های فیلم‌شده خودروی خود را ثبت‌شده نگه دارید."],
       ["نصب قابل ردیابی", "از شیشه‌های جانبی چپ و راست تا شیشه عقب، دقیقاً ثبت کنید فیلم سولارزد روی کدام شیشه نصب شده و چه کسی آن را نصب کرده است."],
     ],
     more: "بیشتر بدانید", boxAlt: "بسته‌بندی اصلی محصول سولارزد", boxCaption: "بسته‌بندی اصلی سولارزد",
@@ -169,7 +169,7 @@ const fa: LandingCopy = {
       ["3", "بخش گارانتی", "فیلم، نصب و مستندات دیجیتال"],
       ["5", "شیشه", "شیشه‌ای را که دقیقاً فیلم شده انتخاب کنید"],
       ["1", "کد پیگیری", "سابقه نصب ثبت‌شده خود را پیدا کنید"],
-      ["2", "دوره پوشش", "شرایط فیلم و نصب به‌طور جداگانه تعیین می‌شود"],
+      ["1", "گارانتی", "یک گارانتی برای هر رول، روی یک کارت"],
     ],
   },
   warranties: {
@@ -177,7 +177,7 @@ const fa: LandingCopy = {
     text: ["سه بخش به هم پیوسته.", "شرایطی روشن برای فیلم، نصب", "و سابقه‌ای که این دو را به هم پیوند می‌دهد."],
     cards: [
       { tag: "۰۱ / فیلم", title: "گارانتی فیلم", text: "برای عیوب تأییدشده محصول در شرایط استفاده عادی، بر اساس مدل فیلم مربوطه و شرایط گارانتی مصوب." },
-      { tag: "۰۲ / نصب", title: "گارانتی نصب", text: "برای ایرادهای تأییدشده در اجرای نصب، با شرایط و دوره پوشش جدا از خود فیلم." },
+      { tag: "۰۲ / نصب", title: "نصب مجاز", text: "هر نصب را نصاب تأییدشده سولارزد ثبت می‌کند و عکس‌های آن پیش از فعال شدن گارانتی بررسی می‌شود." },
       { tag: "۰۳ / دیجیتال", title: "گارانتی دیجیتال", text: "گواهی‌ای یکپارچه برای محصول، خودرو، مشتری اصلی و وضعیت گارانتی — با یک مرجع برای یافتن همه جزئیات." },
     ],
     learnMore: "بیشتر بدانید",
@@ -230,7 +230,7 @@ const ar: LandingCopy = {
     stats: [["3", "مجالات ضمان"], ["5", "نوافذ موثّقة"], ["1", "رمز تتبّع"], ["24/7", "استعلام عبر الإنترنت"]],
     scroll: "الانتقال إلى المحتوى",
   },
-  marquee: ["ضمان الفيلم", "ضمان التركيب", "شهادة رقمية", "لفّات قابلة للتتبّع", "خريطة النوافذ الخمس", "شبكة الوكلاء"],
+  marquee: ["ضمان الفيلم", "تركيب معتمد", "شهادة رقمية", "لفّات قابلة للتتبّع", "خريطة النوافذ الخمس", "شبكة الوكلاء"],
   intro: {
     title: ["أفلام نوافذ لسيارتك.", "سجل واضح لكل تركيب."],
     features: [
@@ -245,7 +245,7 @@ const ar: LandingCopy = {
       ["3", "مجالات ضمان", "الفيلم والتركيب والتوثيق الرقمي"],
       ["5", "نوافذ", "اختر الزجاج الذي تم تظليله بالضبط"],
       ["1", "رمز تتبّع", "اعثر على سجل التركيب المسجَّل"],
-      ["2", "فترتا تغطية", "شروط الفيلم والتركيب محددة كلٌّ على حدة"],
+      ["1", "ضمان", "ضمان واحد لكل لفّة على بطاقة واحدة"],
     ],
   },
   warranties: {
@@ -253,7 +253,7 @@ const ar: LandingCopy = {
     text: ["ثلاثة أجزاء مترابطة.", "شروط واضحة للفيلم وللتركيب", "وللسجل الذي يجمع بينهما."],
     cards: [
       { tag: "01 / الفيلم", title: "ضمان الفيلم", text: "لعيوب المنتج المؤكَّدة في ظروف الاستخدام العادي، وفق طراز الفيلم المعني وشروط الضمان المعتمدة." },
-      { tag: "02 / التركيب", title: "ضمان التركيب", text: "لمشكلات التركيب المؤكَّدة، بشروط وفترات تغطية منفصلة عن الفيلم نفسه." },
+      { tag: "02 / التركيب", title: "تركيب معتمد", text: "يسجّل كلَّ تركيب مركّبٌ معتمد من سولارزد، وتُراجَع صوره قبل تفعيل الضمان." },
       { tag: "03 / الرقمي", title: "الضمان الرقمي", text: "شهادة موحَّدة للمنتج والسيارة والعميل الأصلي وحالة الضمان — مع مكان واحد للعثور على كل التفاصيل." },
     ],
     learnMore: "اعرف المزيد",

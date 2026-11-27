@@ -115,7 +115,7 @@ export default async function SeriesPage({ params, searchParams }: Props) {
           <div className="why-head"><span className="eyebrow">{t("WHY SOLARZED")}</span><h2>{t("One brand. One standard.")}</h2></div>
           <div className="why-grid">
             <article><b>01</b><h3>{t("Checked every batch")}</h3><p>{t("Each production batch is verified against the approved specification before it carries a Solarzed product name.")}</p></article>
-            <article><b>02</b><h3>{t("A serial for every roll")}</h3><p>{t("A unique roll ID and batch number connect each installation back to its source.")}</p></article>
+            <article><b>02</b><h3>{t("A serial for every roll")}</h3><p>{t("A unique Serial Number and batch number connect each installation back to its source.")}</p></article>
             <article><b>03</b><h3>{t("A digital warranty")}</h3><p>{t("Customers find their warranty card by VIN or mobile number — anytime.")}</p></article>
             <article><b>04</b><h3>{t("Clear claims")}</h3><p>{t("Every claim is assessed on its cause and evidence, with a documented decision.")}</p></article>
           </div>
@@ -128,8 +128,7 @@ export default async function SeriesPage({ params, searchParams }: Props) {
               <thead><tr><th scope="col">{t("Coverage")}</th><th scope="col">{t("What it covers")}</th><th scope="col">{t("Period")}</th></tr></thead>
               <tbody>
                 <tr><th scope="row">{t("Film warranty")}</th><td>{t("Confirmed product defects under normal use and the care instructions.")}</td><td>{t("Per approved product terms")}</td></tr>
-                <tr><th scope="row">{t("Installation warranty")}</th><td>{t("Workmanship issues assessed against the installation instructions for the model.")}</td><td>{t("Per approved product terms")}</td></tr>
-                <tr><th scope="row">{t("Digital certificate")}</th><td>{t("Links the product, roll serial, vehicle, installation and original customer.")}</td><td>{t("Available online anytime")}</td></tr>
+                <tr><th scope="row">{t("Digital certificate")}</th><td>{t("Links the product, Serial Number, vehicle, installation and original customer.")}</td><td>{t("Available online anytime")}</td></tr>
               </tbody>
             </table>
           </div>

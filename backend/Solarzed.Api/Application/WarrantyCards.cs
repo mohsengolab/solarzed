@@ -10,7 +10,7 @@ namespace Solarzed.Api.Application;
 /// <summary>The gold warranty card the owner opens from the SMS link or the VIN + mobile inquiry.</summary>
 public record WarrantyCardView(string Ref, string Owner, string Type, string? Product, string Make, string Model, string Plate,
     string VinMasked, DateOnly Installed, string Installer, string? Country, string[] Areas, string Status, string StatusLabel,
-    CoveragePublic? Coverage, string Link, FilmSpecs? Specs = null);
+    CoveragePublic? Coverage, string Link, FilmSpecs? Specs = null, string? Series = null, string? Description = null);
 
 /// <summary>Datasheet values of the film on a warranty: VLT, IR rejection and UV rejection in %, thickness in mil.</summary>
 public record FilmSpecs(int? Vlt, int? Irr, int? Uvr, decimal? ThicknessMil);
@@ -45,11 +45,14 @@ public class WarrantyCards(AppDbContext db, IActivationSmsSender? sms = null, Sm
         site ??= await Site();
         var p = WarrantyService.ToPublic(w);
         var product = await db.BoxLabels.AsNoTracking().Where(b => b.Id == w.FilmSerial).Select(b => b.Product).FirstOrDefaultAsync();
-        var specs = product == null ? null : await db.Products.AsNoTracking().Where(x => x.Code == product)
-            .Select(x => new FilmSpecs(x.Vlt, x.Irr, x.Uv, x.ThicknessMil)).FirstOrDefaultAsync();
+        var info = product == null ? null : await db.Products.AsNoTracking().Where(x => x.Code == product)
+            .Select(x => new { Specs = new FilmSpecs(x.Vlt, x.Irr, x.Uv, x.ThicknessMil), x.Series, x.Description }).FirstOrDefaultAsync();
+        var specs = info?.Specs;
         if (specs is { Vlt: null, Irr: null, Uvr: null, ThicknessMil: null }) specs = null;
-        return new(p.Ref, w.Owner, p.Type, product, w.Make, w.Model, w.Plate, p.VinMasked, w.Installed, w.Installer, w.Country,
-            JsonSerializer.Deserialize<string[]>(w.AreasJson) ?? [], p.Status, p.StatusLabel, p.Coverage, $"{site}/card#{w.CardKey}", specs);
+        string? Blank(string? v) => string.IsNullOrWhiteSpace(v) ? null : v.Trim();
+        return new(p.Ref, w.Owner, p.Type, product, w.Make, w.Model, WarrantyService.MaskPlate(w.Plate), p.VinMasked, w.Installed, w.Installer, w.Country,
+            JsonSerializer.Deserialize<string[]>(w.AreasJson) ?? [], p.Status, p.StatusLabel, p.Coverage, $"{site}/card#{w.CardKey}", specs,
+            Blank(info?.Series), Blank(info?.Description));
     }
 
     /// <summary>

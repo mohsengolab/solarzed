@@ -63,8 +63,17 @@ export const isWrongMobile = (national: string, country: CountryCode) => {
 export const toE164 = (national: string, country: CountryCode) =>
   parsePhoneNumberFromString(nationalDigits(national), country)?.number ?? `+${getCountryCallingCode(country)}${nationalDigits(national)}`;
 
-/** Example mobile, written the way people in that country write it, for the input placeholder. */
-export const examplePlaceholder = (country: CountryCode) => getExampleNumber(country, examples)?.formatNational() ?? "";
+/**
+ * Example mobile for the input placeholder, without the trunk 0: the +code is already picked in front of the field,
+ * so Iran shows 912 345 6789, not 0912 345 6789.
+ */
+export const examplePlaceholder = (country: CountryCode) => {
+  const example = getExampleNumber(country, examples);
+  if (!example) return "";
+  const international = example.formatInternational();
+  const prefix = `+${example.countryCallingCode}`;
+  return international.startsWith(prefix) ? international.slice(prefix.length).trim() : example.nationalNumber;
+};
 
 /** Which country a stored mobile belongs to (09… is Iranian). */
 export function countryOfPhone(phone: string | null | undefined): CountryCode | null {

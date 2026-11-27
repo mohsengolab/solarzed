@@ -61,12 +61,13 @@ public class WarrantyTests
         Assert.NotNull(WarrantyService.CheckFilmLength(sides, null, null));          // meters are required
         Assert.NotNull(WarrantyService.CheckFilmLength(sides, 2m, null));            // 4 × 80 cm = 3.2 m
         Assert.Null(WarrantyService.CheckFilmLength(sides, 3.2m, null));
-        Assert.NotNull(WarrantyService.CheckFilmLength(["rear"], 0.99m, null));     // rear needs 1 m
-        Assert.Null(WarrantyService.CheckFilmLength(["rear"], 1m, 50m));
-        Assert.NotNull(WarrantyService.CheckFilmLength(["windshield"], 0.9m, 100m)); // windshield needs 1 m long
-        Assert.NotNull(WarrantyService.CheckFilmLength(["windshield"], 5m, 50m));    // ...and a roll 1 m wide
-        Assert.Null(WarrantyService.CheckFilmLength(["windshield"], 1m, 100m));
-        Assert.Null(WarrantyService.CheckFilmLength(["windshield"], 1m, null));      // width not recorded
+        Assert.NotNull(WarrantyService.CheckFilmLength(["rear"], 1m, 50m));         // every install uses at least 3.2 m
+        Assert.Null(WarrantyService.CheckFilmLength(["rear"], 3.2m, 50m));
+        Assert.NotNull(WarrantyService.CheckFilmLength([.. sides, "rear", "windshield"], 3.2m, 100m)); // 6 glasses need 5.2 m
+        Assert.Null(WarrantyService.CheckFilmLength([.. sides, "rear", "windshield"], 5.2m, 100m));
+        Assert.NotNull(WarrantyService.CheckFilmLength(["windshield"], 5m, 50m));    // the windshield needs a roll 1 m wide
+        Assert.Null(WarrantyService.CheckFilmLength(["windshield"], 3.2m, 100m));
+        Assert.Null(WarrantyService.CheckFilmLength(["windshield"], 3.2m, null));    // width not recorded
     }
 
     [Fact]
@@ -165,7 +166,7 @@ public class WarrantyTests
         await db.SaveChangesAsync();
         Assert.IsType<OkObjectResult>(await admin.Decision(row.Code, new("active", null)));
         Assert.Equal(DateOnly.Parse(type == "tint" ? "2031-01-14" : "2033-01-14"), row.FilmEnds);
-        Assert.Equal(DateOnly.Parse(type == "tint" ? "2028-01-14" : "2029-01-14"), row.InstallEnds);
+        Assert.Null(row.InstallEnds);   // one warranty only: no installation warranty
         Assert.NotNull(WarrantyService.ToPublic(row).Coverage);
         Assert.IsType<BadRequestObjectResult>(await admin.Decision(row.Code, new("REJECTED", "")));
         Assert.IsType<BadRequestObjectResult>(await admin.Decision(row.Code, new("99", null)));

@@ -37,7 +37,8 @@ public static class PortalAuth
 }
 
 public record PortalMe(string? Phone, string? Email, string? Name, string? FirstName, string? LastName, string? Country, string? City, string? Job,
-    string Partner = "none", string? ShopName = null, double? Latitude = null, double? Longitude = null, string? ContactEmail = null);
+    string Partner = "none", string? ShopName = null, double? Latitude = null, double? Longitude = null, string? ContactEmail = null,
+    string? Address = null);
 
 public class PortalService(AppDbContext db, IActivationSmsSender sms, IEmailSender? email = null, IConfiguration? config = null, SmsLog? log = null)
 {
@@ -219,7 +220,7 @@ public class PortalService(AppDbContext db, IActivationSmsSender sms, IEmailSend
 
     public static PortalMe Shape(PortalUser user) =>
         new(user.Phone, user.Email, user.Name, user.FirstName, user.LastName, user.Country, user.City, user.Job,
-            user.Partner.ToString().ToLowerInvariant(), user.ShopName, user.Latitude, user.Longitude, user.ContactEmail);
+            user.Partner.ToString().ToLowerInvariant(), user.ShopName, user.Latitude, user.Longitude, user.ContactEmail, user.Address);
 
     /// <summary>Saves the self-service profile; empty strings clear a field.</summary>
     public static void ApplyProfile(PortalUser user, PortalProfileRequest req)
@@ -229,6 +230,7 @@ public class PortalService(AppDbContext db, IActivationSmsSender sms, IEmailSend
         user.Country = Clean(req.Country, 100);
         user.City = Clean(req.City, 100);
         user.Job = Clean(req.Job, 100);
+        user.Address = Clean(req.Address, 500);
         // The contact email is checked for shape only; empty clears it.
         user.ContactEmail = string.IsNullOrWhiteSpace(req.ContactEmail) ? null : CanonicalEmail(req.ContactEmail);
         // The map location is kept only as a valid pair; anything else (missing, out of range) clears it.
@@ -303,4 +305,4 @@ public record InstallerWarranty(WarrantyPublic Warranty, string OwnerPhoneMasked
 
 public record PartnerApplyRequest(string? ShopName, string? Country, string? City);
 public record PortalProfileRequest(string? FirstName, string? LastName, string? Country, string? City, string? Job, string? Name, string? Company = null,
-    double? Latitude = null, double? Longitude = null, string? ContactEmail = null);
+    double? Latitude = null, double? Longitude = null, string? ContactEmail = null, string? Address = null);

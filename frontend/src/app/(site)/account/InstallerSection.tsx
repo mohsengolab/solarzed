@@ -124,7 +124,6 @@ export default function InstallerSection({ user, onUser, view, rows = [], reload
                     <dt>{t("Installed")}</dt><dd>{w.installed}</dd>
                     <dt>{t("Covers")}</dt><dd>{w.areas.length ? w.areas.map(a => t(AREA_LABELS[a] ?? a)).join(" · ") : "—"}</dd>
                     <dt>{t("Film warranty until")}</dt><dd>{w.status === "active" ? w.coverage?.filmEnds ?? "—" : t("Starts once Solarzed approves it")}</dd>
-                    <dt>{t("Installation warranty until")}</dt><dd>{w.status === "active" ? w.coverage?.installEnds ?? "—" : "—"}</dd>
                     {w.invoiceNumber && <><dt>{t("Invoice number")}</dt><dd dir="ltr">{w.invoiceNumber}</dd></>}
                     {w.sellerName && <><dt>{t("Seller")}</dt><dd>{w.sellerName}</dd></>}
                     {r.country && <><dt>{t("Country")}</dt><dd>{r.country}</dd></>}

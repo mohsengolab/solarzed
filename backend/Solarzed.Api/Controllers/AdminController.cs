@@ -233,15 +233,11 @@ public class AdminController(AppDbContext db, IConfiguration cfg, Microsoft.AspN
             {
                 if (setting.TintFilmYears.HasValue)
                     w.FilmEnds = WarrantyService.AddYears(w.Installed, setting.TintFilmYears.Value);
-                if (setting.TintInstallYears.HasValue)
-                    w.InstallEnds = WarrantyService.AddYears(w.Installed, setting.TintInstallYears.Value);
             }
             else
             {
                 if (setting.PpfFilmYears.HasValue)
                     w.FilmEnds = WarrantyService.AddYears(w.Installed, setting.PpfFilmYears.Value);
-                if (setting.PpfInstallYears.HasValue)
-                    w.InstallEnds = WarrantyService.AddYears(w.Installed, setting.PpfInstallYears.Value);
             }
         }
 

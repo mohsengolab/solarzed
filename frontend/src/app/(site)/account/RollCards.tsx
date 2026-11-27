@@ -97,7 +97,6 @@ export default function RollCards({ rolls, phone, selected, onToggle, onToggleAl
                     <dt>{t("Installed")}</dt><dd>{date(w.installed)}</dd>
                     <dt>{t("Meters used")}</dt><dd>{w.usedLengthM != null ? t("{n} m", { n: n(w.usedLengthM) }) : "—"}</dd>
                     <dt>{t("Film warranty")}</dt><dd>{w.coverage?.filmEnds ? t("until {date}", { date: date(w.coverage.filmEnds) }) : "—"}</dd>
-                    {w.coverage?.installEnds && <><dt>{t("Installation warranty")}</dt><dd>{t("until {date}", { date: date(w.coverage.installEnds) })}</dd></>}
                     <dt>{t("Customer")}</dt><dd dir="ltr">{ownerPhoneMasked}</dd>
                     {w.areas.length > 0 && <><dt>{t("Areas")}</dt><dd>{w.areas.length}</dd></>}
                   </dl>
@@ -120,8 +119,7 @@ export default function RollCards({ rolls, phone, selected, onToggle, onToggleAl
   </>;
 }
 
-const rollYearsText = (t: T, b: HeldBox) => [b.filmYears ? t("Film {n} yr", { n: b.filmYears }) : null, b.installYears ? t("Install {n} yr", { n: b.installYears }) : null]
-  .filter(Boolean).join(" · ") || null;
+const rollYearsText = (t: T, b: HeldBox) => b.filmYears ? t("Film {n} yr", { n: b.filmYears }) : null;
 
 /** The warranty card's QR (it holds the roll's Serial Number), shown once the roll was activated on a vehicle. */
 function RollQr({ serial, t }: { serial: string; t: T }) {
@@ -149,6 +147,7 @@ function RollFacts({ box, t, n, date }: { box: HeldBox; t: T; n: (v: number) => 
   const pct = (v: number | null | undefined) => v != null ? `${n(v)}%` : null;
   const rows: [string, string | null][] = [
     ["ROLL NO", box.id],
+    [t("Serial Number"), box.rollId ?? null],
     [t("Product"), [box.productName, box.product].filter(Boolean).join(" · ")],
     [t("Type"), box.type === "ppf" ? "PPF" : t("Window film")],
     [t("Width"), box.widthCm != null ? t("{n} cm", { n: n(box.widthCm) }) : null],
@@ -156,12 +155,11 @@ function RollFacts({ box, t, n, date }: { box: HeldBox; t: T; n: (v: number) => 
     [t("Meters used"), total != null || used ? t("{n} m", { n: n(used) }) : null],
     [t("Meters left"), left != null ? t("{n} m", { n: n(left) }) : null],
     [t("Film warranty"), box.filmYears ? t("{n} years", { n: box.filmYears }) : null],
-    [t("Installation warranty"), box.installYears ? t("{n} years", { n: box.installYears }) : null],
     ["VLT", pct(box.vlt)], ["TSER", pct(box.tser)], ["UV", pct(box.uv)], ["IRR", pct(box.irr)],
     [t("Thickness"), box.thicknessMil != null ? `${n(box.thicknessMil)} mil` : null],
     [t("In your account since"), box.heldSince ? date(box.heldSince) : null],
     [t("First used"), box.activatedAt ? date(box.activatedAt) : null],
   ];
   return <dl className={own.rollFacts}>{rows.filter(([, v]) => v).map(([k, v]) =>
-    <div key={k}><dt>{k}</dt><dd dir={/^[A-Z]{2,}/.test(k) || k === "ROLL NO" ? "ltr" : undefined}>{v}</dd></div>)}</dl>;
+    <div key={k}><dt>{k}</dt><dd dir={/^[A-Z]{2,}/.test(k) || k === "ROLL NO" || k === t("Serial Number") ? "ltr" : undefined}>{v}</dd></div>)}</dl>;
 }

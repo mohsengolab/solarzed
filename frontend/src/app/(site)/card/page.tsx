@@ -4,6 +4,7 @@ import { useEffect, useState } from "react";
 import Link from "next/link";
 import { warrantyCard, WarrantyCard } from "@/lib/api";
 import GoldCard from "@/components/GoldCard";
+import CardDetails from "@/components/CardDetails";
 import { useT } from "@/lib/i18n/client";
 import styles from "../warranty/warranty.module.css";
 
@@ -38,7 +39,7 @@ export default function CardPage() {
         {!card && !error && <p className={styles.sub}>{t("Loading…")}</p>}
         {error && <p className={styles.errorMsg}>{error}</p>}
         {card && <>
-          <div className={styles.results}><GoldCard card={card} /></div>
+          <div className={styles.results}><GoldCard card={card} /><CardDetails card={card} /></div>
           <p className={styles.helpText}>{t("Keep this link. You can also find this card any time on the warranty inquiry page with your VIN and mobile number.")} <Link href="/warranty">{t("Warranty inquiry")}</Link></p>
           <div className={styles.form}><button type="submit" onClick={() => window.print()}>{t("Save / print card")}</button></div>
         </>}

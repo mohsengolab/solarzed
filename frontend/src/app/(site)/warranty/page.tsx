@@ -4,6 +4,7 @@ import { useState, useEffect, FormEvent } from "react";
 import Link from "next/link";
 import { lookupOwner, WarrantyCard } from "@/lib/api";
 import GoldCard from "@/components/GoldCard";
+import CardDetails from "@/components/CardDetails";
 import VehicleCoverage, { byVehicle } from "@/components/VehicleCoverage";
 import { useT } from "@/lib/i18n/client";
 import styles from "./warranty.module.css";
@@ -74,7 +75,7 @@ export default function WarrantyPage() {
               {byVehicle(cards).map((car, i) => <div key={i} className={styles.cards}>
                 <VehicleCoverage title={`${car[0].make} ${car[0].model} · ${car[0].plate}`}
                   items={car.map(c => ({ ...c, film: c.product }))} />
-                {car.map((c, j) => <GoldCard key={j} card={c} />)}
+                {car.map((c, j) => <div key={j}><GoldCard card={c} /><CardDetails card={c} /></div>)}
               </div>)}</>}
           </div>}
 

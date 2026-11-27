@@ -40,7 +40,9 @@ public record HeldBox(string Id, string Product, string Type, string? RollId, Da
     int? Vlt = null, int? Tser = null, int? Uv = null, int? Irr = null, decimal? ThicknessMil = null, bool Void = false,
     decimal? RemainingM = null, decimal UsedM = 0, int Installs = 0, DateTime? ActivatedAt = null);
 /// <param name="Used">Rolls the account already started using on vehicles and still holds.</param>
-public record MyBoxes(HeldBox[] Boxes, TransferView[] Outgoing, HeldBox[]? Used = null);
+/// <param name="Sent">What each roll in <paramref name="Outgoing"/> is (product, size, specs, Serial Number), for the transfer
+/// history. Only the roll itself: nothing about how the receiver used it.</param>
+public record MyBoxes(HeldBox[] Boxes, TransferView[] Outgoing, HeldBox[]? Used = null, HeldBox[]? Sent = null);
 /// <summary>One roll the account holds, with every installation made from it and its hand-overs to or from the account.</summary>
 public record RollDetail(HeldBox Roll, InstallerWarranty[] Installs, TransferView[] History);
 
@@ -412,7 +414,13 @@ public class BoxTransferService(AppDbContext db)
             .OrderByDescending(x => x.At).ThenByDescending(x => x.Id).Take(200).ToListAsync();
         var used = await db.BoxLabels.AsNoTracking().Where(x => x.HolderPhone == phone && x.ActivatedAt != null)
             .OrderByDescending(x => x.ActivatedAt).Take(500).ToListAsync();
-        return new(await Held(boxes), outgoing.Select(View).ToArray(), await Held(used));
+        var sentIds = outgoing.Select(x => x.LabelId).Distinct().ToList();
+        var sentLabels = await db.BoxLabels.AsNoTracking().Where(x => sentIds.Contains(x.Id)).ToListAsync();
+        var sent = (await Held(sentLabels)).Select(b => b with
+        {
+            HeldSince = null, RemainingM = b.LengthM, UsedM = 0, Installs = 0, ActivatedAt = null,
+        }).ToArray();
+        return new(await Held(boxes), outgoing.Select(View).ToArray(), await Held(used), sent);
     }
 
     /// <summary>One roll the signed-in account holds: what it is, how much is left, the vehicles it went on and its hand-overs.</summary>

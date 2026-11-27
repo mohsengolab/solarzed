@@ -1,9 +1,9 @@
 "use client";
 
 import { FormEvent, useCallback, useEffect, useState } from "react";
-import { adminSession, adminUsers, adminCreateUser, adminUpdateUser, adminResetPassword, managementFetch, fa, FA_DATE, type AdminUserRow, type AdminRole, type Paged } from "@/lib/api";
+import { adminSession, adminUsers, adminCreateUser, adminUpdateUser, adminResetPassword, managementFetch, fa, FA_DATE, qs, type AdminUserRow, type AdminRole, type Paged } from "@/lib/api";
 import s from "./admin.module.css";
-import { usePaged, SortTh, Pager, FilterBar, countActive, errorText as message } from "./AdminKit";
+import { usePaged, SortTh, Pager, FilterBar, countActive, downloadExcel, errorText as message } from "./AdminKit";
 import { useCan } from "./RolesPanel";
 
 type Product = { code: string; name: string; type: string; series: string; description: string; archived: boolean; updatedAt?: string;
@@ -101,9 +101,12 @@ export function ProductsPanel() {
   </section>;
 }
 
-type CustomerRecord = { code: string; owner: string; phone: string; make: string; model: string; vin: string; plate: string; type: string; installed: string; status: string; filmEnds: string | null };
+type CustomerRecord = { code: string; owner: string; phone: string; make: string; model: string; vin: string; plate: string; type: string; installed: string; status: string; filmEnds: string | null;
+  installer?: string; country?: string | null; filmSerial?: string; invoiceNumber?: string; createdAt?: string };
 type CustomerPage = Paged<CustomerRecord> & { phones: string[] };
-const C_EMPTY = { q: "", make: "", status: "", type: "", installedFrom: "", installedTo: "" };
+const C_EMPTY = { q: "", make: "", status: "", type: "", installer: "", country: "", installedFrom: "", installedTo: "", createdFrom: "", createdTo: "", expiringDays: "" };
+const C_STATUS: Record<string, string> = { active: "فعال", pending: "در انتظار", rejected: "رد شده" };
+const C_TYPE: Record<string, string> = { tint: "فیلم شیشه", ppf: "PPF" };
 
 export function CustomersPanel() {
   const [f, setF] = useState(C_EMPTY);
@@ -115,22 +118,52 @@ export function CustomersPanel() {
   }, []);
   const list = usePaged<CustomerRecord>(load, f, { pageSize: 20 });
   const set = (k: keyof typeof C_EMPTY) => (e: { target: { value: string } }) => setF(p => ({ ...p, [k]: e.target.value }));
-  return <section><header className={s.panelHead}><div><span className={s.eyebrow}>مشتریان</span><h1>مشتریان و خودروها</h1></div></header>
+  const [exporting, setExporting] = useState(false);
+  const [exportMsg, setExportMsg] = useState("");
+
+  // Every customer matching the filters (200 per request, up to 5,000 customers), one row per warranty.
+  async function exportExcel() {
+    setExporting(true); setExportMsg("");
+    try {
+      const rows: CustomerRecord[] = [];
+      for (let page = 1; page <= 25; page++) {
+        const r = await managementFetch<CustomerPage>(`customers${qs({ ...f, page, pageSize: 200 })}`);
+        rows.push(...r.items);
+        if (page * 200 >= r.total) break;
+      }
+      downloadExcel("customers", rows.map(r => ({ ...r, status: C_STATUS[r.status] ?? r.status, type: C_TYPE[r.type] ?? r.type,
+        createdAt: r.createdAt ? new Date(r.createdAt).toLocaleDateString(FA_DATE) : "" })), [
+        ["owner", "مشتری"], ["phone", "موبایل"], ["make", "برند خودرو"], ["model", "مدل خودرو"], ["vin", "VIN"], ["plate", "پلاک"],
+        ["code", "کد گارانتی"], ["type", "نوع محصول"], ["status", "وضعیت"], ["filmSerial", "Serial Number"], ["invoiceNumber", "شماره فاکتور"],
+        ["installer", "نصاب"], ["country", "کشور"], ["installed", "تاریخ نصب"], ["filmEnds", "پایان گارانتی فیلم"], ["createdAt", "تاریخ ثبت"],
+      ]);
+      setExportMsg(`${fa(String(rows.length))} ردیف در فایل اکسل ذخیره شد.`);
+    } catch (e) { setExportMsg(message(e)); } finally { setExporting(false); }
+  }
+  return <section><header className={s.panelHead}><div><span className={s.eyebrow}>مشتریان</span><h1>مشتریان و خودروها</h1></div>
+    <button type="button" className={s.btnPrimary} onClick={exportExcel} disabled={exporting || !list.total}>{exporting ? "در حال آماده‌سازی…" : "خروجی اکسل ↓"}</button></header>
     <FilterBar active={countActive(f)} onClear={() => setF(C_EMPTY)}>
       <label className={s.wide}>جستجوی نام، موبایل یا VIN<input type="search" placeholder="نام، موبایل، VIN، پلاک یا کد گارانتی" value={f.q} onChange={set("q")} /></label>
       <label>برند / مدل خودرو<input value={f.make} onChange={set("make")} /></label>
       <label>وضعیت گارانتی<select value={f.status} onChange={set("status")}><option value="">هر وضعیت</option><option value="pending">در انتظار</option><option value="active">فعال</option><option value="rejected">رد شده</option></select></label>
       <label>نوع محصول<select value={f.type} onChange={set("type")}><option value="">همه انواع</option><option value="tint">فیلم شیشه</option><option value="ppf">PPF</option></select></label>
+      <label>نصاب<input value={f.installer} onChange={set("installer")} placeholder="نام یا موبایل نصاب" /></label>
+      <label>کشور<input value={f.country} onChange={set("country")} /></label>
       <label>نصب از<input type="date" value={f.installedFrom} onChange={set("installedFrom")} /></label>
       <label>نصب تا<input type="date" value={f.installedTo} onChange={set("installedTo")} /></label>
+      <label>ثبت از<input type="date" value={f.createdFrom} onChange={set("createdFrom")} /></label>
+      <label>ثبت تا<input type="date" value={f.createdTo} onChange={set("createdTo")} /></label>
+      <label>انقضای گارانتی فیلم<select value={f.expiringDays} onChange={set("expiringDays")}><option value="">هر زمان</option><option value="30">تا ۳۰ روز آینده</option><option value="90">تا ۹۰ روز آینده</option><option value="365">تا ۱ سال آینده</option></select></label>
     </FilterBar>
     {list.error && <p role="alert" className={s.errorText}>{list.error}</p>}
+    {exportMsg && <p role="status" className={s.okText}>{exportMsg}</p>}
+    <p className={s.empty}>{fa(String(list.total))} مشتری با این فیلترها</p>
     <p className={s.empty}>اطلاعات مشتری از ثبت‌های گارانتی می‌آید. هر مشتری تاریخچه کامل خود را می‌بیند.</p>
     <div className={list.loading ? s.tableBusy : ""}>
       {phones.map(phone => {
         const records = list.items.filter(r => r.phone === phone);
         if (!records.length) return null;
-        return <article className={s.card} key={phone}><h2>{records[0].owner} · <span dir="ltr">{phone}</span></h2><table className={s.table}><thead><tr><th>گارانتی</th><th>خودرو</th><th>VIN</th><th>پلاک</th><th>نوع</th><th>نصب</th><th>وضعیت</th><th>پایان فیلم</th></tr></thead><tbody>{records.map(r => <tr key={r.code}><td><code dir="ltr">{r.code}</code></td><td>{r.make} {r.model}</td><td dir="ltr">{r.vin}</td><td dir="ltr">{r.plate}</td><td>{r.type}</td><td>{r.installed}</td><td><span className={s.badge} data-tone={r.status}>{fa(r.status)}</span></td><td>{r.filmEnds ?? "—"}</td></tr>)}</tbody></table></article>;
+        return <article className={s.card} key={phone}><h2>{records[0].owner} · <span dir="ltr">{phone}</span></h2><table className={s.table}><thead><tr><th>گارانتی</th><th>خودرو</th><th>VIN</th><th>پلاک</th><th>نوع</th><th>نصب</th><th>وضعیت</th><th>پایان فیلم</th></tr></thead><tbody>{records.map(r => <tr key={r.code}><td><code dir="ltr">{r.code}</code></td><td>{r.make} {r.model}</td><td dir="ltr">{r.vin}</td><td dir="ltr">{r.plate}</td><td>{C_TYPE[r.type] ?? r.type}</td><td>{r.installed}</td><td><span className={s.badge} data-tone={r.status}>{fa(r.status)}</span></td><td>{r.filmEnds ?? "—"}</td></tr>)}</tbody></table></article>;
       })}
     </div>
     {!list.loading && phones.length === 0 && <p className={s.empty}>مشتری‌ای با این فیلترها یافت نشد.</p>}

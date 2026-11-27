@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState, FormEvent } from "react";
-import { boxHistory, boxHolders, transferBoxes, managementFetch, BoxHistory, HolderSummary, fa, FA_DATE } from "@/lib/api";
+import { adminRecipient, boxHistory, boxHolders, transferBoxes, managementFetch, BoxHistory, HolderSummary, fa, FA_DATE } from "@/lib/api";
 import styles from "./admin.module.css";
 import labelsStyle from "./labels.module.css";
 import SerialInput from "@/components/SerialInput";
@@ -58,6 +58,23 @@ export default function BoxTransfers({ onChanged }: { onChanged?: () => void }) 
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
   const [done, setDone] = useState("");
+  // The receiver's account name fills in once a full mobile is typed (as in the installer's transfer form).
+  const [found, setFound] = useState<{ phone: string; name: string | null; registered: boolean } | null>(null);
+  useEffect(() => {
+    const value = phone.trim();
+    if (!/^(?:0|\+?98)?9\d{9}$|^\+\d{8,15}$/.test(value.replace(/[\s-]/g, ""))) return;
+    let live = true;
+    const timer = window.setTimeout(() => {
+      adminRecipient(value).then(r => {
+        if (!live) return;
+        const name = r.name ?? r.shopName ?? null;
+        setFound({ phone: value, name, registered: r.registered });
+        if (name) setTo(name);
+      }).catch(() => { if (live) setFound(null); });
+    }, 400);
+    return () => { live = false; window.clearTimeout(timer); };
+  }, [phone]);
+  const recipient = found && found.phone === phone.trim() ? found : null;
 
   const loadHolders = () => boxHolders().then(result => setHolders(result.holders)).catch(ex => setError(message(ex)));
   useEffect(() => {
@@ -108,9 +125,10 @@ export default function BoxTransfers({ onChanged }: { onChanged?: () => void }) 
       <form className={`${styles.card} ${styles.adminForm}`} onSubmit={send}>
           <SerialInput label="رول‌ها" value={list} onChange={setList} />
           <div className={styles.row2}>
-            <label>موبایل گیرنده<input dir="ltr" required inputMode="tel" maxLength={20} list="box-holder-phones" value={phone} onChange={e => setPhone(e.target.value)} placeholder="09…" /></label>
-            <label>نام گیرنده (اختیاری)<input maxLength={200} value={to} onChange={e => setTo(e.target.value)} /></label>
+            <label>موبایل گیرنده<input dir="ltr" required inputMode="tel" maxLength={20} list="box-holder-phones" value={phone} onChange={e => { setPhone(e.target.value); if (recipient?.name) setTo(""); }} placeholder="09…" /></label>
+            <label>نام گیرنده (اختیاری)<input maxLength={200} value={to} readOnly={!!recipient?.name} onChange={e => setTo(e.target.value)} /></label>
           </div>
+          {recipient && <small style={{ marginTop: -6 }}>{recipient.registered ? <>گیرنده: <b>{recipient.name ?? "بدون نام"}</b></> : "این موبایل هنوز حساب ندارد؛ با انتقال، حساب ساخته می‌شود."}</small>}
           <datalist id="box-holder-phones">{named.filter(h => h.phone).map(h => <option key={h.phone!} value={h.phone!}>{h.holder ?? ""}</option>)}</datalist>
           <small style={{ opacity: .7, marginTop: -6 }}>گیرنده با همین موبایل وارد سایت می‌شود و رول‌ها را در حساب خود می‌بیند.</small>
           <label>{fa("Note (optional)")}<input maxLength={500} value={note} onChange={e => setNote(e.target.value)} /></label>

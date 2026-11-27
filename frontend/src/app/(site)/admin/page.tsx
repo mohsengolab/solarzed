@@ -6,7 +6,7 @@ import QRCode from "qrcode";
 import {
   adminLogin, adminLogout, adminSession, adminOverview, adminWarranties, adminDecision,
   adminRollsSearch, adminCreateRolls, adminUpdateRoll, adminDeleteRoll, adminRollHistory, type RollHistoryEvent, adminGetSettings, adminSaveSettings,
-  adminBoxLabels, managementFetch, ADMIN_UNAUTHORIZED, fa, qs, FA_DATE,
+  adminBoxLabels, managementFetch, ADMIN_UNAUTHORIZED, fa, FA_DATE,
 } from "@/lib/api";
 import styles from "./admin.module.css";
 import { backdropProps } from "@/components/backdrop";
@@ -23,7 +23,8 @@ import SerialInput from "@/components/SerialInput";
 import SmsSettingsPanel from "./SmsSettingsPanel";
 import { ClaimsPanel, HistoryPanel, WarrantyActivity } from "./ClaimsPanels";
 import { RolesPanel, PermsProvider, useCan } from "./RolesPanel";
-import { usePaged, SortTh, Pager, FilterBar, countActive, downloadCsv, errorText } from "./AdminKit";
+import { usePaged, SortTh, Pager, FilterBar, countActive, downloadExcel, errorText } from "./AdminKit";
+import { ReportWarranties, ReportRolls } from "./Reports";
 
 type Role = "superadmin" | "admin" | "counter";
 const VIEWS = ["overview", "reports", "warranties", "review", "partners", "claims", "rolls", "transfers", "holders", "warehouses", "products", "customers", "tickets", "labels", "history", "sms", "settings", "account", "users", "roles"] as const;
@@ -411,194 +412,6 @@ function ReportSummary() {
   );
 }
 
-const thisMonthStart = () => { const d = new Date(); d.setDate(1); return d.toISOString().slice(0, 10); };
-const lastMonthRange = () => {
-  const now = new Date();
-  const first = new Date(now.getFullYear(), now.getMonth() - 1, 1);
-  const last  = new Date(now.getFullYear(), now.getMonth(), 0);
-  return { from: first.toISOString().slice(0, 10), to: last.toISOString().slice(0, 10) };
-};
-
-const W_RPT_EMPTY = { status: "", type: "", installer: "", make: "", createdFrom: "", createdTo: "", installedFrom: "", installedTo: "", expiringDays: "" };
-
-function ReportWarranties() {
-  const [f, setF] = useState(W_RPT_EMPTY);
-  const [loading, setLoading] = useState(false);
-  const [msg, setMsg] = useState("");
-  const set = (k: keyof typeof W_RPT_EMPTY) => (e: { target: { value: string } }) => setF(p => ({ ...p, [k]: e.target.value }));
-
-  function preset(name: "thisMonth" | "lastMonth" | "allActive" | "expiring90") {
-    if (name === "thisMonth")  setF({ ...W_RPT_EMPTY, createdFrom: thisMonthStart() });
-    if (name === "lastMonth")  { const { from, to } = lastMonthRange(); setF({ ...W_RPT_EMPTY, createdFrom: from, createdTo: to }); }
-    if (name === "allActive")  setF({ ...W_RPT_EMPTY, status: "active" });
-    if (name === "expiring90") setF({ ...W_RPT_EMPTY, status: "active", expiringDays: "90" });
-  }
-
-  async function doExport() {
-    setLoading(true); setMsg("");
-    try {
-      const q = qs({ ...f, page: 1, pageSize: 1000, sort: "createdAt", dir: "desc" });
-      const all = await adminWarranties<WRow>(q);
-      downloadCsv("warranties-report", all.items, [
-        ["code", "کد گارانتی"], ["status", "وضعیت"], ["type", "نوع محصول"],
-        ["owner", "مالک"], ["phone", "موبایل"], ["make", "برند خودرو"], ["model", "مدل خودرو"],
-        ["vin", "VIN"], ["plate", "پلاک"], ["filmSerial", "ROLL NO"], ["usedLengthM", "مصرف (متر)"], ["invoiceNumber", "شماره فاکتور"],
-        ["installer", "نصّاب / فروشنده"], ["installed", "تاریخ نصب"],
-        ["filmEnds", "پایان گارانتی فیلم"], ["createdAt", "تاریخ ثبت"],
-      ]);
-      setMsg(`${all.total.toLocaleString("fa-IR")} ردیف دریافت شد.`);
-    } catch (e) { setMsg(errorText(e, "خروجی ناموفق بود.")); }
-    finally { setLoading(false); }
-  }
-
-  const lmr = lastMonthRange();
-
-  return (
-    <div className={styles.card}>
-      <h2>گزارش سفارشی گارانتی‌ها</h2>
-      <p className={styles.empty}>فیلترها را تنظیم کنید، سپس خروجی CSV بگیرید (حداکثر ۱۰۰۰ ردیف).</p>
-
-      <div className={styles.filters}>
-        <span style={{ fontSize: 12, color: "var(--sz-fg-4)", marginInlineEnd: 4 }}>گزارش سریع:</span>
-        <button type="button" className={styles.ghost} onClick={() => preset("thisMonth")}>این ماه</button>
-        <button type="button" className={styles.ghost} onClick={() => preset("lastMonth")}>ماه گذشته ({lmr.from.slice(0,7)})</button>
-        <button type="button" className={styles.ghost} onClick={() => preset("allActive")}>همه فعال‌ها</button>
-        <button type="button" className={styles.ghost} onClick={() => preset("expiring90")}>انقضا ۹۰ روز</button>
-        <button type="button" className={styles.ghost} onClick={() => setF(W_RPT_EMPTY)}>پاک کردن</button>
-      </div>
-
-      <div className={styles.row2}>
-        <label className={styles.adminForm.toString()}>وضعیت
-          <select value={f.status} onChange={set("status")} className="" style={{ padding: "9px 12px", background: "rgb(var(--sz-tint) / 0.05)", border: "1.5px solid rgb(var(--sz-tint) / 0.12)", borderRadius: 10, color: "var(--sz-fg)", fontFamily: "var(--sz-font)", fontSize: 14 }}>
-            <option value="">همه وضعیت‌ها</option><option value="active">فعال</option><option value="pending">در انتظار</option><option value="rejected">رد شده</option>
-          </select>
-        </label>
-        <label>نوع محصول
-          <select value={f.type} onChange={set("type")} style={{ padding: "9px 12px", background: "rgb(var(--sz-tint) / 0.05)", border: "1.5px solid rgb(var(--sz-tint) / 0.12)", borderRadius: 10, color: "var(--sz-fg)", fontFamily: "var(--sz-font)", fontSize: 14 }}>
-            <option value="">همه انواع</option><option value="tint">فیلم شیشه</option><option value="ppf">PPF</option>
-          </select>
-        </label>
-        <label style={{ display: "flex", flexDirection: "column", gap: 6, fontSize: 13, fontWeight: 600, color: "var(--sz-fg-2)" }}>نصّاب / فروشنده
-          <input value={f.installer} onChange={set("installer")} placeholder="نام نصّاب یا فروشنده" style={{ padding: "9px 12px", background: "rgb(var(--sz-tint) / 0.05)", border: "1.5px solid rgb(var(--sz-tint) / 0.12)", borderRadius: 10, color: "var(--sz-fg)", fontFamily: "var(--sz-font)", fontSize: 14 }} />
-        </label>
-        <label style={{ display: "flex", flexDirection: "column", gap: 6, fontSize: 13, fontWeight: 600, color: "var(--sz-fg-2)" }}>برند / مدل خودرو
-          <input value={f.make} onChange={set("make")} placeholder="مثلاً تویوتا یا پراید" style={{ padding: "9px 12px", background: "rgb(var(--sz-tint) / 0.05)", border: "1.5px solid rgb(var(--sz-tint) / 0.12)", borderRadius: 10, color: "var(--sz-fg)", fontFamily: "var(--sz-font)", fontSize: 14 }} />
-        </label>
-        <label style={{ display: "flex", flexDirection: "column", gap: 6, fontSize: 13, fontWeight: 600, color: "var(--sz-fg-2)" }}>ثبت از
-          <input type="date" value={f.createdFrom} onChange={set("createdFrom")} style={{ padding: "9px 12px", background: "rgb(var(--sz-tint) / 0.05)", border: "1.5px solid rgb(var(--sz-tint) / 0.12)", borderRadius: 10, color: "var(--sz-fg)", fontFamily: "var(--sz-font)", fontSize: 14, colorScheme: "dark" }} />
-        </label>
-        <label style={{ display: "flex", flexDirection: "column", gap: 6, fontSize: 13, fontWeight: 600, color: "var(--sz-fg-2)" }}>ثبت تا
-          <input type="date" value={f.createdTo} onChange={set("createdTo")} style={{ padding: "9px 12px", background: "rgb(var(--sz-tint) / 0.05)", border: "1.5px solid rgb(var(--sz-tint) / 0.12)", borderRadius: 10, color: "var(--sz-fg)", fontFamily: "var(--sz-font)", fontSize: 14, colorScheme: "dark" }} />
-        </label>
-        <label style={{ display: "flex", flexDirection: "column", gap: 6, fontSize: 13, fontWeight: 600, color: "var(--sz-fg-2)" }}>نصب از
-          <input type="date" value={f.installedFrom} onChange={set("installedFrom")} style={{ padding: "9px 12px", background: "rgb(var(--sz-tint) / 0.05)", border: "1.5px solid rgb(var(--sz-tint) / 0.12)", borderRadius: 10, color: "var(--sz-fg)", fontFamily: "var(--sz-font)", fontSize: 14, colorScheme: "dark" }} />
-        </label>
-        <label style={{ display: "flex", flexDirection: "column", gap: 6, fontSize: 13, fontWeight: 600, color: "var(--sz-fg-2)" }}>نصب تا
-          <input type="date" value={f.installedTo} onChange={set("installedTo")} style={{ padding: "9px 12px", background: "rgb(var(--sz-tint) / 0.05)", border: "1.5px solid rgb(var(--sz-tint) / 0.12)", borderRadius: 10, color: "var(--sz-fg)", fontFamily: "var(--sz-font)", fontSize: 14, colorScheme: "dark" }} />
-        </label>
-        <label style={{ display: "flex", flexDirection: "column", gap: 6, fontSize: 13, fontWeight: 600, color: "var(--sz-fg-2)" }}>انقضای گارانتی فیلم
-          <select value={f.expiringDays} onChange={set("expiringDays")} style={{ padding: "9px 12px", background: "rgb(var(--sz-tint) / 0.05)", border: "1.5px solid rgb(var(--sz-tint) / 0.12)", borderRadius: 10, color: "var(--sz-fg)", fontFamily: "var(--sz-font)", fontSize: 14 }}>
-            <option value="">هر زمان</option><option value="30">تا ۳۰ روز</option><option value="90">تا ۹۰ روز</option><option value="365">تا ۱ سال</option>
-          </select>
-        </label>
-      </div>
-
-      <div className={styles.filters} style={{ marginTop: 20 }}>
-        <button type="button" className={styles.btnPrimary} onClick={doExport} disabled={loading}>
-          {loading ? "در حال دریافت…" : "دریافت خروجی CSV ↓"}
-        </button>
-      </div>
-      {msg && <p className={styles.okText}>{msg}</p>}
-    </div>
-  );
-}
-
-const R_RPT_EMPTY = { model: "", type: "", qc: "", status: "", supplier: "", receivedFrom: "", receivedTo: "" };
-
-function ReportRolls() {
-  const [f, setF] = useState(R_RPT_EMPTY);
-  const [loading, setLoading] = useState(false);
-  const [msg, setMsg] = useState("");
-  const [products, setProducts] = useState<{ code: string; name: string }[]>([]);
-  const set = (k: keyof typeof R_RPT_EMPTY) => (e: { target: { value: string } }) => setF(p => ({ ...p, [k]: e.target.value }));
-
-  useEffect(() => {
-    managementFetch<{ items: typeof products }>("products?pageSize=200")
-      .then(r => setProducts(r.items)).catch(() => {});
-  }, []);
-
-  async function doExport() {
-    setLoading(true); setMsg("");
-    try {
-      const q = qs({ ...f, page: 1, pageSize: 1000, sort: "receivedAt", dir: "desc" });
-      const all = await adminRollsSearch<RollRow>(q);
-      downloadCsv("rolls-report", all.items, [
-        ["id", "شناسه رول"], ["modelCode", "کد مدل"], ["type", "نوع"],
-        ["batch", "Batch"], ["supplier", "تأمین‌کننده"], ["qc", "کنترل کیفیت"],
-        ["status", "وضعیت انبار"], ["installs", "تعداد نصب"], ["receivedAt", "تاریخ دریافت"],
-      ]);
-      setMsg(`${all.total.toLocaleString("fa-IR")} ردیف دریافت شد.`);
-    } catch (e) { setMsg(errorText(e, "خروجی ناموفق بود.")); }
-    finally { setLoading(false); }
-  }
-
-  const lmr = lastMonthRange();
-  return (
-    <div className={styles.card}>
-      <h2>گزارش سفارشی رول‌ها</h2>
-      <p className={styles.empty}>فیلترها را تنظیم کنید، سپس خروجی CSV بگیرید (حداکثر ۱۰۰۰ ردیف).</p>
-
-      <div className={styles.filters}>
-        <span style={{ fontSize: 12, color: "var(--sz-fg-4)", marginInlineEnd: 4 }}>گزارش سریع:</span>
-        <button type="button" className={styles.ghost} onClick={() => setF({ ...R_RPT_EMPTY, receivedFrom: thisMonthStart() })}>دریافت این ماه</button>
-        <button type="button" className={styles.ghost} onClick={() => setF({ ...R_RPT_EMPTY, receivedFrom: lmr.from, receivedTo: lmr.to })}>دریافت ماه گذشته</button>
-        <button type="button" className={styles.ghost} onClick={() => setF({ ...R_RPT_EMPTY, status: "instock" })}>موجود در انبار</button>
-        <button type="button" className={styles.ghost} onClick={() => setF({ ...R_RPT_EMPTY, qc: "pending" })}>QC در انتظار</button>
-        <button type="button" className={styles.ghost} onClick={() => setF(R_RPT_EMPTY)}>پاک کردن</button>
-      </div>
-
-      <div className={styles.row2}>
-        <label style={{ display: "flex", flexDirection: "column", gap: 6, fontSize: 13, fontWeight: 600, color: "var(--sz-fg-2)" }}>محصول
-          <select value={f.model} onChange={set("model")} style={{ padding: "9px 12px", background: "rgb(var(--sz-tint) / 0.05)", border: "1.5px solid rgb(var(--sz-tint) / 0.12)", borderRadius: 10, color: "var(--sz-fg)", fontFamily: "var(--sz-font)", fontSize: 14 }}>
-            <option value="">همه محصولات</option>{products.map(p => <option key={p.code} value={p.code}>{p.code}</option>)}
-          </select>
-        </label>
-        <label style={{ display: "flex", flexDirection: "column", gap: 6, fontSize: 13, fontWeight: 600, color: "var(--sz-fg-2)" }}>نوع
-          <select value={f.type} onChange={set("type")} style={{ padding: "9px 12px", background: "rgb(var(--sz-tint) / 0.05)", border: "1.5px solid rgb(var(--sz-tint) / 0.12)", borderRadius: 10, color: "var(--sz-fg)", fontFamily: "var(--sz-font)", fontSize: 14 }}>
-            <option value="">همه انواع</option><option value="tint">فیلم شیشه</option><option value="ppf">PPF</option>
-          </select>
-        </label>
-        <label style={{ display: "flex", flexDirection: "column", gap: 6, fontSize: 13, fontWeight: 600, color: "var(--sz-fg-2)" }}>کنترل کیفیت
-          <select value={f.qc} onChange={set("qc")} style={{ padding: "9px 12px", background: "rgb(var(--sz-tint) / 0.05)", border: "1.5px solid rgb(var(--sz-tint) / 0.12)", borderRadius: 10, color: "var(--sz-fg)", fontFamily: "var(--sz-font)", fontSize: 14 }}>
-            <option value="">همه</option><option value="pending">در انتظار</option><option value="approved">تأیید شده</option><option value="rejected">رد شده</option>
-          </select>
-        </label>
-        <label style={{ display: "flex", flexDirection: "column", gap: 6, fontSize: 13, fontWeight: 600, color: "var(--sz-fg-2)" }}>وضعیت انبار
-          <select value={f.status} onChange={set("status")} style={{ padding: "9px 12px", background: "rgb(var(--sz-tint) / 0.05)", border: "1.5px solid rgb(var(--sz-tint) / 0.12)", borderRadius: 10, color: "var(--sz-fg)", fontFamily: "var(--sz-font)", fontSize: 14 }}>
-            <option value="">همه</option><option value="instock">موجود</option><option value="shipped">ارسال شده</option><option value="consumed">مصرف شده</option><option value="void">باطل</option>
-          </select>
-        </label>
-        <label style={{ display: "flex", flexDirection: "column", gap: 6, fontSize: 13, fontWeight: 600, color: "var(--sz-fg-2)" }}>تأمین‌کننده شامل
-          <input value={f.supplier} onChange={set("supplier")} placeholder="کد یا نام تأمین‌کننده" style={{ padding: "9px 12px", background: "rgb(var(--sz-tint) / 0.05)", border: "1.5px solid rgb(var(--sz-tint) / 0.12)", borderRadius: 10, color: "var(--sz-fg)", fontFamily: "var(--sz-font)", fontSize: 14 }} />
-        </label>
-        <label style={{ display: "flex", flexDirection: "column", gap: 6, fontSize: 13, fontWeight: 600, color: "var(--sz-fg-2)" }}>دریافت از
-          <input type="date" value={f.receivedFrom} onChange={set("receivedFrom")} style={{ padding: "9px 12px", background: "rgb(var(--sz-tint) / 0.05)", border: "1.5px solid rgb(var(--sz-tint) / 0.12)", borderRadius: 10, color: "var(--sz-fg)", fontFamily: "var(--sz-font)", fontSize: 14, colorScheme: "dark" }} />
-        </label>
-        <label style={{ display: "flex", flexDirection: "column", gap: 6, fontSize: 13, fontWeight: 600, color: "var(--sz-fg-2)" }}>دریافت تا
-          <input type="date" value={f.receivedTo} onChange={set("receivedTo")} style={{ padding: "9px 12px", background: "rgb(var(--sz-tint) / 0.05)", border: "1.5px solid rgb(var(--sz-tint) / 0.12)", borderRadius: 10, color: "var(--sz-fg)", fontFamily: "var(--sz-font)", fontSize: 14, colorScheme: "dark" }} />
-        </label>
-      </div>
-
-      <div className={styles.filters} style={{ marginTop: 20 }}>
-        <button type="button" className={styles.btnPrimary} onClick={doExport} disabled={loading}>
-          {loading ? "در حال دریافت…" : "دریافت خروجی CSV ↓"}
-        </button>
-      </div>
-      {msg && <p className={styles.okText}>{msg}</p>}
-    </div>
-  );
-}
-
 // ── Warranties ───────────────────────────────────────────────────────────────
 
 type WRow = { code: string; cardKey?: string | null; owner: string; phone: string; make: string; model: string; vin: string; plate: string; type: string; installer: string;
@@ -691,9 +504,9 @@ function WarrantiesPanel() {
   async function exportCsv() {
     try {
       const all = await adminWarranties<WRow>(list.exportQuery);
-      downloadCsv("warranties", all.items, [["code", "کد"], ["status", "وضعیت"], ["type", "نوع"], ["owner", "مالک"], ["phone", "موبایل"],
+      downloadExcel("warranties", all.items, [["code", "کد"], ["status", "وضعیت"], ["type", "نوع"], ["owner", "مالک"], ["phone", "موبایل"],
         ["make", "برند"], ["model", "مدل"], ["vin", "VIN"], ["plate", "پلاک"], ["filmSerial", "ROLL NO"], ["usedLengthM", "مصرف (متر)"], ["invoiceNumber", "فاکتور"],
-        ["installer", "نصّاب"], ["installed", "تاریخ نصب"], ["filmEnds", "پایان گارانتی فیلم"], ["createdAt", "ثبت"]]);
+        ["installer", "نصاب"], ["installed", "تاریخ نصب"], ["filmEnds", "پایان گارانتی فیلم"], ["createdAt", "ثبت"]]);
     } catch (e) { setQrError(fa(errorText(e, "خروجی ناموفق بود."))); }
   }
 
@@ -702,7 +515,7 @@ function WarrantiesPanel() {
     <section>
       <header className={styles.panelHead}>
         <div><span className={styles.eyebrow}>گارانتی‌ها</span><h1>ثبت‌ها</h1></div>
-        <button type="button" className={styles.ghost} onClick={exportCsv} disabled={!list.total}>خروجی CSV (حداکثر ۲۰۰)</button>
+        <button type="button" className={styles.ghost} onClick={exportCsv} disabled={!list.total}>خروجی اکسل (حداکثر ۲۰۰)</button>
       </header>
       <div className={styles.filters} role="group" aria-label="وضعیت">
         {["pending", "active", "rejected", ""].map(st => (
@@ -717,7 +530,7 @@ function WarrantiesPanel() {
         <label>پرچم‌ها<select value={f.flagged} onChange={set("flagged")}><option value="">هر</option><option value="true">فقط دارای پرچم</option><option value="false">بدون پرچم</option></select></label>
         <label>پرچم مشخص<select value={f.flag} onChange={set("flag")}><option value="">هر پرچم</option>{FLAGS.map(x => <option key={x} value={x}>{fa(x)}</option>)}</select></label>
         <label>برند / مدل خودرو<input value={f.make} onChange={set("make")} /></label>
-        <label>نصّاب / فروشنده<input value={f.installer} onChange={set("installer")} /></label>
+        <label>نصاب / فروشنده<input value={f.installer} onChange={set("installer")} /></label>
         <label>نصب از<input type="date" value={f.installedFrom} onChange={set("installedFrom")} /></label>
         <label>نصب تا<input type="date" value={f.installedTo} onChange={set("installedTo")} /></label>
         <label>ثبت از<input type="date" value={f.createdFrom} onChange={set("createdFrom")} /></label>
@@ -728,7 +541,7 @@ function WarrantiesPanel() {
       <div className={styles.card}>
         <table className={`${styles.table} ${list.loading ? styles.tableBusy : ""}`}>
           <thead><tr><th>QR</th><SortTh column="code" label="کد" {...sortProps} /><SortTh column="owner" label="مالک" {...sortProps} /><SortTh column="make" label="خودرو" {...sortProps} />
-            <SortTh column="type" label="نوع" {...sortProps} /><SortTh column="installer" label="نصّاب" {...sortProps} /><SortTh column="installed" label="نصب" {...sortProps} />
+            <SortTh column="type" label="نوع" {...sortProps} /><SortTh column="installer" label="نصاب" {...sortProps} /><SortTh column="installed" label="نصب" {...sortProps} />
             <SortTh column="filmEnds" label="پایان فیلم" {...sortProps} /><SortTh column="status" label="وضعیت" {...sortProps} /><th>پرچم‌ها</th></tr></thead>
           <tbody>
             {list.items.map(w => (
@@ -803,8 +616,8 @@ function WarrantiesPanel() {
               const groups: [string, [string, string, boolean?][]][] = [
                 ["مالک", [["owner", "نام"], ["phone", "موبایل", true]]],
                 ["خودرو", [["make", "برند"], ["model", "مدل"], ["plate", "پلاک", true], ["vin", "VIN", true]]],
-                ["نصب", [["installer", "نصّاب"], ["installed", "تاریخ نصب", true], ["sellerName", "فروشنده"], ["sellerPhone", "موبایل فروشنده", true]]],
-                ["فیلم و فاکتور", [["filmSerial", "ROLL NO", true], ["invoiceNumber", "شماره فاکتور", true], ...(seesCodes ? [["rollId", "شناسه رول", true] as [string, string, boolean]] : [])]],
+                ["نصب", [["installer", "نصاب"], ["installed", "تاریخ نصب", true], ["sellerName", "فروشنده"], ["sellerPhone", "موبایل فروشنده", true]]],
+                ["فیلم و فاکتور", [["filmSerial", "ROLL NO", true], ["invoiceNumber", "شماره فاکتور", true], ...(seesCodes ? [["rollId", "Serial Number", true] as [string, string, boolean]] : [])]],
               ];
               return <>
                 {flags.length > 0 && <div className={styles.wFlags} role="note">
@@ -1053,7 +866,7 @@ function RollsPanel() {
   async function exportCsv() {
     try {
       const all = await adminRollsSearch<RollRow>(list.exportQuery);
-      downloadCsv("rolls", all.items, [["number", "#"], ["id", "شناسه رول"], ["rollNo", "ROLL NO"], ["modelCode", "مدل"], ["type", "نوع"], ["batch", "Batch"], ["supplier", "تأمین‌کننده"],
+      downloadExcel("rolls", all.items, [["number", "#"], ["id", "Serial Number"], ["rollNo", "ROLL NO"], ["modelCode", "مدل"], ["type", "نوع"], ["batch", "Batch"], ["supplier", "تأمین‌کننده"],
         ["widthCm", "عرض (cm)"], ["lengthM", "طول (m)"], ["remainingM", "متراژ مانده (m)"], ["usedM", "مصرف‌شده (m)"], ["qc", "QC"], ["status", "وضعیت"], ["installs", "نصب‌ها"], ["receivedAt", "دریافت"]]);
     } catch (e) { setMsg(fa(errorText(e, "خروجی ناموفق بود."))); }
   }
@@ -1119,7 +932,7 @@ function RollsPanel() {
             <small style={{ opacity: .75 }}>هر کارتن یک رول است: برای هر ROLL NO یک رول ساخته می‌شود. اگر خالی بماند، یک رول ساخته می‌شود و ROLL NO را بعداً در «مدیریت» همان رول وارد کنید.</small>
           </div>
           <button type="submit" className={styles.btnPrimary} disabled={saving}>
-            {saving ? "در حال ساخت…" : "ساخت شناسه رول ↗"}
+            {saving ? "در حال ساخت…" : "ساخت Serial Number ↗"}
           </button>
           {msg && <p>{msg}</p>}
         </form>
@@ -1128,11 +941,11 @@ function RollsPanel() {
       <div ref={inventoryRef} className={styles.panelHead} style={{ marginTop: 24, marginBottom: 12, scrollMarginTop: 16 }}>
         <h2>موجودی</h2>
         <div className={styles.filters}>
-          <button type="button" className={styles.ghost} onClick={exportCsv} disabled={!list.total}>خروجی CSV (حداکثر ۲۰۰)</button>
+          <button type="button" className={styles.ghost} onClick={exportCsv} disabled={!list.total}>خروجی اکسل (حداکثر ۲۰۰)</button>
         </div>
       </div>
       <FilterBar active={countActive(f)} onClear={() => setF(R_EMPTY)}>
-        <label className={styles.wide}>جستجوی موجودی<input type="search" placeholder={seesCodes ? "شماره، شناسه رول، ROLL NO، مدل، Batch یا تأمین‌کننده" : "شماره، ROLL NO، مدل، Batch یا تأمین‌کننده"} value={f.q} onChange={set("q")} /></label>
+        <label className={styles.wide}>جستجوی موجودی<input type="search" placeholder={seesCodes ? "شماره، Serial Number، ROLL NO، مدل، Batch یا تأمین‌کننده" : "شماره، ROLL NO، مدل، Batch یا تأمین‌کننده"} value={f.q} onChange={set("q")} /></label>
         <label>محصول<select value={f.model} onChange={set("model")}><option value="">همه محصولات</option>{products.map(p => <option key={p.code} value={p.code}>{p.code}</option>)}</select></label>
         <label>نوع<select value={f.type} onChange={set("type")}><option value="">همه انواع</option><option value="tint">فیلم شیشه</option><option value="ppf">PPF</option></select></label>
         <label>فیلتر QC<select value={f.qc} onChange={set("qc")}><option value="">هر QC</option><option value="pending">در انتظار</option><option value="approved">تأیید شده</option><option value="rejected">رد شده</option></select></label>
@@ -1150,7 +963,7 @@ function RollsPanel() {
       {list.error && <p role="alert" className={styles.errorText}>{list.error}</p>}
       <div className={`${styles.card} ${styles.rollsCard}`}>
         <table className={`${styles.table} ${styles.tableCompact} ${seesCodes ? "" : styles.noCodes} ${list.loading ? styles.tableBusy : ""}`}>
-          <thead><tr><SortTh column="number" label="#" {...sortProps} /><th>QR</th><SortTh column="id" label="شناسه رول" {...sortProps} /><SortTh column="rollNo" label="ROLL NO" {...sortProps} /><SortTh column="modelCode" label="مدل" {...sortProps} /><SortTh column="type" label="نوع" {...sortProps} />
+          <thead><tr><SortTh column="number" label="#" {...sortProps} /><th>QR</th><SortTh column="id" label="Serial Number" {...sortProps} /><SortTh column="rollNo" label="ROLL NO" {...sortProps} /><SortTh column="modelCode" label="مدل" {...sortProps} /><SortTh column="type" label="نوع" {...sortProps} />
             <SortTh column="batch" label="Batch" {...sortProps} /><th>ابعاد</th><th>مصرف‌شده / کل</th><SortTh column="qc" label="QC" {...sortProps} />
             <th>لوکیشن</th><th>نصب‌ها</th><SortTh column="receivedAt" label="دریافت" {...sortProps} /><th>عملیات</th></tr></thead>
           <tbody>
@@ -1301,9 +1114,7 @@ function SettingsPanel() {
         <form onSubmit={onSubmit} className={styles.adminForm}><fieldset disabled={!canEdit} style={{ display: "contents" }}>
           {[
             { label: "Tint – film warranty", key: "tintFilm" as const },
-            { label: "Tint – installation warranty", key: "tintInstall" as const },
             { label: "PPF – film warranty", key: "ppfFilm" as const },
-            { label: "PPF – installation warranty", key: "ppfInstall" as const },
           ].map(x => (
             <label key={x.key}>{fa(x.label)}
               <select value={String(vals[x.key])} onChange={e => sel(x.key, e.target.value)}>

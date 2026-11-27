@@ -49,7 +49,7 @@ function Rows({ items, parts, uncovered }: { items: CoverageItem[]; parts: [stri
       </span>
       <span className={css.dates}>
         {w.status === "active"
-          ? <><small>{t("Film until")} <b>{w.coverage?.filmEnds ?? "—"}</b></small><small>{t("Installation until")} <b>{w.coverage?.installEnds ?? "—"}</b></small></>
+          ? <><small>{t("Film until")} <b>{w.coverage?.filmEnds ?? "—"}</b></small></>
           : <small>{w.status === "pending" ? t("Starts once Solarzed approves it") : t("Contact your installer")}</small>}
       </span>
       <span className={css.badge}>{t(STATUS[w.status])}</span>

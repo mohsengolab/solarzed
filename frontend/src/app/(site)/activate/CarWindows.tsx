@@ -1,5 +1,6 @@
 "use client";
 
+import { useState } from "react";
 import { useT } from "@/lib/i18n/client";
 import styles from "./carWindows.module.css";
 
@@ -27,31 +28,49 @@ export const MIN_GLASS_LENGTH: Record<string, number> = {
 };
 /** The windshield needs film at least this wide (cm). */
 export const WINDSHIELD_MIN_WIDTH = 100;
+/** Least film any window-film installation uses (four side windows), same as the server. */
+export const MIN_FILM_USED_M = 3.2;
+/** Selected when a window-film roll opens: the four side windows. */
+export const DEFAULT_WINDOWS = ["left-front", "right-front", "left-rear", "right-rear"];
+/** Why the windshield can't be picked for a roll this wide, or null. */
+export const windshieldProblem = (rollWidthCm: number | null | undefined, t: (key: string, vars?: Record<string, string | number>) => string) =>
+  rollWidthCm != null && rollWidthCm < WINDSHIELD_MIN_WIDTH
+    ? t("This roll is {w} cm wide. You cannot register the windshield: it needs film at least {min} cm wide.", { w: rollWidthCm, min: WINDSHIELD_MIN_WIDTH }) : null;
 const GLASS_LABELS: Record<string, string> = Object.fromEntries(glass.map(([id, label]) => [id, label]));
 /** English name of any glass or body panel id, to pass through t(). */
 export const AREA_LABELS: Record<string, string> = { ...GLASS_LABELS, ...PANEL_LABELS };
 
 /** Why the film used can't cover the selected glass, or null. Shown only when the form is sent. */
 export function filmLengthProblem(selected: string[], usedM: string, rollWidthCm: number | null | undefined, t: (key: string, vars?: Record<string, string | number>) => string) {
-  if (selected.includes("windshield") && rollWidthCm != null && rollWidthCm < WINDSHIELD_MIN_WIDTH)
-    return t("This roll is {w} cm wide. You cannot register the windshield: it needs film at least {min} cm wide.", { w: rollWidthCm, min: WINDSHIELD_MIN_WIDTH });
+  const narrow = selected.includes("windshield") ? windshieldProblem(rollWidthCm, t) : null;
+  if (narrow) return narrow;
   const used = Number(usedM);
   if (!usedM.trim() || !(used > 0)) return t("Enter the film used in meters.");
-  const needed = selected.reduce((sum, id) => sum + (MIN_GLASS_LENGTH[id] ?? 0), 0) / 100;
+  const needed = Math.max(MIN_FILM_USED_M, selected.reduce((sum, id) => sum + (MIN_GLASS_LENGTH[id] ?? 0), 0) / 100);
   if (used < needed) return t("You cannot register {n} windows with {m} m of film. They need at least {need} m.", { n: selected.length, m: used, need: needed });
   return null;
 }
 
-export default function CarWindows({ value, onChange }: { value: string[]; onChange: (next: string[]) => void }) {
+/** rollWidthCm: the windshield is refused right on the tap when the roll is too narrow for it, with the reason under the map. */
+export default function CarWindows({ value, onChange, rollWidthCm }: {
+  value: string[]; onChange: (next: string[]) => void; rollWidthCm?: number | null;
+}) {
   const t = useT();
   const shown = glass;
-  const toggle = (id: string) => onChange(value.includes(id) ? value.filter(item => item !== id) : [...value, id]);
+  const narrow = windshieldProblem(rollWidthCm, t);
+  const [warn, setWarn] = useState("");
+  const pick = (next: string[]) => {
+    const refused = !!narrow && next.includes("windshield") && !value.includes("windshield");
+    setWarn(refused ? narrow : "");
+    onChange(refused ? next.filter(id => id !== "windshield") : next);
+  };
+  const toggle = (id: string) => pick(value.includes(id) ? value.filter(item => item !== id) : [...value, id]);
   const all = shown.map(([id]) => id);
-  const sides = ["left-front", "right-front", "left-rear", "right-rear"];
+  const sides = DEFAULT_WINDOWS;
   const selected = shown.filter(([id]) => value.includes(id));
   return <div className={styles.wrap}>
     <div className={styles.shortcuts}>
-      <button type="button" onClick={() => onChange(all)}>{t("All {n} windows", { n: all.length })}</button>
+      <button type="button" onClick={() => pick(all)}>{t("All {n} windows", { n: all.length })}</button>
       <button type="button" onClick={() => onChange(sides)}>{t("Both sides")}</button>
       <button type="button" onClick={() => onChange([])}>{t("Clear")}</button>
     </div>
@@ -79,5 +98,6 @@ export default function CarWindows({ value, onChange }: { value: string[]; onCha
       })}
     </div>
     <p className={styles.summary} aria-live="polite"><b>{t("{n} of {total} windows selected", { n: selected.length, total: shown.length })}</b>{selected.length > 0 && <span>{selected.map(([, label]) => t(label)).join(" · ")}</span>}</p>
+    {warn && <p role="alert" className={styles.warn}>{warn}</p>}
   </div>;
 }

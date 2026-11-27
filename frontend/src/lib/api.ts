@@ -36,11 +36,11 @@ const FarsiStrings = {
   "Product type": "نوع محصول", "All types": "همه انواع", "Window film": "فیلم شیشه", "PPF": "PPF",
   "Flagged only": "فقط دارای پرچم", "Not flagged": "بدون پرچم",
   "Specific flag": "پرچم مشخص", "Any flag": "هر پرچم", "Vehicle make / model": "برند / مدل خودرو",
-  "Installer / seller": "نصّاب / فروشنده", "Installed from": "نصب از", "Installed to": "نصب تا",
+  "Installer / seller": "نصاب / فروشنده", "Installed from": "نصب از", "Installed to": "نصب تا",
   "Registered from": "ثبت از", "Registered to": "ثبت تا",
   "Film warranty expiring": "انقضای گارانتی فیلم", "Any time": "هر زمان",
   "Within 30 days": "تا ۳۰ روز", "Within 90 days": "تا ۹۰ روز", "Within 1 year": "تا ۱ سال",
-  "QR": "QR", "Owner": "مالک", "Type": "نوع", "Installer": "نصّاب",
+  "QR": "QR", "Owner": "مالک", "Type": "نوع", "Installer": "نصاب",
   "Film ends": "پایان فیلم", "Status": "وضعیت", "No warranties match these filters.": "گارانتی‌ای با این فیلترها یافت نشد.",
   "Warranty QR codes": "کدهای QR گارانتی",
   "Print warranty QR": "چاپ QR گارانتی", "Clear selection": "پاک کردن انتخاب", "Decision — ": "تصمیم — ",
@@ -54,15 +54,15 @@ const FarsiStrings = {
   "Model code": "کد مدل", "e.g. PIR or CP-01": "مثلاً PIR یا CP-01", "Batch": "Batch",
   "e.g. LOT-2608-B17": "مثلاً LOT-2608-B17", "Supplier code": "کد تأمین‌کننده", "e.g. SUP-02": "مثلاً SUP-02",
   "Paint protection film": "فیلم محافظ رنگ", "QC": "کنترل کیفیت", "Approved": "تأیید شده",
-  "Quantity": "تعداد", "Create roll IDs ↗": "ساخت شناسه رول ↗", "Creating…": "در حال ساخت…",
+  "Quantity": "تعداد", "Create roll IDs ↗": "ساخت Serial Number ↗", "Creating…": "در حال ساخت…",
   "Inventory": "موجودی", "Search inventory": "جستجوی موجودی", "Roll ID, model, batch or supplier":
-    "شناسه رول، مدل، Batch یا تأمین‌کننده", "Product": "محصول", "All products": "همه محصولات",
+    "Serial Number، مدل، Batch یا تأمین‌کننده", "Product": "محصول", "All products": "همه محصولات",
   "QC filter": "فیلتر QC", "Any QC": "هر QC", "Stock status filter": "فیلتر وضعیت انبار",
   "Any status": "هر وضعیت", "In stock": "موجود در انبار", "Shipped": "ارسال شده",
   "Consumed": "مصرف شده", "Void": "باطل", "Batch contains": "Batch شامل", "Supplier contains": "تأمین‌کننده شامل",
   "Received from": "دریافت از", "Received to": "دریافت تا",
   "Installations": "نصب‌ها", "Has installations": "دارای نصب", "No installations": "بدون نصب",
-  "Roll ID": "شناسه رول", "Model": "مدل", "Supplier": "تأمین‌کننده", "Received": "تاریخ دریافت",
+  "Roll ID": "Serial Number", "Model": "مدل", "Supplier": "تأمین‌کننده", "Received": "تاریخ دریافت",
   "Manage ": "مدیریت ", "No rolls match these filters.": "رولی با این فیلترها یافت نشد.",
   "Quality control": "کنترل کیفیت", "Change note": "یادداشت تغییر", "Save inventory": "ذخیره موجودی",
   "History": "تاریخچه", "Inventory updated.": "موجودی به‌روزرسانی شد.", "Update failed.": "به‌روزرسانی ناموفق بود.",
@@ -110,7 +110,7 @@ const FarsiStrings = {
   // Users
   "User management": "مدیریت کاربران",
   "Create user": "ساخت کاربر", "Add a manager or a carton/serial operator.": "یک مدیر یا کانتر اضافه کنید.",
-  "Name (optional)": "نام (اختیاری)", "Role": "نقش", "Manager — everything": "مدیر — بدون شناسه رول و کد گارانتی؛ رول‌ها: فقط لوکیشن و وضعیت",
+  "Name (optional)": "نام (اختیاری)", "Role": "نقش", "Manager — everything": "مدیر — بدون Serial Number و کد گارانتی؛ رول‌ها: فقط لوکیشن و وضعیت",
   "Carton — only the serial on the box": "کانتر — ROLL NO و بررسی عکس‌ها",
   "Password": "رمز عبور", "Create": "ساخت", "Actions": "عملی‌ها",
   "Disable": "غیرفعال", "Enable": "فعال", "Reset password": "بازنشانی رمز",
@@ -148,7 +148,7 @@ const FarsiStrings = {
   // Warranty detail labels
   "owner": "مالک", "phone": "موبایل", "make": "برند", "model": "مدل", "vin": "VIN", "plate": "پلاک",
   "filmSerial": "ROLL NO", "invoiceNumber": "شماره فاکتور", "installed": "تاریخ نصب", "sellerName": "فروشنده",
-  "sellerPhone": "موبایل فروشنده", "installer": "نصّاب", "rollId": "شناسه رول", "flagsJson": "پرچم‌ها", "reviewNote": "یادداشت بررسی",
+  "sellerPhone": "موبایل فروشنده", "installer": "نصاب", "rollId": "Serial Number", "flagsJson": "پرچم‌ها", "reviewNote": "یادداشت بررسی",
   // Remaining label and print strings
   "Box serials": "ROLL NOها", "The request failed.": "درخواست ناموفق بود.",
   "SMS is not configured yet. QR labels can be prepared, but customers cannot activate until Faraz is connected.":
@@ -371,6 +371,9 @@ export interface WarrantyCard {
   link: string;
   /** Datasheet values of the film: VLT, IR and UV rejection in %, thickness in mil. */
   specs?: FilmSpecs | null;
+  /** The product's series and its description from the catalog (the text on the product page). */
+  series?: string | null;
+  description?: string | null;
 }
 
 export interface FilmSpecs { vlt?: number | null; irr?: number | null; uvr?: number | null; thicknessMil?: number | null }
@@ -540,6 +543,7 @@ export interface TransferResult { batchId: string; toHolder: string | null; toPh
 export function transferBoxes(data: TransferInput) {
   return apiFetch<TransferResult>("/api/admin/box-labels/transfers", { method: "POST", body: JSON.stringify(data) });
 }
+export function adminRecipient(phone: string) { return apiFetch<Recipient>(`/api/admin/box-labels/recipient?phone=${encodeURIComponent(phone.trim())}`); }
 export function boxHistory(serial: string) { return apiFetch<BoxHistory>(`/api/admin/box-labels/${encodeURIComponent(serial.trim())}/transfers`); }
 export interface HolderSummary { holder: string | null; phone: string | null; boxes: number }
 export function boxHolders() { return apiFetch<{ holders: HolderSummary[] }>("/api/admin/box-labels/holders"); }
@@ -576,6 +580,8 @@ export interface PortalUser {
   latitude?: number | null; longitude?: number | null;
   /** Contact email typed in the profile (unverified; not a sign-in identifier). */
   contactEmail?: string | null;
+  /** Street address typed in the profile. */
+  address?: string | null;
   /** Installer partner (همکار) status; only "approved" partners register warranties for customers. */
   partner?: "none" | "pending" | "approved" | "suspended"; shopName?: string | null;
 }
@@ -593,7 +599,7 @@ export function portalLogin(challengeId: string, code: string) {
 export function portalLogout() { return apiFetch<{ ok: boolean }>("/api/portal/logout", { method: "POST" }); }
 
 /** Saves the profile: first/last name, country, city, job and map location (null clears it). */
-export function portalProfile(data: { name?: string; company?: string; firstName?: string; lastName?: string; country?: string; city?: string; job?: string; contactEmail?: string; latitude?: number | null; longitude?: number | null }) {
+export function portalProfile(data: { name?: string; company?: string; firstName?: string; lastName?: string; country?: string; city?: string; job?: string; contactEmail?: string; address?: string; latitude?: number | null; longitude?: number | null }) {
   return apiFetch<PortalUser>("/api/portal/profile", { method: "POST", body: JSON.stringify(data) });
 }
 /** Starts the bind challenge for a new mobile number or email address; complete it with portalBindVerify. */
@@ -627,7 +633,7 @@ export interface HeldBox {
   remainingM?: number | null; usedM?: number; installs?: number; activatedAt?: string | null;
 }
 /** used: rolls already started on vehicles that the account still holds. */
-export function portalBoxes() { return apiFetch<{ boxes: HeldBox[]; outgoing: BoxTransfer[]; used?: HeldBox[] | null }>("/api/portal/boxes"); }
+export function portalBoxes() { return apiFetch<{ boxes: HeldBox[]; outgoing: BoxTransfer[]; used?: HeldBox[] | null; sent?: HeldBox[] | null }>("/api/portal/boxes"); }
 /** One held roll with every installation made from it and its hand-overs to or from this account. */
 export interface RollDetail { roll: HeldBox; installs: InstallerWarranty[]; history: BoxTransfer[] }
 export function portalBox(id: string) { return apiFetch<RollDetail>(`/api/portal/boxes/${encodeURIComponent(id)}`); }

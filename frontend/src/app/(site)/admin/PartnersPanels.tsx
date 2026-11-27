@@ -1,19 +1,23 @@
 "use client";
 
-import { FormEvent, useCallback, useEffect, useState } from "react";
+import { FormEvent, useCallback, useEffect, useMemo, useState } from "react";
 import {
   adminPartners, adminAddPartner, adminPartnerStatus, adminReviewList, adminReviewDecide, adminReviewResendCard, adminReviewPhoto, adminWarrantyPhotos,
   fa, FA_DATE, PHOTO_KINDS, type PartnerRow, type ReviewItem,
 } from "@/lib/api";
 import s from "./admin.module.css";
 import own from "./partners.module.css";
-import { errorText as message } from "./AdminKit";
+import { errorText as message, FilterBar, countActive, downloadExcel } from "./AdminKit";
 import { useCan } from "./RolesPanel";
 
 const date = (v: string | null) => v ? new Date(v).toLocaleDateString(FA_DATE) : "—";
 const STATUS_FA: Record<PartnerRow["status"], string> = { pending: "در انتظار تأیید", approved: "تأییدشده", suspended: "تعلیق" };
 const KIND_FA = Object.fromEntries(PHOTO_KINDS.map(k => [k.kind, k.label])) as Record<string, string>;
 const EMPTY = { phone: "", shopName: "", firstName: "", lastName: "", country: "ایران", city: "" };
+/** Filters applied on the loaded list (the API returns up to 500 partners). */
+const P_FILTERS = { country: "", city: "", activity: "", appliedFrom: "", appliedTo: "", lastFrom: "", lastTo: "", sort: "" };
+const day = (v: string | null) => v ? v.slice(0, 10) : "";
+const distinct = (values: (string | null)[]) => [...new Set(values.map(v => v?.trim()).filter((v): v is string => !!v))].sort((a, b) => a.localeCompare(b, "fa"));
 
 // ── همکاران (نصاب‌ها) ─────────────────────────────────────────────────────────
 
@@ -27,6 +31,39 @@ export function PartnersPanel({ onReview }: { onReview: () => void }) {
   const [adding, setAdding] = useState(false);
   const [busy, setBusy] = useState(false);
   const [msg, setMsg] = useState("");
+  const [pf, setPf] = useState(P_FILTERS);
+  const setP = (k: keyof typeof P_FILTERS) => (e: { target: { value: string } }) => setPf(p => ({ ...p, [k]: e.target.value, ...(k === "country" ? { city: "" } : {}) }));
+
+  const countries = useMemo(() => distinct(rows.map(r => r.country)), [rows]);
+  const cities = useMemo(() => distinct(rows.filter(r => !pf.country || r.country?.trim() === pf.country).map(r => r.city)), [rows, pf.country]);
+  const shown = useMemo(() => {
+    const list = rows.filter(p =>
+      (!pf.country || p.country?.trim() === pf.country) &&
+      (!pf.city || p.city?.trim() === pf.city) &&
+      (!pf.appliedFrom || day(p.appliedAt) >= pf.appliedFrom) && (!pf.appliedTo || (!!p.appliedAt && day(p.appliedAt) <= pf.appliedTo)) &&
+      (!pf.lastFrom || day(p.lastInstall) >= pf.lastFrom) && (!pf.lastTo || (!!p.lastInstall && day(p.lastInstall) <= pf.lastTo)) &&
+      (pf.activity === "" ||
+        (pf.activity === "working" && p.warranties > 0) || (pf.activity === "idle" && p.warranties === 0) ||
+        (pf.activity === "review" && p.pendingReview > 0) || (pf.activity === "rejected" && p.rejected > 0) ||
+        (pf.activity === "cartons" && p.cartons > 0)));
+    const by: Record<string, (a: PartnerRow, b: PartnerRow) => number> = {
+      warranties: (a, b) => b.warranties - a.warranties,
+      cartons: (a, b) => b.cartons - a.cartons,
+      last: (a, b) => day(b.lastInstall).localeCompare(day(a.lastInstall)),
+      applied: (a, b) => day(b.appliedAt).localeCompare(day(a.appliedAt)),
+      name: (a, b) => (a.shopName ?? "").localeCompare(b.shopName ?? "", "fa"),
+    };
+    return pf.sort && by[pf.sort] ? [...list].sort(by[pf.sort]) : list;
+  }, [rows, pf]);
+
+  function exportExcel() {
+    downloadExcel("partners", shown.map(p => ({ ...p, status: STATUS_FA[p.status], name: [p.firstName, p.lastName].filter(Boolean).join(" "),
+      active: p.active ? "بله" : "خیر", appliedAt: date(p.appliedAt), reviewedAt: date(p.reviewedAt), lastInstall: date(p.lastInstall) })), [
+      ["shopName", "فروشگاه / کارگاه"], ["name", "نام و نام خانوادگی"], ["phone", "موبایل"], ["country", "کشور"], ["city", "شهر"],
+      ["status", "وضعیت همکاری"], ["active", "حساب فعال"], ["warranties", "گارانتی ثبت‌شده"], ["pendingReview", "منتظر کانتر"],
+      ["rejected", "برگشتی"], ["cartons", "کارتن نزد همکار"], ["appliedAt", "تاریخ درخواست"], ["reviewedAt", "تاریخ بررسی"], ["lastInstall", "آخرین نصب"],
+    ]);
+  }
 
   const load = useCallback(async () => {
     const params = new URLSearchParams();
@@ -84,14 +121,32 @@ export function PartnersPanel({ onReview }: { onReview: () => void }) {
       <div className={s.filters}><button className={s.btnPrimary} disabled={busy}>{busy ? "در حال ذخیره…" : "ثبت و تأیید همکار"}</button></div>
     </form>}
 
+    <FilterBar active={countActive({ q, ...pf })} onClear={() => { setQ(""); setPf(P_FILTERS); }}>
+      <label className={s.wide}>جستجو<input type="search" placeholder="موبایل، نام، نام فروشگاه، شهر یا کشور" value={q} onChange={e => setQ(e.target.value)} /></label>
+      <label>کشور<select value={pf.country} onChange={setP("country")}><option value="">همه کشورها</option>{countries.map(c => <option key={c}>{c}</option>)}</select></label>
+      <label>شهر<select value={pf.city} onChange={setP("city")}><option value="">همه شهرها</option>{cities.map(c => <option key={c}>{c}</option>)}</select></label>
+      <label>فعالیت<select value={pf.activity} onChange={setP("activity")}>
+        <option value="">همه</option><option value="working">دارای گارانتی ثبت‌شده</option><option value="idle">بدون گارانتی</option>
+        <option value="review">منتظر بررسی کانتر</option><option value="rejected">دارای مورد برگشتی</option><option value="cartons">کارتن نزد همکار</option>
+      </select></label>
+      <label>مرتب‌سازی<select value={pf.sort} onChange={setP("sort")}>
+        <option value="">پیش‌فرض (درخواست‌های جدید)</option><option value="warranties">بیشترین گارانتی</option><option value="cartons">بیشترین کارتن</option>
+        <option value="last">آخرین نصب</option><option value="applied">جدیدترین عضویت</option><option value="name">نام فروشگاه</option>
+      </select></label>
+      <label>عضویت از<input type="date" value={pf.appliedFrom} onChange={setP("appliedFrom")} /></label>
+      <label>عضویت تا<input type="date" value={pf.appliedTo} onChange={setP("appliedTo")} /></label>
+      <label>آخرین نصب از<input type="date" value={pf.lastFrom} onChange={setP("lastFrom")} /></label>
+      <label>آخرین نصب تا<input type="date" value={pf.lastTo} onChange={setP("lastTo")} /></label>
+    </FilterBar>
     <div className={s.filters}>
-      <label className={s.wide}>جستجو<input type="search" placeholder="موبایل، نام فروشگاه، شهر یا کشور" value={q} onChange={e => setQ(e.target.value)} /></label>
+      <span className={s.empty}>{fa(String(shown.length))} همکار{shown.length !== rows.length ? ` از ${fa(String(rows.length))}` : ""}</span>
+      <button type="button" className={s.ghost} onClick={exportExcel} disabled={!shown.length}>خروجی اکسل ↓</button>
     </div>
     {msg && <p role="status">{msg}</p>}
     <div className={s.card}><table className={s.table}><thead><tr>
       <th>فروشگاه</th><th>موبایل</th><th>شهر / کشور</th><th>وضعیت</th><th>گارانتی ثبت‌شده</th><th>منتظر کانتر</th><th>کارتن نزد همکار</th><th>آخرین نصب</th><th>عملیات</th>
     </tr></thead><tbody>
-      {rows.map(p => <tr key={p.id}>
+      {shown.map(p => <tr key={p.id}>
         <td><b>{p.shopName ?? "—"}</b>{(p.firstName || p.lastName) && <small className={own.sub}>{[p.firstName, p.lastName].filter(Boolean).join(" ")}</small>}</td>
         <td dir="ltr">{p.phone}</td>
         <td>{[p.city, p.country].filter(Boolean).join("، ") || "—"}</td>
@@ -107,7 +162,7 @@ export function PartnersPanel({ onReview }: { onReview: () => void }) {
         </>}</td>
       </tr>)}
     </tbody></table>
-      {rows.length === 0 && <p className={s.empty}>{status || q ? "همکاری با این فیلتر یافت نشد." : "هنوز همکاری ثبت نشده است. همکاران از صفحه «حساب من» در سایت درخواست می‌دهند یا اینجا اضافه می‌شوند."}</p>}
+      {shown.length === 0 && <p className={s.empty}>{status || q || countActive(pf) ? "همکاری با این فیلتر یافت نشد." : "هنوز همکاری ثبت نشده است. همکاران از صفحه «حساب من» در سایت درخواست می‌دهند یا اینجا اضافه می‌شوند."}</p>}
     </div>
   </section>;
 }

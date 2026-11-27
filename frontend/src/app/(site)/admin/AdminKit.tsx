@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useState, type ReactNode } from "react";
 import { qs, fa, type Paged } from "@/lib/api";
 import s from "./admin.module.css";
+import { downloadXlsx, type Cell } from "@/lib/xlsx";
 
 export type Filters = Record<string, string | number | boolean | null | undefined>;
 export const errorText = (e: unknown, fallback = "درخواست ناموفق بود.") => e instanceof Error ? e.message : fallback;
@@ -89,17 +90,8 @@ export function FilterBar({ children, onClear, active }: { children: ReactNode; 
 export const countActive = (f: Filters, defaults: Filters = {}) =>
   Object.entries(f).filter(([k, v]) => v !== "" && v !== undefined && v !== null && v !== defaults[k]).length;
 
-// Spreadsheet-safe CSV: quotes every cell and neutralises formula prefixes (CSV injection).
-export function downloadCsv(name: string, rows: Record<string, unknown>[], columns: [key: string, header: string][]) {
-  const cell = (v: unknown) => {
-    let t = v === null || v === undefined ? "" : String(v);
-    if (/^[=+\-@\t\r]/.test(t)) t = "'" + t;
-    return `"${t.replace(/"/g, '""')}"`;
-  };
-  const csv = "﻿" + [columns.map(c => cell(c[1])).join(","), ...rows.map(r => columns.map(c => cell(r[c[0]])).join(","))].join("\r\n");
-  const url = URL.createObjectURL(new Blob([csv], { type: "text/csv;charset=utf-8" }));
-  const a = document.createElement("a");
-  a.href = url; a.download = `${name}-${new Date().toISOString().slice(0, 10)}.csv`;
-  document.body.append(a); a.click(); a.remove();
-  setTimeout(() => URL.revokeObjectURL(url), 1000);
+/** Excel (.xlsx) export: one column per field, header in bold, right-to-left sheet. */
+export function downloadExcel(name: string, rows: Record<string, unknown>[], columns: [key: string, header: string][]) {
+  const value = (v: unknown): Cell => v === null || v === undefined ? "" : typeof v === "number" || typeof v === "boolean" ? v : String(v);
+  downloadXlsx(name, columns.map(c => c[1]), rows.map(r => columns.map(c => value(r[c[0]]))));
 }

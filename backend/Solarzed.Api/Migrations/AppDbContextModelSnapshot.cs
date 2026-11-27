@@ -400,6 +400,10 @@ namespace Solarzed.Api.Migrations
                         .HasMaxLength(100)
                         .HasColumnType("nvarchar(100)");
 
+                    b.Property<string>("Address")
+                        .HasMaxLength(500)
+                        .HasColumnType("nvarchar(500)");
+
                     b.Property<string>("ContactEmail")
                         .HasMaxLength(254)
                         .HasColumnType("nvarchar(254)");
