@@ -86,7 +86,6 @@ export default function AccountPage() {
   const [outgoing, setOutgoing] = useState<BoxTransfer[]>([]);
   const [warranties, setWarranties] = useState<WarrantyPublic[]>([]);
   const [installs, setInstalls] = useState<InstallerWarranty[]>([]);
-  const [selected, setSelected] = useState<string[]>([]);
   const [list, setSerials] = useState<string[]>([]);
   const [toPhone, setToPhone] = useState("");
   // The receiver's country defaults to the sender's own until another one is picked.
@@ -214,7 +213,6 @@ export default function AccountPage() {
   async function load() {
     const [b, w, t] = await Promise.all([portalBoxes(), portalWarranties(), portalTickets()]);
     setBoxes(b.boxes); setOutgoing(b.outgoing); setWarranties(w.warranties); setTickets(t.tickets);
-    setSelected(current => current.filter(id => b.boxes.some(box => box.id === id)));
   }
 
   useEffect(() => {
@@ -255,6 +253,9 @@ export default function AccountPage() {
   const setConfirming = (on: boolean) => setConfirmKey(on ? receiverKey : "");
   const receiverName = recipient?.name ?? recipient?.shopName ?? (toName.trim() || null);
   const chosenRolls = list.map(id => boxes.find(b => b.id === id) ?? null);
+  // Ticking a roll in the list puts it straight into the transfer; scanned or typed ROLL NOs show up ticked.
+  const toggleRoll = (id: string) => setSerials(items => items.includes(id) ? items.filter(x => x !== id) : [...items, id]);
+  const pageRolls = boxList.rows.filter(b => !b.void).map(b => b.id);
 
   function review(event: FormEvent) {
     event.preventDefault(); setError(""); setDone("");
@@ -267,7 +268,7 @@ export default function AccountPage() {
       const result = await portalTransfer({ serials: list, ...(toBy === "phone" ? { toPhone: toE164(toPhone, receiverCountry) } : { toEmail: toEmail.trim() }),
         toName: toName || null, note: note || null });
       setDone(t("{n} roll(s) transferred to {to} · Transfer {batch}", { n: result.transfers.length, to: who(t, result.toHolder, result.toPhone), batch: result.batchId }) + (result.sms === "sent" ? " · " + t("The receiver was notified by SMS.") : ""));
-      setSerials([]); setNote(""); setSelected([]); setConfirming(false);
+      setSerials([]); setNote(""); setConfirming(false);
       setToPhone(""); setToEmail(""); setToName("");
       await load();
     } catch (ex) { setError(ex instanceof Error ? t(ex.message) : t("Transfer failed.")); }
@@ -503,21 +504,27 @@ export default function AccountPage() {
                 : !boxList.matches.length ? <Empty title={t("Nothing matches your search")} /> : <>
                 <div className={own.scroll}><table className={own.table}>
                   <thead><tr>
-                    <th><input type="checkbox" aria-label={t("Select all rolls on this page")} checked={boxList.rows.every(b => selected.includes(b.id))}
-                      onChange={e => setSelected(items => e.target.checked ? [...new Set([...items, ...boxList.rows.map(b => b.id)])] : items.filter(id => !boxList.rows.some(b => b.id === id)))} /></th>
+                    <th><input type="checkbox" aria-label={t("Select all rolls on this page")} checked={pageRolls.length > 0 && pageRolls.every(id => list.includes(id))}
+                      onChange={e => setSerials(items => e.target.checked ? [...new Set([...items, ...pageRolls])] : items.filter(id => !pageRolls.includes(id)))} /></th>
                     <th>ROLL NO</th><th>{t("Product")}</th><th>{t("Size")}</th><th>{t("Warranty")}</th><th>{t("Specs")}</th><th>{t("Since")}</th></tr></thead>
-                  <tbody>{boxList.rows.map(box => <tr key={box.id}>
-                    <td><input type="checkbox" aria-label={t("Select {id}", { id: box.id })} disabled={box.void} checked={selected.includes(box.id)} onChange={event => setSelected(items => event.target.checked ? [...items, box.id] : items.filter(id => id !== box.id))} /></td>
+                  <tbody>{boxList.rows.map(box => <tr key={box.id} className={list.includes(box.id) ? own.picked : undefined}
+                    onClick={event => { if (!box.void && !(event.target as HTMLElement).closest("input,a,button")) toggleRoll(box.id); }}>
+                    <td><input type="checkbox" aria-label={t("Select {id}", { id: box.id })} disabled={box.void} checked={list.includes(box.id)} onChange={() => toggleRoll(box.id)} /></td>
                     <td><code dir="ltr">{box.id}</code>{box.void && <span className={own.badge}>{t("Void")}</span>}</td>
                     <td>{box.productName ? <>{box.productName}<br /><small className={own.muted}>{box.product} · {box.type.toUpperCase()}</small></> : <>{box.product} · {box.type.toUpperCase()}</>}</td>
                     <td dir="ltr">{rollSize(box)}</td><td>{rollYears(t, box)}</td><td dir="ltr"><small>{rollSpecs(box)}</small></td><td>{date(box.heldSince)}</td>
                   </tr>)}</tbody>
                 </table></div>
                 <Pager page={boxList.page} pages={boxList.pages} setPage={boxList.setPage} shown={boxList.rows.length} matched={boxList.matches.length} />
+                {list.length > 0 && <div className={own.pickBar} role="status">
+                  <b>{t("{n} roll(s) selected", { n: list.length })}</b>
+                  <button type="button" className={own.ghost} onClick={() => setSerials([])}>{t("Clear")}</button>
+                  <button type="button" className={styles.button} onClick={() => document.getElementById("transfer-form")?.scrollIntoView({ behavior: "smooth", block: "start" })}>{t("Transfer selected")}</button>
+                </div>}
               </>}
             </section>
 
-            {boxes.length > 0 && <section>
+            {boxes.length > 0 && <section id="transfer-form">
               <h2>{t("Transfer rolls")}</h2>
               {confirming && recipient ? <div className={`${own.form} ${own.panel}`}>
                 <h3>{t("Are you sure you want to transfer these rolls?")}</h3>
@@ -541,7 +548,6 @@ export default function AccountPage() {
               <p>{t("Scan, type or tick the ROLL NO of each roll, then enter the receiver's mobile (with country code) or email. Their name fills in automatically; you confirm on the next step.")}</p>
               <form onSubmit={review} className={own.form}>
                 <SerialInput label={t("ROLL NOs (scan, type or upload Excel)")} value={list} onChange={setSerials} />
-                {selected.length > 0 && <button type="button" className={own.ghost} onClick={() => setSerials([...new Set([...list, ...selected])])}>{t("Use selected rolls ({n})", { n: selected.length })}</button>}
                 <div className={own.chips} role="radiogroup" aria-label={t("Find the receiver by")}>
                   {([["phone", t("Mobile")], ["email", t("Email")]] as const).map(([id, label]) =>
                     <button key={id} type="button" role="radio" aria-checked={toBy === id} className={toBy === id ? styles.button : own.ghost} onClick={() => setToBy(id)}>{label}</button>)}
