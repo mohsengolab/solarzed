@@ -56,7 +56,9 @@
     ".next-installs/types/**/*.ts",
     ".next-installs/dev/types/**/*.ts",
     ".next-warranty/types/**/*.ts",
-    ".next-warranty/dev/types/**/*.ts"
+    ".next-warranty/dev/types/**/*.ts",
+    ".next-hidecode/types/**/*.ts",
+    ".next-hidecode/dev/types/**/*.ts"
   ],
   "exclude": [
     "node_modules",

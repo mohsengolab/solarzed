@@ -370,6 +370,138 @@
         "SOLARZED_REVALIDATE_SECRET": "local-dev-revalidate-secret-only",
         "NEXT_DIST_DIR": ".next-lang"
       }
+    },
+    {
+      "name": "api-warranty",
+      "runtimeExecutable": "dotnet",
+      "runtimeArgs": [
+        "run",
+        "--project",
+        "backend/Solarzed.Api",
+        "-p:OutDir=bin/warranty/",
+        "--launch-profile",
+        "http",
+        "--urls",
+        "http://localhost:5390"
+      ],
+      "port": 5390,
+      "autoPort": false,
+      "env": {
+        "ConnectionStrings__Default": "Server=(localdb)\\mssqllocaldb;Database=SolarzedTransferQA;Trusted_Connection=True;",
+        "FrontendOrigin": "http://localhost:3090",
+        "SOLARZED_REVALIDATE_SECRET": "local-dev-revalidate-secret-only",
+        "Sms__DevConsole": "true",
+        "Email__DevConsole": "true",
+        "AdminPassword": "TransferQA-5b17c2e9"
+      }
+    },
+    {
+      "name": "web-warranty",
+      "runtimeExecutable": "npm",
+      "runtimeArgs": [
+        "--prefix",
+        "frontend",
+        "run",
+        "dev",
+        "--",
+        "--port",
+        "3090"
+      ],
+      "port": 3090,
+      "autoPort": false,
+      "env": {
+        "BACKEND_URL": "http://localhost:5390",
+        "SOLARZED_REVALIDATE_SECRET": "local-dev-revalidate-secret-only",
+        "NEXT_DIST_DIR": ".next-warranty"
+      }
+    },
+    {
+      "name": "api-hidecode",
+      "runtimeExecutable": "dotnet",
+      "runtimeArgs": [
+        "run",
+        "--project",
+        "backend/Solarzed.Api",
+        "-p:OutDir=bin/hidecode/",
+        "--launch-profile",
+        "http",
+        "--urls",
+        "http://localhost:5400"
+      ],
+      "port": 5400,
+      "autoPort": false,
+      "env": {
+        "ConnectionStrings__Default": "Server=(localdb)\\mssqllocaldb;Database=SolarzedTransferQA;Trusted_Connection=True;",
+        "FrontendOrigin": "http://localhost:3100",
+        "SOLARZED_REVALIDATE_SECRET": "local-dev-revalidate-secret-only",
+        "Sms__DevConsole": "true",
+        "Email__DevConsole": "true",
+        "AdminPassword": "TransferQA-5b17c2e9"
+      }
+    },
+    {
+      "name": "web-hidecode",
+      "runtimeExecutable": "npm",
+      "runtimeArgs": [
+        "--prefix",
+        "frontend",
+        "run",
+        "dev",
+        "--",
+        "--port",
+        "3100"
+      ],
+      "port": 3100,
+      "autoPort": false,
+      "env": {
+        "BACKEND_URL": "http://localhost:5400",
+        "SOLARZED_REVALIDATE_SECRET": "local-dev-revalidate-secret-only",
+        "NEXT_DIST_DIR": ".next-hidecode"
+      }
+    },
+    {
+      "name": "api-rolldetail",
+      "runtimeExecutable": "dotnet",
+      "runtimeArgs": [
+        "run",
+        "--project",
+        "backend/Solarzed.Api",
+        "-p:OutDir=bin/rolldetail/",
+        "--launch-profile",
+        "http",
+        "--urls",
+        "http://localhost:5410"
+      ],
+      "port": 5410,
+      "autoPort": false,
+      "env": {
+        "ConnectionStrings__Default": "Server=(localdb)\\mssqllocaldb;Database=SolarzedTransferQA;Trusted_Connection=True;",
+        "FrontendOrigin": "http://localhost:3110",
+        "SOLARZED_REVALIDATE_SECRET": "local-dev-revalidate-secret-only",
+        "Sms__DevConsole": "true",
+        "Email__DevConsole": "true",
+        "AdminPassword": "TransferQA-5b17c2e9"
+      }
+    },
+    {
+      "name": "web-rolldetail",
+      "runtimeExecutable": "npm",
+      "runtimeArgs": [
+        "--prefix",
+        "frontend",
+        "run",
+        "dev",
+        "--",
+        "--port",
+        "3110"
+      ],
+      "port": 3110,
+      "autoPort": false,
+      "env": {
+        "BACKEND_URL": "http://localhost:5410",
+        "SOLARZED_REVALIDATE_SECRET": "local-dev-revalidate-secret-only",
+        "NEXT_DIST_DIR": ".next-rolldetail"
+      }
     }
   ]
 }
