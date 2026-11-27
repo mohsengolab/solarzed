@@ -35,6 +35,7 @@ const ICONS: Record<string, string> = {
   overview: "M4 13h6V4H4v9Zm0 7h6v-5H4v5Zm10 0h6v-9h-6v9Zm0-16v5h6V4h-6Z",
   profile: "M12 12a4 4 0 1 0 0-8 4 4 0 0 0 0 8Zm-7 8a7 7 0 0 1 14 0",
   transfer: "M4 8h13l-3-3m6 11H7l3 3",
+  rolls: "M4 7.5 12 4l8 3.5v9L12 20l-8-3.5v-9Zm0 0L12 11l8-3.5M12 11v9",
   warranty: "M12 3 5 6v5c0 4.5 3 8 7 10 4-2 7-5.5 7-10V6l-7-3Zm-3 9 2 2 4-4",
   register: "M4 7V5a1 1 0 0 1 1-1h2m10 0h2a1 1 0 0 1 1 1v2m0 10v2a1 1 0 0 1-1 1h-2M7 20H5a1 1 0 0 1-1-1v-2m4-5h8",
   installations: "M5 16l1.5-5A2 2 0 0 1 8.4 9.5h7.2a2 2 0 0 1 1.9 1.5L19 16M4 16h16v3H4zM7 19v1m10-1v1",
@@ -42,8 +43,8 @@ const ICONS: Record<string, string> = {
 };
 const Icon = ({ name }: { name: string }) => <svg aria-hidden="true" viewBox="0 0 24 24" width="18" height="18"><path fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" d={ICONS[name]} /></svg>;
 
-type Tab = "overview" | "profile" | "transfer" | "warranty" | "register" | "installations" | "tickets";
-const ALL_TABS: Tab[] = ["overview", "profile", "transfer", "warranty", "register", "installations", "tickets"];
+type Tab = "overview" | "profile" | "rolls" | "transfer" | "warranty" | "register" | "installations" | "tickets";
+const ALL_TABS: Tab[] = ["overview", "profile", "rolls", "transfer", "warranty", "register", "installations", "tickets"];
 const tabFromHash = (): Tab => { const h = typeof window === "undefined" ? "" : window.location.hash.slice(1); return (ALL_TABS as string[]).includes(h) ? h as Tab : "overview"; };
 
 const SEEN_KEY = "sz-ticket-seen";
@@ -374,7 +375,8 @@ export default function AccountPage() {
     ] : []),
     // Installers follow every warranty they registered under Installations, so they get no separate Warranties section.
     ...(installer ? [] : [{ id: "warranty" as Tab, label: t("Warranties"), count: warranties.length || undefined }]),
-    { id: "transfer", label: t("Rolls"), count: boxes.length || undefined },
+    { id: "rolls", label: t("Rolls"), count: boxes.length || undefined },
+    { id: "transfer", label: t("Transfer rolls"), count: list.length || undefined },
     { id: "tickets", label: t("Support"), count: unreadTotal ? t("{n} new", { n: unreadTotal }) : openTickets || undefined, hot: unreadTotal > 0 },
     { id: "profile", label: t("Profile") },
   ];
@@ -426,7 +428,7 @@ export default function AccountPage() {
             <div className={own.stats}>
               {installer && stat("installations", t("Installations"), cars.length, pendingInstalls ? t("{n} waiting or sent back", { n: pendingInstalls }) : t("all approved"), rejectedInstalls > 0)}
               {!installer && stat("warranty", t("Warranties"), warranties.length, t("{n} active", { n: warranties.filter(w => w.status === "active").length }))}
-              {stat("transfer", t("Rolls in account"), boxes.length, outgoing.length ? t("{n} transferred out", { n: outgoing.length }) : t("ready to transfer"))}
+              {stat("rolls", t("Rolls in account"), boxes.length, outgoing.length ? t("{n} transferred out", { n: outgoing.length }) : t("ready to transfer"))}
               {stat("tickets", t("Support tickets"), tickets.length, unreadTotal ? t("{n} with a new reply", { n: unreadTotal }) : t("{n} open", { n: openTickets }), unreadTotal > 0)}
             </div>
           </section>
@@ -489,14 +491,14 @@ export default function AccountPage() {
           </>}
         </section>}
 
-        {view === "transfer" && <>
-          {done && <p role="status" className={own.notice}>{done}</p>}
+        {(view === "rolls" || view === "transfer") && <>
+          {done && view === "transfer" && <p role="status" className={own.notice}>{done}</p>}
           {!user.phone ? <section>
             <h2>{t("Rolls")}</h2>
             <p role="status" className={own.notice}>{t("Rolls are transferred by ROLL NO to a mobile number. Add and verify your mobile in your profile first: the company and other sellers send rolls to that number, and you receive them here.")}</p>
             <button type="button" className={styles.button} onClick={() => go("profile")}>{t("Go to profile")}</button>
           </section> : <>
-            <section>
+            {view === "rolls" && <section>
               <h2>{t("Unused rolls in your account")}</h2>
               <p>{t("Every roll transferred to your mobile and not yet used on a vehicle, with its features. Tick rolls to transfer them.")} <b dir="ltr">{user.phone}</b></p>
               {boxes.length > 0 && <ListToolbar view={boxList} placeholder={t("Search ROLL NO or product…")} filters={[["tint", t("Window film")], ["ppf", "PPF"]] as const} />}
@@ -519,12 +521,15 @@ export default function AccountPage() {
                 {list.length > 0 && <div className={own.pickBar} role="status">
                   <b>{t("{n} roll(s) selected", { n: list.length })}</b>
                   <button type="button" className={own.ghost} onClick={() => setSerials([])}>{t("Clear")}</button>
-                  <button type="button" className={styles.button} onClick={() => document.getElementById("transfer-form")?.scrollIntoView({ behavior: "smooth", block: "start" })}>{t("Transfer selected")}</button>
+                  <button type="button" className={styles.button} onClick={() => go("transfer")}>{t("Transfer selected")}</button>
                 </div>}
               </>}
-            </section>
+            </section>}
 
-            {boxes.length > 0 && <section id="transfer-form">
+            {view === "transfer" && (!boxes.length ? <section>
+              <h2>{t("Transfer rolls")}</h2>
+              <Empty title={t("No rolls in your account")}><span>{t("When Solarzed or a seller transfers rolls to your mobile, they appear here.")}</span></Empty>
+            </section> : <section>
               <h2>{t("Transfer rolls")}</h2>
               {confirming && recipient ? <div className={`${own.form} ${own.panel}`}>
                 <h3>{t("Are you sure you want to transfer these rolls?")}</h3>
@@ -547,6 +552,7 @@ export default function AccountPage() {
               </div> : <>
               <p>{t("Scan, type or tick the ROLL NO of each roll, then enter the receiver's mobile (with country code) or email. Their name fills in automatically; you confirm on the next step.")}</p>
               <form onSubmit={review} className={own.form}>
+                <p className={own.muted}>{t("Or tick them in the list:")} <button type="button" className={styles.linkButton} onClick={() => go("rolls")}>{t("Pick from my rolls ({n})", { n: boxes.length })}</button></p>
                 <SerialInput label={t("ROLL NOs (scan, type or upload Excel)")} value={list} onChange={setSerials} />
                 <div className={own.chips} role="radiogroup" aria-label={t("Find the receiver by")}>
                   {([["phone", t("Mobile")], ["email", t("Email")]] as const).map(([id, label]) =>
@@ -567,9 +573,9 @@ export default function AccountPage() {
                 <button className={styles.button} disabled={busy || looking || !list.length || !receiverReady || !recipient}>{t("Continue")}</button>
               </form>
               </>}
-            </section>}
+            </section>)}
 
-            {outgoing.length > 0 && <section>
+            {view === "rolls" && outgoing.length > 0 && <section>
               <h2>{t("Rolls you transferred")}</h2>
               <ListToolbar view={outList} placeholder={t("Search ROLL NO, receiver, note…")} />
               {!outList.matches.length ? <Empty title={t("Nothing matches your search")} /> : <>

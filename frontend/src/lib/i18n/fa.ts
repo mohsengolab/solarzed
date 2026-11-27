@@ -205,6 +205,8 @@ const fa: Record<string, string> = {
   "Scan or type the ROLL NO of each carton and enter the receiver's mobile — the number they registered in their Solarzed profile. The rolls then appear in their account.": "ROLL NO هر کارتن را اسکن یا تایپ کنید و موبایل گیرنده را وارد کنید — همان شماره‌ای که در پروفایل سولارزد خود ثبت کرده است. سپس رول‌ها در حساب او نمایش داده می‌شوند.",
   "ROLL NOs (scan, type or upload Excel)": "ROLL NOها (اسکن، تایپ یا فایل اکسل)",
   "{n} roll(s) selected": "{n} رول انتخاب شده",
+  "Or tick them in the list:": "یا آن‌ها را در لیست تیک بزنید:",
+  "Pick from my rolls ({n})": "انتخاب از رول‌های من ({n})",
   "Transfer selected": "انتقال رول‌های انتخاب‌شده",
   "Receiver mobile": "موبایل گیرنده",
   "Receiver name (optional)": "نام گیرنده (اختیاری)",
