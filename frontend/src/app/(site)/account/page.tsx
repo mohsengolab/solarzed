@@ -10,7 +10,6 @@ import {
   BoxTransfer, HeldBox, InstallerWarranty, PortalUser, PortalChannel, PortalTicket, WarrantyPublic, type AdminTicketReply, type Recipient, type TicketDepartment,
 } from "@/lib/api";
 import PortalSignIn, { EMAIL_VERIFICATION } from "@/components/PortalSignIn";
-import SerialInput from "@/components/SerialInput";
 import CountrySelect, { Flag } from "@/components/CountrySelect";
 import PhoneInput from "@/components/PhoneInput";
 import { citiesOf, countryFromText, countryOfPhone, findCountry, isValidMobile, toE164 } from "@/lib/countries";
@@ -389,6 +388,28 @@ export default function AccountPage() {
       <b>{value.toLocaleString(LOCALES[lang])}</b><span>{label}</span><small>{hint}</small>
     </button>;
 
+  // Every unused roll the account holds, with a checkbox to pick it for a transfer.
+  const rollPicker = <>
+              {boxes.length > 0 && <ListToolbar view={boxList} placeholder={t("Search ROLL NO or product…")} filters={[["tint", t("Window film")], ["ppf", "PPF"]] as const} />}
+              {!boxes.length ? <Empty title={t("No rolls in your account")}><span>{t("When Solarzed or a seller transfers rolls to your mobile, they appear here.")}</span></Empty>
+                : !boxList.matches.length ? <Empty title={t("Nothing matches your search")} /> : <>
+                <div className={own.scroll}><table className={own.table}>
+                  <thead><tr>
+                    <th><input type="checkbox" aria-label={t("Select all rolls on this page")} checked={pageRolls.length > 0 && pageRolls.every(id => list.includes(id))}
+                      onChange={e => setSerials(items => e.target.checked ? [...new Set([...items, ...pageRolls])] : items.filter(id => !pageRolls.includes(id)))} /></th>
+                    <th>ROLL NO</th><th>{t("Product")}</th><th>{t("Size")}</th><th>{t("Warranty")}</th><th>{t("Specs")}</th><th>{t("Since")}</th></tr></thead>
+                  <tbody>{boxList.rows.map(box => <tr key={box.id} className={list.includes(box.id) ? own.picked : undefined}
+                    onClick={event => { if (!box.void && !(event.target as HTMLElement).closest("input,a,button")) toggleRoll(box.id); }}>
+                    <td><input type="checkbox" aria-label={t("Select {id}", { id: box.id })} disabled={box.void} checked={list.includes(box.id)} onChange={() => toggleRoll(box.id)} /></td>
+                    <td><code dir="ltr">{box.id}</code>{box.void && <span className={own.badge}>{t("Void")}</span>}</td>
+                    <td>{box.productName ? <>{box.productName}<br /><small className={own.muted}>{box.product} · {box.type.toUpperCase()}</small></> : <>{box.product} · {box.type.toUpperCase()}</>}</td>
+                    <td dir="ltr">{rollSize(box)}</td><td>{rollYears(t, box)}</td><td dir="ltr"><small>{rollSpecs(box)}</small></td><td>{date(box.heldSince)}</td>
+                  </tr>)}</tbody>
+                </table></div>
+                <Pager page={boxList.page} pages={boxList.pages} setPage={boxList.setPage} shown={boxList.rows.length} matched={boxList.matches.length} />
+              </>}
+  </>;
+
   return <div className={`${styles.page} ${own.wide}`}>
     <header><Link href="/" aria-label={t("Solarzed home")}>{/* eslint-disable-next-line @next/next/no-img-element */}<img src="/assets/solarzed-original.png" width={160} height={32} alt="SOLARZED" style={{ display: "block" }} /></Link><small>{t("MY ACCOUNT")}</small></header>
     <div className={own.shell}>
@@ -501,29 +522,12 @@ export default function AccountPage() {
             {view === "rolls" && <section>
               <h2>{t("Unused rolls in your account")}</h2>
               <p>{t("Every roll transferred to your mobile and not yet used on a vehicle, with its features. Tick rolls to transfer them.")} <b dir="ltr">{user.phone}</b></p>
-              {boxes.length > 0 && <ListToolbar view={boxList} placeholder={t("Search ROLL NO or product…")} filters={[["tint", t("Window film")], ["ppf", "PPF"]] as const} />}
-              {!boxes.length ? <Empty title={t("No rolls in your account")}><span>{t("When Solarzed or a seller transfers rolls to your mobile, they appear here.")}</span></Empty>
-                : !boxList.matches.length ? <Empty title={t("Nothing matches your search")} /> : <>
-                <div className={own.scroll}><table className={own.table}>
-                  <thead><tr>
-                    <th><input type="checkbox" aria-label={t("Select all rolls on this page")} checked={pageRolls.length > 0 && pageRolls.every(id => list.includes(id))}
-                      onChange={e => setSerials(items => e.target.checked ? [...new Set([...items, ...pageRolls])] : items.filter(id => !pageRolls.includes(id)))} /></th>
-                    <th>ROLL NO</th><th>{t("Product")}</th><th>{t("Size")}</th><th>{t("Warranty")}</th><th>{t("Specs")}</th><th>{t("Since")}</th></tr></thead>
-                  <tbody>{boxList.rows.map(box => <tr key={box.id} className={list.includes(box.id) ? own.picked : undefined}
-                    onClick={event => { if (!box.void && !(event.target as HTMLElement).closest("input,a,button")) toggleRoll(box.id); }}>
-                    <td><input type="checkbox" aria-label={t("Select {id}", { id: box.id })} disabled={box.void} checked={list.includes(box.id)} onChange={() => toggleRoll(box.id)} /></td>
-                    <td><code dir="ltr">{box.id}</code>{box.void && <span className={own.badge}>{t("Void")}</span>}</td>
-                    <td>{box.productName ? <>{box.productName}<br /><small className={own.muted}>{box.product} · {box.type.toUpperCase()}</small></> : <>{box.product} · {box.type.toUpperCase()}</>}</td>
-                    <td dir="ltr">{rollSize(box)}</td><td>{rollYears(t, box)}</td><td dir="ltr"><small>{rollSpecs(box)}</small></td><td>{date(box.heldSince)}</td>
-                  </tr>)}</tbody>
-                </table></div>
-                <Pager page={boxList.page} pages={boxList.pages} setPage={boxList.setPage} shown={boxList.rows.length} matched={boxList.matches.length} />
-                {list.length > 0 && <div className={own.pickBar} role="status">
+              {rollPicker}
+                {boxes.length > 0 && list.length > 0 && <div className={own.pickBar} role="status">
                   <b>{t("{n} roll(s) selected", { n: list.length })}</b>
                   <button type="button" className={own.ghost} onClick={() => setSerials([])}>{t("Clear")}</button>
                   <button type="button" className={styles.button} onClick={() => go("transfer")}>{t("Transfer selected")}</button>
                 </div>}
-              </>}
             </section>}
 
             {view === "transfer" && (!boxes.length ? <section>
@@ -550,10 +554,10 @@ export default function AccountPage() {
                   <button type="button" className={own.ghost} disabled={busy} onClick={() => setConfirming(false)}>{t("Back")}</button>
                 </div>
               </div> : <>
-              <p>{t("Scan, type or tick the ROLL NO of each roll, then enter the receiver's mobile (with country code) or email. Their name fills in automatically; you confirm on the next step.")}</p>
+              <p>{t("Tick the rolls you want to transfer, then enter the receiver's mobile (with country code) or email. Their name fills in automatically; you confirm on the next step.")}</p>
+              {rollPicker}
+              {list.length > 0 && <p className={own.muted}><b>{t("{n} roll(s) selected", { n: list.length })}</b> · <button type="button" className={styles.linkButton} onClick={() => setSerials([])}>{t("Clear")}</button></p>}
               <form onSubmit={review} className={own.form}>
-                <p className={own.muted}>{t("Or tick them in the list:")} <button type="button" className={styles.linkButton} onClick={() => go("rolls")}>{t("Pick from my rolls ({n})", { n: boxes.length })}</button></p>
-                <SerialInput label={t("ROLL NOs (scan, type or upload Excel)")} value={list} onChange={setSerials} />
                 <div className={own.chips} role="radiogroup" aria-label={t("Find the receiver by")}>
                   {([["phone", t("Mobile")], ["email", t("Email")]] as const).map(([id, label]) =>
                     <button key={id} type="button" role="radio" aria-checked={toBy === id} className={toBy === id ? styles.button : own.ghost} onClick={() => setToBy(id)}>{label}</button>)}
