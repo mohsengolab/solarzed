@@ -22,6 +22,7 @@ import { LOCALES, formatDate, formatStamp, type T } from "@/lib/i18n";
 import { useLang, useT } from "@/lib/i18n/client";
 import styles from "../activate/activate.module.css";
 import own from "./account.module.css";
+import { backdropProps } from "@/components/backdrop";
 
 const who = (t: T, name: string | null, phone: string | null) => name && phone && name !== phone ? `${name} (${phone})` : name ?? phone ?? t("Central warehouse");
 const fullName = (user: PortalUser) => [user.firstName, user.lastName].filter(Boolean).join(" ") || user.name || null;
@@ -527,7 +528,9 @@ export default function AccountPage() {
               <Empty title={t("No rolls in your account")}><span>{t("When Solarzed or a seller transfers rolls to your mobile, they appear here.")}</span></Empty>
             </section> : <section>
               <h2>{t("Transfer rolls")}</h2>
-              {confirming && recipient ? <div className={`${own.form} ${own.panel}`}>
+              {confirming && recipient && <div className={own.modal} role="dialog" aria-modal="true" aria-label={t("Are you sure you want to transfer these rolls?")}
+                {...backdropProps(() => !busy && setConfirming(false))}>
+                <div className={`${own.form} ${own.modalInner}`}>
                 <h3>{t("Are you sure you want to transfer these rolls?")}</h3>
                 <p>{t("To")}: <b>{receiverName ?? t("New account")}</b>{recipient.partner && <span className={own.badge}>{t("Partner")}</span>}
                   {recipient.phone && <> · <span dir="ltr">{recipient.phone}</span></>}{recipient.email && <> · <span dir="ltr">{recipient.email}</span></>}</p>
@@ -541,11 +544,13 @@ export default function AccountPage() {
                   </tr>; })}</tbody>
                 </table></div>
                 {note && <p>{t("Note")}: {note}</p>}
+                {error && <p role="alert" className={styles.error}>{error}</p>}
                 <div className={own.chips}>
                   <button type="button" className={styles.button} disabled={busy} onClick={transfer}>{busy ? t("Working…") : t("Yes, transfer {n} roll(s)", { n: list.length })}</button>
-                  <button type="button" className={own.ghost} disabled={busy} onClick={() => setConfirming(false)}>{t("Back")}</button>
+                  <button type="button" className={own.ghost} disabled={busy} onClick={() => setConfirming(false)}>{t("Cancel")}</button>
                 </div>
-              </div> : <>
+                </div>
+              </div>}
               <p>{t("Tick the rolls you want to transfer, then enter the receiver's mobile (with country code) or email. Their name fills in automatically; you confirm on the next step.")}</p>
               {rollPicker}
               {list.length > 0 && <p className={own.muted}><b>{t("{n} roll(s) selected", { n: list.length })}</b> · <button type="button" className={styles.linkButton} onClick={() => setSerials([])}>{t("Clear")}</button></p>}
@@ -568,7 +573,6 @@ export default function AccountPage() {
                 <label>{t("Note (optional)")}<input maxLength={500} value={note} onChange={event => setNote(event.target.value)} /></label>
                 <button className={styles.button} disabled={busy || looking || !list.length || !receiverReady || !recipient}>{t("Continue")}</button>
               </form>
-              </>}
             </section>)}
 
             {view === "rolls" && usedBoxes.length > 0 && <section>

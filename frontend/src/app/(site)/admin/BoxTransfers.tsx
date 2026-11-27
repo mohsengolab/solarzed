@@ -83,7 +83,10 @@ export default function BoxTransfers({ onChanged }: { onChanged?: () => void }) 
     } catch (ex) { setError(message(ex)); setReturning(false); } finally { setBusy(false); }
   }
 
-  function send(event: FormEvent) { event.preventDefault(); run(false); }
+  // The send button only asks for confirmation; the transfer runs once the modal is confirmed.
+  const [confirming, setConfirming] = useState(false);
+  function send(event: FormEvent) { event.preventDefault(); setError(""); setDone(""); setConfirming(true); }
+  async function confirmSend() { await run(false); setConfirming(false); }
 
   function openReturn() {
     setError(""); setWarehouseId(String(warehouses[0]?.id ?? "")); setReturning(true);
@@ -135,6 +138,21 @@ export default function BoxTransfers({ onChanged }: { onChanged?: () => void }) 
           </table></div> : <p className={styles.empty}>{fa("No transfers recorded for this box.")}</p>}
         </>}
       </div>
+      {confirming && <div className={styles.dialog} role="dialog" aria-modal="true" aria-label="تأیید انتقال" {...backdropProps(() => !busy && setConfirming(false))}>
+        <div className={`${styles.dialogInner} ${styles.adminForm}`} style={{ maxWidth: 480 }}>
+          <h2>آیا از انتقال مطمئن هستید؟</h2>
+          <button type="button" className={styles.dialogClose} aria-label="بستن" disabled={busy} onClick={() => setConfirming(false)}>×</button>
+          <p style={{ margin: 0 }}>{n(list.length)} رول به <b>{to.trim() ? `${to.trim()} (` : ""}<span dir="ltr">{phone.trim()}</span>{to.trim() ? ")" : ""}</b> منتقل می‌شود.</p>
+          <div className={labelsStyle.scroll} style={{ maxHeight: 220 }}>
+            <p style={{ margin: 0, lineHeight: 1.9 }} dir="ltr">{list.map(id => <code key={id} style={{ marginInlineEnd: 8 }}>{id}</code>)}</p>
+          </div>
+          {note && <p style={{ margin: 0 }}>{fa("Note (optional)")}: {note}</p>}
+          <div style={{ display: "flex", gap: 10, flexWrap: "wrap" }}>
+            <button type="button" className={styles.btnPrimary} style={{ flex: 1 }} disabled={busy} onClick={confirmSend}>{busy ? fa("Working…") : `بله، ${n(list.length)} رول منتقل شود`}</button>
+            <button type="button" className={styles.ghost} disabled={busy} onClick={() => setConfirming(false)}>انصراف</button>
+          </div>
+        </div>
+      </div>}
       {returning && <div className={styles.dialog} role="dialog" aria-modal="true" aria-label="بازگشت به انبار" {...backdropProps(() => !busy && setReturning(false))}>
         <form className={`${styles.dialogInner} ${styles.adminForm}`} style={{ maxWidth: 440 }} onSubmit={e => { e.preventDefault(); run(true); }}>
           <h2>بازگشت {n(list.length)} رول به انبار</h2>
