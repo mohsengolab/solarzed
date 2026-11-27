@@ -242,9 +242,16 @@ public class PortalService(AppDbContext db, IActivationSmsSender sms, IEmailSend
         return text.Length > max ? text[..max] : text;
     }
 
+    /// <summary>
+    /// Every vehicle the installer worked on: registrations made through the installer form, plus older ones that
+    /// carry no installer link but were registered from this mobile (e.g. before the partner account was approved,
+    /// when the card registered as the installer's own warranty) or name it as the seller.
+    /// </summary>
     public async Task<InstallerWarranty[]> Installed(string phone)
     {
-        var rows = await db.WarrantyRegistrations.AsNoTracking().Where(x => x.InstallerPhone == phone)
+        var variants = PhoneVariants(phone);
+        var rows = await db.WarrantyRegistrations.AsNoTracking()
+            .Where(x => x.InstallerPhone == phone || (x.InstallerPhone == null && (variants.Contains(x.Phone) || x.SellerPhone == phone)))
             .OrderByDescending(x => x.CreatedAt).Take(200).ToListAsync();
         var codes = rows.Select(x => x.Code).ToArray();
         var photos = await db.WarrantyPhotos.Where(p => codes.Contains(p.WarrantyCode)).GroupBy(p => p.WarrantyCode)
@@ -257,7 +264,7 @@ public class PortalService(AppDbContext db, IActivationSmsSender sms, IEmailSend
     public Task<bool> CanSeePhotos(string phone, string code, CancellationToken ct = default)
     {
         var variants = PhoneVariants(phone);
-        return db.WarrantyRegistrations.AsNoTracking().AnyAsync(x => x.Code == code && (variants.Contains(x.Phone) || x.InstallerPhone == phone), ct);
+        return db.WarrantyRegistrations.AsNoTracking().AnyAsync(x => x.Code == code && (variants.Contains(x.Phone) || x.InstallerPhone == phone || (x.InstallerPhone == null && x.SellerPhone == phone)), ct);
     }
 
     public static string MaskPhone(string phone) => phone.Length > 6 ? phone[..4] + "•••" + phone[^4..] : "•••";
