@@ -24,4 +24,18 @@ public class ProfileTests
         PortalService.ApplyProfile(user, Req("My Company"));
         Assert.Null(user.ShopName);
     }
+
+    [Fact]
+    public void Map_location_is_saved_as_a_valid_pair_or_cleared()
+    {
+        var user = new PortalUser { Phone = "09121111111" };
+        PortalService.ApplyProfile(user, Req(null) with { Latitude = 35.6891975123, Longitude = 51.3889736 });
+        Assert.Equal(35.689198, user.Latitude);
+        Assert.Equal(51.388974, user.Longitude);
+        PortalService.ApplyProfile(user, Req(null) with { Latitude = 95, Longitude = 51 });
+        Assert.Null(user.Latitude);
+        Assert.Null(user.Longitude);
+        PortalService.ApplyProfile(user, Req(null) with { Latitude = 35.7 });
+        Assert.Null(user.Latitude);
+    }
 }

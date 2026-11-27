@@ -37,7 +37,7 @@ public static class PortalAuth
 }
 
 public record PortalMe(string? Phone, string? Email, string? Name, string? FirstName, string? LastName, string? Country, string? City, string? Job,
-    string Partner = "none", string? ShopName = null);
+    string Partner = "none", string? ShopName = null, double? Latitude = null, double? Longitude = null);
 
 public class PortalService(AppDbContext db, IActivationSmsSender sms, IEmailSender? email = null, IConfiguration? config = null, SmsLog? log = null)
 {
@@ -219,7 +219,7 @@ public class PortalService(AppDbContext db, IActivationSmsSender sms, IEmailSend
 
     public static PortalMe Shape(PortalUser user) =>
         new(user.Phone, user.Email, user.Name, user.FirstName, user.LastName, user.Country, user.City, user.Job,
-            user.Partner.ToString().ToLowerInvariant(), user.ShopName);
+            user.Partner.ToString().ToLowerInvariant(), user.ShopName, user.Latitude, user.Longitude);
 
     /// <summary>Saves the self-service profile; empty strings clear a field.</summary>
     public static void ApplyProfile(PortalUser user, PortalProfileRequest req)
@@ -229,6 +229,11 @@ public class PortalService(AppDbContext db, IActivationSmsSender sms, IEmailSend
         user.Country = Clean(req.Country, 100);
         user.City = Clean(req.City, 100);
         user.Job = Clean(req.Job, 100);
+        // The map location is kept only as a valid pair; anything else (missing, out of range) clears it.
+        if (req.Latitude is double lat && req.Longitude is double lng && double.IsFinite(lat) && double.IsFinite(lng)
+            && lat is >= -90 and <= 90 && lng is >= -180 and <= 180)
+        { user.Latitude = Math.Round(lat, 6); user.Longitude = Math.Round(lng, 6); }
+        else { user.Latitude = null; user.Longitude = null; }
         // The company (shop / workshop name) is defined by an admin in Partners; once it exists the user may rename it, never remove it.
         if (user.ShopName != null && Clean(req.Company, 200) is { } company) user.ShopName = company;
         var name = (req.Name ?? "").Trim();
@@ -295,4 +300,5 @@ public class PortalService(AppDbContext db, IActivationSmsSender sms, IEmailSend
 public record InstallerWarranty(WarrantyPublic Warranty, string OwnerPhoneMasked, string? Country, int Photos, DateTime CreatedAt);
 
 public record PartnerApplyRequest(string? ShopName, string? Country, string? City);
-public record PortalProfileRequest(string? FirstName, string? LastName, string? Country, string? City, string? Job, string? Name, string? Company = null);
+public record PortalProfileRequest(string? FirstName, string? LastName, string? Country, string? City, string? Job, string? Name, string? Company = null,
+    double? Latitude = null, double? Longitude = null);

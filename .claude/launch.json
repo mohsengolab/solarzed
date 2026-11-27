@@ -502,6 +502,49 @@
         "SOLARZED_REVALIDATE_SECRET": "local-dev-revalidate-secret-only",
         "NEXT_DIST_DIR": ".next-rolldetail"
       }
+    },
+    {
+      "name": "api-location",
+      "runtimeExecutable": "dotnet",
+      "runtimeArgs": [
+        "run",
+        "--project",
+        "backend/Solarzed.Api",
+        "-p:OutDir=bin/location/",
+        "--launch-profile",
+        "http",
+        "--urls",
+        "http://localhost:5420"
+      ],
+      "port": 5420,
+      "autoPort": false,
+      "env": {
+        "ConnectionStrings__Default": "Server=(localdb)\\mssqllocaldb;Database=SolarzedLocationQA;Trusted_Connection=True;",
+        "FrontendOrigin": "http://localhost:3120",
+        "SOLARZED_REVALIDATE_SECRET": "local-dev-revalidate-secret-only",
+        "Sms__DevConsole": "true",
+        "Email__DevConsole": "true"
+      }
+    },
+    {
+      "name": "web-location",
+      "runtimeExecutable": "npm",
+      "runtimeArgs": [
+        "--prefix",
+        "frontend",
+        "run",
+        "dev",
+        "--",
+        "--port",
+        "3120"
+      ],
+      "port": 3120,
+      "autoPort": false,
+      "env": {
+        "BACKEND_URL": "http://localhost:5420",
+        "SOLARZED_REVALIDATE_SECRET": "local-dev-revalidate-secret-only",
+        "NEXT_DIST_DIR": ".next-location"
+      }
     }
   ]
 }

@@ -75,6 +75,9 @@ public class PortalUser
     [MaxLength(100)] public string? Country { get; set; }
     [MaxLength(100)] public string? City { get; set; }
     [MaxLength(100)] public string? Job { get; set; }
+    // Where the user is, picked on the map in the profile (WGS84 degrees); both set or both null.
+    public double? Latitude { get; set; }
+    public double? Longitude { get; set; }
 
     public bool Active { get; set; } = true;
     public DateTime CreatedAt { get; set; } = DateTime.UtcNow;

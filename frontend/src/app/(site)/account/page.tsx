@@ -4,6 +4,7 @@ import { useCallback, useEffect, useState, FormEvent, type ReactNode } from "rea
 import Link from "next/link";
 import VehicleCoverage, { byVehicle } from "@/components/VehicleCoverage";
 import InstallationPhotos from "@/components/InstallationPhotos";
+import LocationPicker, { type LatLng } from "@/components/LocationPicker";
 import {
   portalBoxes, portalLogout, portalMe, portalRecipient, portalTransfer, portalWarranties, portalInstallerWarranties,
   portalProfile, portalBind, portalBindVerify, portalTickets, portalCreateTicket, portalTicketDetail, portalTicketReply,
@@ -57,7 +58,7 @@ const WARRANTY_FILTERS = [["active", "Active"], ["pending", "In review"], ["reje
 const WARRANTY_STATUS = { active: "Active", pending: "In review", rejected: "Sent back" } as const;
 
 // country holds the ISO code picked in the country list; a free-text country saved before the list existed stays in countryText.
-const emptyProfile = { firstName: "", lastName: "", company: "", country: "" as CountryCode | "", countryText: "", city: "", job: "" };
+const emptyProfile = { firstName: "", lastName: "", company: "", country: "" as CountryCode | "", countryText: "", city: "", job: "", location: null as LatLng | null };
 
 const warrantyText = (w: WarrantyPublic) => [w.make, w.model, w.plate, w.filmSerial, w.invoiceNumber].join(" ");
 const warrantyStatus = (w: WarrantyPublic) => w.status;
@@ -211,6 +212,7 @@ export default function AccountPage() {
       firstName: u.firstName ?? "", lastName: u.lastName ?? "", company: u.shopName ?? "",
       country: countryFromText(u.country)?.code ?? countryOfPhone(u.phone) ?? "", countryText: u.country ?? "",
       city: u.city ?? "", job: u.job ?? "",
+      location: u.latitude != null && u.longitude != null ? { lat: u.latitude, lng: u.longitude } : null,
     });
   }
 
@@ -282,8 +284,8 @@ export default function AccountPage() {
   async function saveProfile(event: FormEvent) {
     event.preventDefault(); setProfileBusy(true); setProfileMsg("");
     try {
-      const { countryText, company, ...rest } = profile;
-      const updated = await portalProfile({ ...rest, ...(user?.shopName ? { company } : {}), country: findCountry(profile.country)?.names.en ?? countryText });
+      const { countryText, company, location, ...rest } = profile;
+      const updated = await portalProfile({ ...rest, latitude: location?.lat ?? null, longitude: location?.lng ?? null, ...(user?.shopName ? { company } : {}), country: findCountry(profile.country)?.names.en ?? countryText });
       setUser(updated); setProfileMsg(t("Profile saved."));
     } catch (ex) { setProfileMsg(ex instanceof Error ? t(ex.message) : t("Could not save your profile.")); }
     finally { setProfileBusy(false); }
@@ -678,6 +680,10 @@ export default function AccountPage() {
                   onChange={e => setProfile({ ...profile, city: e.target.value })} />
                   <datalist id="profile-cities">{citiesOf(profile.country, lang).map(c => <option key={c} value={c} />)}</datalist></label>
                 <label>{t("Job / business")}<input maxLength={100} placeholder={t("e.g. shop, installer, driver")} value={profile.job} onChange={e => setProfile({ ...profile, job: e.target.value })} /></label>
+              </div>
+              <div className={own.field}>
+                <span>{t("Location on the map")}</span>
+                <LocationPicker value={profile.location} country={profile.country} onChange={location => setProfile(p => ({ ...p, location }))} />
               </div>
               <button className={styles.button} disabled={profileBusy}>{profileBusy ? t("Saving…") : t("Save profile")}</button>
               {profileMsg && <p role="status" className={own.notice}>{profileMsg}</p>}
