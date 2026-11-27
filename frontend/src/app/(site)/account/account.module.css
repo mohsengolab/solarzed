@@ -161,3 +161,38 @@ a.ghost{display:inline-block;text-decoration:none;text-align:center}
 .roll .form{align-self:stretch}
 .rollHead{display:flex;justify-content:space-between;align-items:center;gap:10px;align-self:stretch}
 .rollHead code{color:var(--sz-accent-fg)}
+
+/* Rolls: one card per roll; the card opens everything about it */
+.selectAll{display:inline-flex!important;flex-direction:row!important;align-items:center;gap:8px!important;margin:0 0 10px;font-size:13px;color:var(--sz-fg-2);cursor:pointer}
+.selectAll input{accent-color:#1fc3cf;width:16px;height:16px;margin:0}
+.rollCard{display:block;transition:border-color .15s,background .15s}
+.rollCard:hover{border-color:#1fc3cf55}
+.rollPicked{border-color:#1fc3cf88;background:#1fc3cf0b}
+.rollRow{display:flex;align-items:stretch}
+.rollCheck{flex:none;align-self:center;margin:0!important;margin-inline-start:16px!important;width:18px;height:18px;accent-color:#1fc3cf;cursor:pointer}
+.rollRow .carHead{flex:1;min-width:0;flex-wrap:nowrap}
+.rollName{font-size:14px;color:var(--sz-fg-1)}
+.rollName small{color:var(--sz-fg-3)}
+.itemMain b .badge,.itemMain b .status{margin-inline-start:8px}
+.chevron{flex:none;width:26px;height:26px;display:grid;place-items:center;border-radius:8px;border:1px solid rgb(var(--sz-tint) / 0.16);color:var(--sz-fg-2);font-size:16px;line-height:1}
+.carHead[aria-expanded="true"] .chevron{border-color:#1fc3cf;color:var(--sz-accent-fg)}
+.meter{display:flex;flex-direction:column;align-items:flex-end;gap:6px;min-width:150px}
+.meter b{font-size:16px;color:var(--sz-fg)}
+.meter small{font-size:12px;color:var(--sz-fg-3)}
+.bar{display:block;width:150px;height:6px;border-radius:3px;background:rgb(var(--sz-tint) / 0.12);overflow:hidden}
+.bar > span{display:block;height:100%;border-radius:3px;background:#1fc3cf}
+.meter b.low{color:var(--sz-red-soft)}
+.bar > span.low{background:var(--sz-red-soft)}
+.rollFacts{display:grid;grid-template-columns:repeat(auto-fill,minmax(150px,1fr));gap:10px;margin:0}
+.rollFacts > div{padding:10px 12px;border-radius:10px;background:rgb(var(--sz-tint) / 0.035);border:1px solid rgb(var(--sz-tint) / 0.07);min-width:0}
+.rollFacts dt{font-size:11px;font-weight:600;color:var(--sz-fg-3);margin:0 0 3px}
+.rollFacts dd{margin:0;font-size:14px;color:var(--sz-fg);overflow-wrap:anywhere}
+.timeline{list-style:none;margin:0;padding:0;display:flex;flex-direction:column;gap:8px}
+.timeline li{display:flex;gap:14px;align-items:baseline;font-size:13px;color:var(--sz-fg-2);padding-inline-start:12px;border-inline-start:2px solid #1fc3cf55}
+.timeline time{flex:none;min-width:84px;font-size:12px;color:var(--sz-fg-3)}
+.timeline b{color:var(--sz-fg-1)}
+@media (max-width:640px){
+  .rollRow .carHead{flex-wrap:wrap}
+  .meter{align-items:flex-start;min-width:0}
+  .chevron{display:none}
+}

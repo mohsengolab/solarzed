@@ -31,10 +31,18 @@ public record HolderRow(string? Phone, string? Name, string? FirstName, string? 
 public record HolderDetail(string? Phone, string? Name, string? FirstName, string? LastName, string? ShopName, string? City, int Boxes,
     HeldBox[] Held, TransferView[] Transfers);
 /// <summary>A roll someone holds, with what the roll is: product, size, warranty years and film specs.</summary>
+/// <param name="LengthM">The roll's full length.</param>
+/// <param name="RemainingM">Meters left on the roll (null when usage is not tracked).</param>
+/// <param name="UsedM">Meters recorded on the installations made from this roll.</param>
+/// <param name="Installs">Installations (warranties) registered from this roll.</param>
 public record HeldBox(string Id, string Product, string Type, string? RollId, DateTime? HeldSince,
     string? ProductName = null, decimal? LengthM = null, decimal? WidthCm = null, int? FilmYears = null, int? InstallYears = null,
-    int? Vlt = null, int? Tser = null, int? Uv = null, int? Irr = null, decimal? ThicknessMil = null, bool Void = false);
-public record MyBoxes(HeldBox[] Boxes, TransferView[] Outgoing);
+    int? Vlt = null, int? Tser = null, int? Uv = null, int? Irr = null, decimal? ThicknessMil = null, bool Void = false,
+    decimal? RemainingM = null, decimal UsedM = 0, int Installs = 0, DateTime? ActivatedAt = null);
+/// <param name="Used">Rolls the account already started using on vehicles and still holds.</param>
+public record MyBoxes(HeldBox[] Boxes, TransferView[] Outgoing, HeldBox[]? Used = null);
+/// <summary>One roll the account holds, with every installation made from it and its hand-overs to or from the account.</summary>
+public record RollDetail(HeldBox Roll, InstallerWarranty[] Installs, TransferView[] History);
 
 /// <summary>
 /// Moves cartons between people using only the serial printed on the box. The company hands boxes to a
@@ -148,13 +156,21 @@ public class BoxTransferService(AppDbContext db)
             .Select(r => new { r.Id, r.WidthCm, r.LengthM, r.Status }).ToDictionaryAsync(r => r.Id);
         var codes = boxes.Select(x => x.Product).Distinct().ToList();
         var products = await db.Products.AsNoTracking().Where(p => codes.Contains(p.Code)).ToDictionaryAsync(p => p.Code);
+        var activated = boxes.Where(x => x.ActivatedAt != null).Select(x => x.Id).ToList();
+        var usage = await db.WarrantyRegistrations.AsNoTracking().Where(w => activated.Contains(w.FilmSerial))
+            .GroupBy(w => w.FilmSerial).Select(g => new { g.Key, Count = g.Count(), Used = g.Sum(w => w.UsedLengthM ?? 0) })
+            .ToDictionaryAsync(g => g.Key);
         return boxes.Select(x =>
         {
             var roll = x.RollId != null && rolls.TryGetValue(x.RollId, out var r) ? r : null;
             var p = products.GetValueOrDefault(x.Product);
+            var used = usage.GetValueOrDefault(x.Id);
+            // An unused carton still has its whole roll; a used one keeps the running balance recorded at each install.
+            var remaining = x.RemainingLengthM ?? (x.ActivatedAt == null ? roll?.LengthM : null);
             return new HeldBox(x.Id, x.Product, x.Type.ToString().ToLowerInvariant(), x.RollId, x.HeldSince,
-                NormalizeHolder(p?.Name), x.RemainingLengthM ?? roll?.LengthM, roll?.WidthCm, x.FilmYears, x.InstallYears,
-                p?.Vlt, p?.Tser, p?.Uv, p?.Irr, p?.ThicknessMil, roll?.Status == RollStatus.Void);
+                NormalizeHolder(p?.Name), roll?.LengthM ?? x.RemainingLengthM, roll?.WidthCm, x.FilmYears, x.InstallYears,
+                p?.Vlt, p?.Tser, p?.Uv, p?.Irr, p?.ThicknessMil, roll?.Status == RollStatus.Void,
+                remaining, used?.Used ?? 0, used?.Count ?? 0, x.ActivatedAt);
         }).ToArray();
     }
 
@@ -394,7 +410,28 @@ public class BoxTransferService(AppDbContext db)
             .OrderByDescending(x => x.HeldSince).Take(1000).ToListAsync();
         var outgoing = await db.BoxTransfers.AsNoTracking().Where(x => x.FromPhone == phone)
             .OrderByDescending(x => x.At).ThenByDescending(x => x.Id).Take(200).ToListAsync();
-        return new(await Held(boxes), outgoing.Select(View).ToArray());
+        var used = await db.BoxLabels.AsNoTracking().Where(x => x.HolderPhone == phone && x.ActivatedAt != null)
+            .OrderByDescending(x => x.ActivatedAt).Take(500).ToListAsync();
+        return new(await Held(boxes), outgoing.Select(View).ToArray(), await Held(used));
+    }
+
+    /// <summary>One roll the signed-in account holds: what it is, how much is left, the vehicles it went on and its hand-overs.</summary>
+    public async Task<RollDetail> Detail(string id, string phone)
+    {
+        var serial = NormalizeSerial(id);
+        // A roll held by someone else reads as not found, so ROLL NOs of other holders reveal nothing.
+        var label = await db.BoxLabels.AsNoTracking().FirstOrDefaultAsync(x => x.Id == serial && x.HolderPhone == phone)
+            ?? throw new ActivationError(404, "This roll is not in your account.");
+        var rows = await db.WarrantyRegistrations.AsNoTracking().Where(w => w.FilmSerial == label.Id)
+            .OrderByDescending(w => w.CreatedAt).Take(200).ToListAsync();
+        var codes = rows.Select(w => w.Code).ToArray();
+        var photos = await db.WarrantyPhotos.AsNoTracking().Where(p => codes.Contains(p.WarrantyCode)).GroupBy(p => p.WarrantyCode)
+            .Select(g => new { g.Key, Count = g.Count() }).ToDictionaryAsync(x => x.Key, x => x.Count);
+        var installs = rows.Select(w => new InstallerWarranty(WarrantyService.ToPublic(w), PortalService.MaskPhone(w.Phone), w.Country,
+            photos.GetValueOrDefault(w.Code), w.CreatedAt)).ToArray();
+        var history = await db.BoxTransfers.AsNoTracking().Where(x => x.LabelId == label.Id && (x.FromPhone == phone || x.ToPhone == phone))
+            .OrderByDescending(x => x.At).ThenByDescending(x => x.Id).Take(50).ToListAsync();
+        return new((await Held([label]))[0], installs, history.Select(View).ToArray());
     }
 
     sealed class NoSms : IActivationSmsSender

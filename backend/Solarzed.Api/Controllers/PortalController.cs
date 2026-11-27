@@ -222,6 +222,16 @@ public class PortalController(PortalService portal, BoxTransferService transfers
         return Ok(me.Phone is { } phone ? await transfers.Mine(phone) : new MyBoxes([], []));
     }
 
+    /// <summary>One roll the account holds, with the meters left, its installations and its hand-overs.</summary>
+    [HttpGet("boxes/{id}")]
+    public async Task<IActionResult> Box(string id)
+    {
+        var me = await Me();
+        if (me.Phone is not { } phone) return NotFound(new { error = "This roll is not in your account." });
+        try { return Ok(await transfers.Detail(id, phone)); }
+        catch (ActivationError ex) { return StatusCode(ex.Status, new { error = ex.Message }); }
+    }
+
     [HttpPost("boxes/transfer")]
     public async Task<IActionResult> Transfer(PortalTransferRequest request)
     {

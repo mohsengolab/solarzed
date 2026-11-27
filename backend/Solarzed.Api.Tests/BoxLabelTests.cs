@@ -239,6 +239,16 @@ public class BoxLabelTests
         var box = await f.Db.BoxLabels.AsNoTracking().SingleAsync();
         Assert.Equal(Installer, box.HolderPhone);
         Assert.Equal(label.CardCode, box.WarrantyCode);
+        // The installer's account lists the roll as in use, with its full length, meters used and left.
+        var transfers = new BoxTransferService(f.Db);
+        var mine = await transfers.Mine(Installer);
+        Assert.Empty(mine.Boxes);
+        var inUse = Assert.Single(mine.Used!);
+        Assert.Equal((150m, 120m, 30m, 1), (inUse.LengthM, inUse.RemainingM, inUse.UsedM, inUse.Installs));
+        var detail = await transfers.Detail(label.Id.ToLowerInvariant(), Installer);
+        Assert.Equal("TEST123", Assert.Single(detail.Installs).Warranty.Plate);
+        Assert.Contains(detail.History, h => h.Note == "Warranty activated");
+        await Error(404, () => transfers.Detail(label.Id, "09124444444"));
         await Error(409, () => f.Service.Activate(request, Installer, partner, Photos()));
         var another = request with { Registration = request.Registration with { Vin = "JTDBE32K123456788", Plate = "OTHER123" }, UsedLengthM = 120m };
         Assert.False((await f.Service.Info(Serial, "09124444444", installer: true)).CanRegister);

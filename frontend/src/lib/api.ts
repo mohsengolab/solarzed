@@ -619,8 +619,14 @@ export interface HeldBox {
   id: string; product: string; type: "tint" | "ppf"; rollId: string; heldSince: string | null;
   productName?: string | null; lengthM?: number | null; widthCm?: number | null; filmYears?: number | null; installYears?: number | null;
   vlt?: number | null; tser?: number | null; uv?: number | null; irr?: number | null; thicknessMil?: number | null; void?: boolean;
+  /** lengthM is the full roll; remainingM what is left (null when not tracked); usedM the meters recorded on its installations. */
+  remainingM?: number | null; usedM?: number; installs?: number; activatedAt?: string | null;
 }
-export function portalBoxes() { return apiFetch<{ boxes: HeldBox[]; outgoing: BoxTransfer[] }>("/api/portal/boxes"); }
+/** used: rolls already started on vehicles that the account still holds. */
+export function portalBoxes() { return apiFetch<{ boxes: HeldBox[]; outgoing: BoxTransfer[]; used?: HeldBox[] | null }>("/api/portal/boxes"); }
+/** One held roll with every installation made from it and its hand-overs to or from this account. */
+export interface RollDetail { roll: HeldBox; installs: InstallerWarranty[]; history: BoxTransfer[] }
+export function portalBox(id: string) { return apiFetch<RollDetail>(`/api/portal/boxes/${encodeURIComponent(id)}`); }
 /** Who a mobile or email belongs to. registered=false: a new mobile; the transfer creates the account. */
 export interface Recipient { registered: boolean; name: string | null; shopName: string | null; phone: string | null; email: string | null; partner: boolean }
 export function portalRecipient(by: { phone?: string; email?: string }) {

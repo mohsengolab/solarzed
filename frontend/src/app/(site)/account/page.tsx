@@ -17,6 +17,7 @@ import type { CountryCode } from "libphonenumber-js/mobile";
 import ActivationFlow from "../activate/ActivationFlow";
 import InstallerSection, { toCars } from "./InstallerSection";
 import { Empty, ListToolbar, Pager, useListView } from "./ListTools";
+import RollCards from "./RollCards";
 import { LOCALES, formatDate, formatStamp, type T } from "@/lib/i18n";
 import { useLang, useT } from "@/lib/i18n/client";
 import styles from "../activate/activate.module.css";
@@ -84,6 +85,7 @@ export default function AccountPage() {
   const [checked, setChecked] = useState(false);
   const [boxes, setBoxes] = useState<HeldBox[]>([]);
   const [outgoing, setOutgoing] = useState<BoxTransfer[]>([]);
+  const [usedBoxes, setUsedBoxes] = useState<HeldBox[]>([]);
   const [warranties, setWarranties] = useState<WarrantyPublic[]>([]);
   const [installs, setInstalls] = useState<InstallerWarranty[]>([]);
   const [list, setSerials] = useState<string[]>([]);
@@ -170,6 +172,7 @@ export default function AccountPage() {
   const ticketList = useListView(sortedTickets, ticketText, ticketStatus);
   const warrantyList = useListView(warranties, warrantyText, warrantyStatus);
   const boxList = useListView(boxes, boxText, boxType);
+  const usedList = useListView(usedBoxes, boxText, boxType);
   const outList = useListView(outgoing, outText, none);
 
   // Keep the ticket list and the open conversation live: a staff reply shows up without a page reload.
@@ -212,7 +215,7 @@ export default function AccountPage() {
 
   async function load() {
     const [b, w, t] = await Promise.all([portalBoxes(), portalWarranties(), portalTickets()]);
-    setBoxes(b.boxes); setOutgoing(b.outgoing); setWarranties(w.warranties); setTickets(t.tickets);
+    setBoxes(b.boxes); setOutgoing(b.outgoing); setUsedBoxes(b.used ?? []); setWarranties(w.warranties); setTickets(t.tickets);
   }
 
   useEffect(() => {
@@ -393,19 +396,8 @@ export default function AccountPage() {
               {boxes.length > 0 && <ListToolbar view={boxList} placeholder={t("Search ROLL NO or product…")} filters={[["tint", t("Window film")], ["ppf", "PPF"]] as const} />}
               {!boxes.length ? <Empty title={t("No rolls in your account")}><span>{t("When Solarzed or a seller transfers rolls to your mobile, they appear here.")}</span></Empty>
                 : !boxList.matches.length ? <Empty title={t("Nothing matches your search")} /> : <>
-                <div className={own.scroll}><table className={own.table}>
-                  <thead><tr>
-                    <th><input type="checkbox" aria-label={t("Select all rolls on this page")} checked={pageRolls.length > 0 && pageRolls.every(id => list.includes(id))}
-                      onChange={e => setSerials(items => e.target.checked ? [...new Set([...items, ...pageRolls])] : items.filter(id => !pageRolls.includes(id)))} /></th>
-                    <th>ROLL NO</th><th>{t("Product")}</th><th>{t("Size")}</th><th>{t("Warranty")}</th><th>{t("Specs")}</th><th>{t("Since")}</th></tr></thead>
-                  <tbody>{boxList.rows.map(box => <tr key={box.id} className={list.includes(box.id) ? own.picked : undefined}
-                    onClick={event => { if (!box.void && !(event.target as HTMLElement).closest("input,a,button")) toggleRoll(box.id); }}>
-                    <td><input type="checkbox" aria-label={t("Select {id}", { id: box.id })} disabled={box.void} checked={list.includes(box.id)} onChange={() => toggleRoll(box.id)} /></td>
-                    <td><code dir="ltr">{box.id}</code>{box.void && <span className={own.badge}>{t("Void")}</span>}</td>
-                    <td>{box.productName ? <>{box.productName}<br /><small className={own.muted}>{box.product} · {box.type.toUpperCase()}</small></> : <>{box.product} · {box.type.toUpperCase()}</>}</td>
-                    <td dir="ltr">{rollSize(box)}</td><td>{rollYears(t, box)}</td><td dir="ltr"><small>{rollSpecs(box)}</small></td><td>{date(box.heldSince)}</td>
-                  </tr>)}</tbody>
-                </table></div>
+                <RollCards rolls={boxList.rows} phone={user.phone ?? ""} selected={list} onToggle={toggleRoll}
+                  onToggleAll={on => setSerials(items => on ? [...new Set([...items, ...pageRolls])] : items.filter(id => !pageRolls.includes(id)))} />
                 <Pager page={boxList.page} pages={boxList.pages} setPage={boxList.setPage} shown={boxList.rows.length} matched={boxList.matches.length} />
               </>}
   </>;
@@ -521,7 +513,7 @@ export default function AccountPage() {
           </section> : <>
             {view === "rolls" && <section>
               <h2>{t("Unused rolls in your account")}</h2>
-              <p>{t("Every roll transferred to your mobile and not yet used on a vehicle, with its features. Tick rolls to transfer them.")} <b dir="ltr">{user.phone}</b></p>
+              <p>{t("Every roll transferred to your mobile and not yet used on a vehicle. Open a roll to see all its details and meters left; tick rolls to transfer them.")} <b dir="ltr">{user.phone}</b></p>
               {rollPicker}
                 {boxes.length > 0 && list.length > 0 && <div className={own.pickBar} role="status">
                   <b>{t("{n} roll(s) selected", { n: list.length })}</b>
@@ -578,6 +570,16 @@ export default function AccountPage() {
               </form>
               </>}
             </section>)}
+
+            {view === "rolls" && usedBoxes.length > 0 && <section>
+              <h2>{t("Rolls in use")}</h2>
+              <p>{t("Rolls you started on vehicles. Open a roll to see the meters left and every vehicle and warranty it was used for.")}</p>
+              <ListToolbar view={usedList} placeholder={t("Search ROLL NO or product…")} filters={[["tint", t("Window film")], ["ppf", "PPF"]] as const} />
+              {!usedList.matches.length ? <Empty title={t("Nothing matches your search")} /> : <>
+                <RollCards rolls={usedList.rows} phone={user.phone ?? ""} />
+                <Pager page={usedList.page} pages={usedList.pages} setPage={usedList.setPage} shown={usedList.rows.length} matched={usedList.matches.length} />
+              </>}
+            </section>}
 
             {view === "rolls" && outgoing.length > 0 && <section>
               <h2>{t("Rolls you transferred")}</h2>
