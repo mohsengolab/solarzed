@@ -91,7 +91,8 @@ public class PortalController(PortalService portal, BoxTransferService transfers
     {
         var me = await Me();
         var shop = me.ShopName;
-        PortalService.ApplyProfile(me, request);
+        try { PortalService.ApplyProfile(me, request); }
+        catch (ActivationError ex) { return StatusCode(ex.Status, new { error = ex.Message }); }
         if (shop != me.ShopName) AuditLog.Add(db, "portal:" + me.Phone, "partner", me.Phone ?? me.Email ?? "", "renamed", AuditLog.Diff(("shop", shop, me.ShopName)));
         try { await db.SaveChangesAsync(); }
         catch (DbUpdateConcurrencyException) { return Conflict(new { error = "Please retry saving your profile." }); }

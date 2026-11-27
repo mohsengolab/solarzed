@@ -38,4 +38,16 @@ public class ProfileTests
         PortalService.ApplyProfile(user, Req(null) with { Latitude = 35.7 });
         Assert.Null(user.Latitude);
     }
+
+    [Fact]
+    public void Contact_email_is_saved_lowercased_cleared_or_rejected()
+    {
+        var user = new PortalUser { Phone = "09121111111" };
+        PortalService.ApplyProfile(user, Req(null) with { ContactEmail = "  Ali@Example.COM " });
+        Assert.Equal("ali@example.com", user.ContactEmail);
+        Assert.Null(user.Email);
+        PortalService.ApplyProfile(user, Req(null) with { ContactEmail = "" });
+        Assert.Null(user.ContactEmail);
+        Assert.Throws<ActivationError>(() => PortalService.ApplyProfile(user, Req(null) with { ContactEmail = "not-an-email" }));
+    }
 }

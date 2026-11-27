@@ -574,6 +574,8 @@ export interface PortalUser {
   firstName: string | null; lastName: string | null; country: string | null; city: string | null; job: string | null;
   /** Where the user is, picked on the profile map; both null when not set. */
   latitude?: number | null; longitude?: number | null;
+  /** Contact email typed in the profile (unverified; not a sign-in identifier). */
+  contactEmail?: string | null;
   /** Installer partner (همکار) status; only "approved" partners register warranties for customers. */
   partner?: "none" | "pending" | "approved" | "suspended"; shopName?: string | null;
 }
@@ -591,7 +593,7 @@ export function portalLogin(challengeId: string, code: string) {
 export function portalLogout() { return apiFetch<{ ok: boolean }>("/api/portal/logout", { method: "POST" }); }
 
 /** Saves the profile: first/last name, country, city, job and map location (null clears it). */
-export function portalProfile(data: { name?: string; company?: string; firstName?: string; lastName?: string; country?: string; city?: string; job?: string; latitude?: number | null; longitude?: number | null }) {
+export function portalProfile(data: { name?: string; company?: string; firstName?: string; lastName?: string; country?: string; city?: string; job?: string; contactEmail?: string; latitude?: number | null; longitude?: number | null }) {
   return apiFetch<PortalUser>("/api/portal/profile", { method: "POST", body: JSON.stringify(data) });
 }
 /** Starts the bind challenge for a new mobile number or email address; complete it with portalBindVerify. */

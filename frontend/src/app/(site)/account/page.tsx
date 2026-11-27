@@ -58,7 +58,7 @@ const WARRANTY_FILTERS = [["active", "Active"], ["pending", "In review"], ["reje
 const WARRANTY_STATUS = { active: "Active", pending: "In review", rejected: "Sent back" } as const;
 
 // country holds the ISO code picked in the country list; a free-text country saved before the list existed stays in countryText.
-const emptyProfile = { firstName: "", lastName: "", company: "", country: "" as CountryCode | "", countryText: "", city: "", job: "", location: null as LatLng | null };
+const emptyProfile = { firstName: "", lastName: "", company: "", country: "" as CountryCode | "", countryText: "", city: "", job: "", contactEmail: "", location: null as LatLng | null };
 
 const warrantyText = (w: WarrantyPublic) => [w.make, w.model, w.plate, w.filmSerial, w.invoiceNumber].join(" ");
 const warrantyStatus = (w: WarrantyPublic) => w.status;
@@ -211,7 +211,7 @@ export default function AccountPage() {
     if (u) setProfile({
       firstName: u.firstName ?? "", lastName: u.lastName ?? "", company: u.shopName ?? "",
       country: countryFromText(u.country)?.code ?? countryOfPhone(u.phone) ?? "", countryText: u.country ?? "",
-      city: u.city ?? "", job: u.job ?? "",
+      city: u.city ?? "", job: u.job ?? "", contactEmail: u.contactEmail ?? u.email ?? "",
       location: u.latitude != null && u.longitude != null ? { lat: u.latitude, lng: u.longitude } : null,
     });
   }
@@ -680,6 +680,7 @@ export default function AccountPage() {
                   onChange={e => setProfile({ ...profile, city: e.target.value })} />
                   <datalist id="profile-cities">{citiesOf(profile.country, lang).map(c => <option key={c} value={c} />)}</datalist></label>
                 <label>{t("Job / business")}<input maxLength={100} placeholder={t("e.g. shop, installer, driver")} value={profile.job} onChange={e => setProfile({ ...profile, job: e.target.value })} /></label>
+                <label>{t("Email")}<input type="email" dir="ltr" maxLength={254} autoComplete="email" placeholder="you@example.com" value={profile.contactEmail} onChange={e => setProfile({ ...profile, contactEmail: e.target.value })} /></label>
               </div>
               <div className={own.field}>
                 <span>{t("Location on the map")}</span>
@@ -693,7 +694,7 @@ export default function AccountPage() {
             <h2>{t("Sign-in & contact")}</h2>
             <dl className={own.facts}>
               <dt>{t("Mobile")}</dt><dd dir="ltr" className={own.phoneFact}>{user.phone && countryOfPhone(user.phone) && <Flag code={countryOfPhone(user.phone)!} />}{user.phone ?? t("not set")}</dd>
-              <dt>{t("Email")}</dt><dd dir="ltr">{user.email ?? t("not set")}</dd>
+              {(EMAIL_VERIFICATION || user.email) && <><dt>{t("Email")}</dt><dd dir="ltr">{user.email ?? t("not set")}</dd></>}
             </dl>
             <p className={own.muted}>{t("Rolls are transferred to your mobile and warranty cards are registered to it.")}</p>
             {(!user.phone || (EMAIL_VERIFICATION && !user.email)) && <div className={own.form}>

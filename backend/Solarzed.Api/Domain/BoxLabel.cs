@@ -75,6 +75,8 @@ public class PortalUser
     [MaxLength(100)] public string? Country { get; set; }
     [MaxLength(100)] public string? City { get; set; }
     [MaxLength(100)] public string? Job { get; set; }
+    // Contact email typed in the profile; not verified and never used to sign in (that is Email above).
+    [MaxLength(254)] public string? ContactEmail { get; set; }
     // Where the user is, picked on the map in the profile (WGS84 degrees); both set or both null.
     public double? Latitude { get; set; }
     public double? Longitude { get; set; }
