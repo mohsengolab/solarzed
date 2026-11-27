@@ -744,5 +744,8 @@ const ar: Record<string, string> = {
   "Rolls in use": "لفّات قيد الاستخدام",
   "Rolls you started on vehicles. Open a roll to see the meters left and every vehicle and warranty it was used for.": "لفّات بدأت استخدامها على المركبات. افتح اللفّة لترى الأمتار المتبقية وكل مركبة وضمان استُخدمت لها.",
   "This roll is not in your account.": "هذه اللفّة ليست في حسابك.",
+  "QR code of {id}": "رمز QR للّفّة {id}",
+  "Download QR": "تنزيل رمز QR",
+  "The QR code on this roll's warranty card. Scan it to register another vehicle from this roll.": "رمز QR الموجود على بطاقة ضمان هذه اللفّة. امسحه لتسجيل مركبة أخرى من هذه اللفّة.",
 };
 export default ar;

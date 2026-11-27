@@ -744,5 +744,8 @@ const fa: Record<string, string> = {
   "Rolls in use": "رول‌های در حال مصرف",
   "Rolls you started on vehicles. Open a roll to see the meters left and every vehicle and warranty it was used for.": "رول‌هایی که مصرفشان را روی خودرو شروع کرده‌اید. روی هر رول بزنید تا متراژ باقی‌مانده و همهٔ خودروها و گارانتی‌هایی که با آن ثبت شده را ببینید.",
   "This roll is not in your account.": "این رول در حساب شما نیست.",
+  "QR code of {id}": "کد QR رول {id}",
+  "Download QR": "دانلود QR",
+  "The QR code on this roll's warranty card. Scan it to register another vehicle from this roll.": "کد QR کارت گارانتی این رول. برای ثبت خودروی دیگری با همین رول، آن را اسکن کنید.",
 };
 export default fa;

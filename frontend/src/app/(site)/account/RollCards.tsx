@@ -1,6 +1,7 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
+import QRCode from "qrcode";
 import { portalBox, type HeldBox, type RollDetail } from "@/lib/api";
 import InstallationPhotos from "@/components/InstallationPhotos";
 import { LOCALES, formatDate, type T } from "@/lib/i18n";
@@ -80,6 +81,7 @@ export default function RollCards({ rolls, phone, selected, onToggle, onToggleAl
           </button>
         </div>
         {expanded && <div className={own.carBody}>
+          {box.activatedAt && box.rollId && <RollQr serial={box.rollId} t={t} />}
           <RollFacts box={box} t={t} n={n} date={date} />
           {!detail ? <p className={own.muted}>{t("Loading…")}</p>
             : "error" in detail ? <p role="alert" className={own.reason}>{detail.error}</p>
@@ -120,6 +122,26 @@ export default function RollCards({ rolls, phone, selected, onToggle, onToggleAl
 
 const rollYearsText = (t: T, b: HeldBox) => [b.filmYears ? t("Film {n} yr", { n: b.filmYears }) : null, b.installYears ? t("Install {n} yr", { n: b.installYears }) : null]
   .filter(Boolean).join(" · ") || null;
+
+/** The warranty card's QR (it holds the roll's Serial Number), shown once the roll was activated on a vehicle. */
+function RollQr({ serial, t }: { serial: string; t: T }) {
+  const [src, setSrc] = useState("");
+  useEffect(() => {
+    let live = true;
+    QRCode.toDataURL(serial, { errorCorrectionLevel: "M", margin: 4, scale: 8 }).then(url => { if (live) setSrc(url); }).catch(() => undefined);
+    return () => { live = false; };
+  }, [serial]);
+  return <div className={own.rollQr}>
+    {/* eslint-disable-next-line @next/next/no-img-element */}
+    {src ? <img src={src} width={132} height={132} alt={t("QR code of {id}", { id: serial })} /> : <span className={own.qrBlank} />}
+    <div>
+      <small>{t("Serial Number")}</small>
+      <code dir="ltr">{serial}</code>
+      <p className={own.muted}>{t("The QR code on this roll's warranty card. Scan it to register another vehicle from this roll.")}</p>
+      {src && <a className={own.ghost} href={src} download={`${serial}.png`}>{t("Download QR")}</a>}
+    </div>
+  </div>;
+}
 
 /** Everything recorded about the roll itself. */
 function RollFacts({ box, t, n, date }: { box: HeldBox; t: T; n: (v: number) => string; date: (v: string | null | undefined) => string }) {
