@@ -558,7 +558,7 @@ export function releaseRoll(id: string) {
 }
 
 // ── Warranty card activation (public) ──
-export interface ActivationInfo { id: string; product: string; type: "tint" | "ppf"; activated: boolean; filmYears: number; installYears: number | null; smsAvailable: boolean; released: boolean; warrantyCode: string | null; canRegister: boolean; remainingLengthM: number | null }
+export interface ActivationInfo { id: string; product: string; type: "tint" | "ppf"; activated: boolean; filmYears: number; installYears: number | null; smsAvailable: boolean; released: boolean; warrantyCode: string | null; canRegister: boolean; remainingLengthM: number | null; widthCm?: number | null }
 export interface ActivationResult { warranty: WarrantyPublic; remainingLengthM: number | null }
 export function inspectBox(token: string) {
   return apiFetch<ActivationInfo>("/api/activation/inspect", { method: "POST", body: JSON.stringify({ token }) });

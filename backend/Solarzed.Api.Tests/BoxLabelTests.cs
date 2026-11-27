@@ -258,10 +258,10 @@ public class BoxLabelTests
         Assert.NotEqual(first.Code, second.Code);
         Assert.Equal("OTHER123", second.Warranty.Plate);
         Assert.Equal(0m, second.RemainingLengthM);
-        // A roll has no fixed vehicle count: meters are optional and a "used up" balance never blocks the holder.
+        // A roll has no fixed vehicle count: a "used up" balance never blocks the holder, but the meters are required.
         Assert.True((await f.Service.Info(Serial, Installer, installer: true)).CanRegister);
-        var third = await f.Service.Activate(another with { Registration = request.Registration with { Vin = "JTDBE32K123456787", Plate = "THIRD123" }, UsedLengthM = null }, Installer, partner, Photos());
-        Assert.Null(third.Warranty.UsedLengthM);
+        await Error(400, () => f.Service.Activate(another with { Registration = request.Registration with { Vin = "JTDBE32K123456787", Plate = "THIRD123" }, UsedLengthM = null }, Installer, partner, Photos()));
+        var third = await f.Service.Activate(another with { Registration = request.Registration with { Vin = "JTDBE32K123456787", Plate = "THIRD123" }, UsedLengthM = 4m }, Installer, partner, Photos());
         Assert.Equal(0m, third.RemainingLengthM);
         // Meters beyond the roll's balance are accepted but flagged for the counter.
         var fourth = await f.Service.Activate(another with { Registration = request.Registration with { Vin = "JTDBE32K123456786", Plate = "FOURTH12" }, UsedLengthM = 5m }, Installer, partner, Photos());
@@ -321,7 +321,7 @@ public class BoxLabelTests
         for (var i = 0; i < 8; i++)
         {
             var reg = Registration() with { Vin = $"JTDBE32K12345{i:0000}", Plate = $"PLATE{i}" };
-            var done = await f.Service.Activate(new ActivateBoxRequest(Serial, reg, null, Customer), Installer, partner, Photos());
+            var done = await f.Service.Activate(new ActivateBoxRequest(Serial, reg, 4m, Customer), Installer, partner, Photos());
             flags.Add(JsonSerializer.Deserialize<string[]>((await f.Db.WarrantyRegistrations.AsNoTracking().SingleAsync(x => x.Code == done.Code)).FlagsJson)!);
         }
         Assert.All(flags.Take(6), x => Assert.Empty(x));

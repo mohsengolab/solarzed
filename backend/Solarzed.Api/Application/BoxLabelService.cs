@@ -15,7 +15,7 @@ public record LabelView(string Id, string? RollId, string Product, string Type, 
     string? FactoryCode, string? CardCode, string? FullCode, decimal? RemainingLengthM);
 public record LabelSerialView(string Id, string? RollId, string Product, string Type, DateTime CreatedAt, DateTime? ActivatedAt, string? Holder, string? HolderPhone, DateTime? HeldSince);
 public record ActivationInfo(string Id, string Product, string Type, bool Activated, int FilmYears, int? InstallYears, bool SmsAvailable, bool Released,
-    string? FactoryCode, string? WarrantyCode, bool CanRegister, decimal? RemainingLengthM);
+    string? FactoryCode, string? WarrantyCode, bool CanRegister, decimal? RemainingLengthM, decimal? WidthCm = null);
 public record ActivateBoxRequest(string Token, RegisterRequest Registration, decimal? UsedLengthM = null,
     string? CustomerPhone = null, string? Country = null);
 public record PhotoUpload(string Kind, string ContentType, byte[] Data);
@@ -266,7 +266,7 @@ public class BoxLabelService(AppDbContext db, IDataProtectionProvider protection
         // The Serial Number is what the installer sees; the warranty number stays hidden until registration.
         return new(label.RollId ?? label.Id, label.Product, label.Type.ToString().ToLowerInvariant(), started,
             label.FilmYears, label.InstallYears, sms.Configured, released, null, null,
-            canRegister, !started || canRegister ? remaining : null);
+            canRegister, !started || canRegister ? remaining : null, roll?.WidthCm);
     }
 
     public SmsPolicy Policy => SmsPolicy.From(config);
@@ -332,11 +332,13 @@ public class BoxLabelService(AppDbContext db, IDataProtectionProvider protection
         // Only activated cartons outlive their roll; they were released when first used.
         if (roll == null && first) throw new ActivationError(409, "Product unavailable.");
         if (roll != null) Eligible(roll);
-        // Meters used are optional: nobody measures the film at install time. When given they only feed the
-        // roll's running balance and the over-use flag; they never block a registration.
+        // Meters used are required for window film: they must cover every selected glass's minimum length, and feed
+        // the roll's running balance and the over-use flag.
         var remaining = Remaining(label, roll);
         if (req.UsedLengthM is { } given && (given <= 0 || decimal.Round(given, 2) != given))
-            throw new ActivationError(400, "Enter a positive used length in meters with up to two decimal places, or leave it empty.");
+            throw new ActivationError(400, "Enter a positive used length in meters with up to two decimal places.");
+        if (label.Type == WarrantyType.Tint && WarrantyService.CheckFilmLength(req.Registration.Windows ?? [], req.UsedLengthM, roll?.WidthCm) is { } filmError)
+            throw new ActivationError(400, filmError);
         // Product type/serial are always server-bound, never trusted from the form.
         var request = req.Registration with { Type = label.Type.ToString().ToLowerInvariant(), FilmSerial = label.Id, Phone = ownerPhone };
         // A partner's registrations always carry the partner's own shop name, never free text.
@@ -349,7 +351,7 @@ public class BoxLabelService(AppDbContext db, IDataProtectionProvider protection
         if (error != null) throw new ActivationError(400, error);
         // Honor the existing database field sizes.
         if (request.Make.Length > 100 || request.Model.Length > 100 || request.Owner.Length > 200 ||
-            request.Plate.Length > 20 || request.InvoiceNumber.Length > 60 || request.SellerName.Length > 200 || request.Installer.Length > 200)
+            request.Plate.Length > 20 || (request.InvoiceNumber?.Length ?? 0) > 60 || request.SellerName.Length > 200 || request.Installer.Length > 200)
             throw new ActivationError(400, "One or more fields are too long.");
         var registration = entity!;
         if (await db.WarrantyRegistrations.AnyAsync(x =>

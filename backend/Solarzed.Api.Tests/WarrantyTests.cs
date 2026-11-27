@@ -55,21 +55,23 @@ public class WarrantyTests
     }
 
     [Fact]
-    public void RejectsFilmCutsBelowTheMinimumForEachGlass()
+    public void FilmUsedMustCoverEverySelectedGlass()
     {
-        var sizes = Request().GlassSizes!;
-        Assert.NotNull(WarrantyService.Validate(Request() with { GlassSizes = null }).Error);
-        Assert.NotNull(WarrantyService.Validate(Request() with { GlassSizes = new(sizes) { ["left-front"] = new(79, 50) } }).Error);
-        Assert.NotNull(WarrantyService.Validate(Request() with { GlassSizes = new(sizes) { ["right-front"] = new(80, 49) } }).Error);
-        Assert.NotNull(WarrantyService.Validate(Request() with { GlassSizes = new(sizes) { ["rear"] = new(99, 60) } }).Error);
-        var windshield = Request() with { Windows = ["windshield", "sunroof"], GlassSizes = new() { ["windshield"] = new(100, 99), ["sunroof"] = new(30, 20) } };
-        Assert.NotNull(WarrantyService.Validate(windshield).Error);
-        var ok = WarrantyService.Validate(windshield with { GlassSizes = new() { ["windshield"] = new(100, 100), ["sunroof"] = new(30, 20) } });
-        Assert.Null(ok.Error);
-        Assert.Contains("windshield", ok.Entity!.GlassSizesJson);
-        // Staff typing in old paperwork may leave the sizes out.
-        Assert.Null(WarrantyService.Validate(Request() with { GlassSizes = null }, requireGlassSizes: false).Error);
+        string[] sides = ["left-front", "right-front", "left-rear", "right-rear"];
+        Assert.NotNull(WarrantyService.CheckFilmLength(sides, null, null));          // meters are required
+        Assert.NotNull(WarrantyService.CheckFilmLength(sides, 2m, null));            // 4 × 80 cm = 3.2 m
+        Assert.Null(WarrantyService.CheckFilmLength(sides, 3.2m, null));
+        Assert.NotNull(WarrantyService.CheckFilmLength(["rear"], 0.99m, null));     // rear needs 1 m
+        Assert.Null(WarrantyService.CheckFilmLength(["rear"], 1m, 50m));
+        Assert.NotNull(WarrantyService.CheckFilmLength(["windshield"], 0.9m, 100m)); // windshield needs 1 m long
+        Assert.NotNull(WarrantyService.CheckFilmLength(["windshield"], 5m, 50m));    // ...and a roll 1 m wide
+        Assert.Null(WarrantyService.CheckFilmLength(["windshield"], 1m, 100m));
+        Assert.Null(WarrantyService.CheckFilmLength(["windshield"], 1m, null));      // width not recorded
     }
+
+    [Fact]
+    public void InvoiceNumberIsOptional() =>
+        Assert.Null(WarrantyService.Validate(Request() with { InvoiceNumber = "", GlassSizes = null }).Error);
 
     [Theory]
     [InlineData("2026-02-31")]

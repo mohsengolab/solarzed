@@ -10,12 +10,12 @@ namespace Solarzed.Api.Application;
 public record RegisterRequest(
     string Type,
     string Make, string Model, string Owner, string Phone, string Plate, string Vin,
-    string FilmSerial, string InvoiceNumber, string Installed,
+    string FilmSerial, string? InvoiceNumber, string Installed,
     string SellerName, string SellerPhone, string Installer,
     string[]? Windows, string[]? Panels,
     Dictionary<string, GlassSize>? GlassSizes = null);
 
-/// <summary>The size of the film cut for one glass, in centimetres.</summary>
+/// <summary>The size of the film cut for one glass, in centimetres (older clients only; no longer asked for).</summary>
 public record GlassSize(decimal LengthCm, decimal WidthCm);
 
 /// <summary>What the owner and installer see of a warranty. <c>Ref</c> is an opaque handle: the warranty number itself is never shown to them.</summary>
@@ -45,26 +45,30 @@ public static class WarrantyService
         "left-front-fender", "right-front-fender", "left-doors", "right-doors",
         "left-rear-quarter", "right-rear-quarter", "mirrors"];
 
-    /// <summary>Smallest film cut (length, width in cm) accepted per glass; a smaller piece cannot be registered.</summary>
-    public static readonly IReadOnlyDictionary<string, (decimal Length, decimal Width)> MinGlassSize = new Dictionary<string, (decimal, decimal)>
+    /// <summary>Shortest film length (cm) each glass takes; the meters used must cover the sum for the selected glass.</summary>
+    public static readonly IReadOnlyDictionary<string, decimal> MinGlassLengthCm = new Dictionary<string, decimal>
     {
-        ["windshield"] = (100, 100),
-        ["left-front"] = (80, 50), ["right-front"] = (80, 50), ["left-rear"] = (80, 50), ["right-rear"] = (80, 50),
-        ["rear"] = (100, 0),
-        ["sunroof"] = (0, 0),
+        ["windshield"] = 100,
+        ["left-front"] = 80, ["right-front"] = 80, ["left-rear"] = 80, ["right-rear"] = 80,
+        ["rear"] = 100,
+        ["sunroof"] = 0,
     };
 
-    /// <summary>Every selected glass needs its film size, at least the minimum for that glass.</summary>
-    static string? CheckGlassSizes(string[] windows, Dictionary<string, GlassSize>? sizes)
+    /// <summary>The windshield needs film at least this wide (cm); a narrower roll cannot cover it.</summary>
+    public const decimal WindshieldMinWidthCm = 100;
+
+    /// <summary>
+    /// Why the film used can't cover the selected glass, or null. The meters are required, must reach the sum of each
+    /// glass's minimum length, and a windshield needs a roll at least 100 cm wide (when the roll's width is known).
+    /// </summary>
+    public static string? CheckFilmLength(string[] windows, decimal? usedM, decimal? rollWidthCm)
     {
-        foreach (var w in windows)
-        {
-            if (sizes == null || !sizes.TryGetValue(w, out var size) || size.LengthCm <= 0 || size.WidthCm <= 0 || size.LengthCm > 1000 || size.WidthCm > 1000)
-                return $"enter the film length and width for {w}";
-            var (minLength, minWidth) = MinGlassSize[w];
-            if (size.LengthCm < minLength || size.WidthCm < minWidth)
-                return $"the film for {w} must be at least {minLength} cm long" + (minWidth > 0 ? $" and {minWidth} cm wide" : "");
-        }
+        if (windows.Contains("windshield") && rollWidthCm is { } width && width < WindshieldMinWidthCm)
+            return $"This roll is {width:0.##} cm wide; the windshield needs film at least {WindshieldMinWidthCm:0} cm wide.";
+        if (usedM is not { } used || used <= 0) return "Enter the film used in meters.";
+        var needed = windows.Sum(w => MinGlassLengthCm.TryGetValue(w, out var cm) ? cm : 0) / 100m;
+        if (used < needed)
+            return $"{used:0.##} m of film cannot cover the {windows.Length} selected windows; they need at least {needed:0.##} m.";
         return null;
     }
 
@@ -92,7 +96,7 @@ public static class WarrantyService
         return "SZ-" + new string(code);
     }
 
-    public static (string? Error, WarrantyRegistration? Entity) Validate(RegisterRequest req, int codeLength = 16, bool requireGlassSizes = true)
+    public static (string? Error, WarrantyRegistration? Entity) Validate(RegisterRequest req, int codeLength = 16)
     {
         if (string.IsNullOrWhiteSpace(req.Make)) return ("make required", null);
         if (string.IsNullOrWhiteSpace(req.Model)) return ("model required", null);
@@ -101,7 +105,6 @@ public static class WarrantyService
         if (string.IsNullOrWhiteSpace(req.Plate)) return ("plate required", null);
         if (string.IsNullOrWhiteSpace(req.Vin)) return ("vin required", null);
         if (string.IsNullOrWhiteSpace(req.FilmSerial)) return ("filmSerial required", null);
-        if (string.IsNullOrWhiteSpace(req.InvoiceNumber)) return ("invoiceNumber required", null);
         if (string.IsNullOrWhiteSpace(req.Installed)) return ("installed required", null);
         if (string.IsNullOrWhiteSpace(req.SellerName)) return ("sellerName required", null);
         if (string.IsNullOrWhiteSpace(req.SellerPhone)) return ("sellerPhone required", null);
@@ -133,12 +136,6 @@ public static class WarrantyService
             areas = req.Windows ?? [];
             var invalid = areas.Except(ValidWindows).ToArray();
             if (invalid.Length > 0) return ($"unknown windows: {string.Join(", ", invalid)}", null);
-            // Customers and installers must give each glass's film size; staff entering old paperwork may leave it out.
-            if (requireGlassSizes || req.GlassSizes != null)
-            {
-                var sizeError = CheckGlassSizes(areas, req.GlassSizes);
-                if (sizeError != null) return (sizeError, null);
-            }
         }
         else
         {
@@ -162,13 +159,13 @@ public static class WarrantyService
             Plate = req.Plate.Trim().ToUpperInvariant(),
             Vin = vin,
             FilmSerial = req.FilmSerial.Trim(),
-            InvoiceNumber = req.InvoiceNumber.Trim(),
+            InvoiceNumber = (req.InvoiceNumber ?? "").Trim(),  // optional
             Installed = installed,
             SellerName = req.SellerName.Trim(),
             SellerPhone = sellerPhone,
             Installer = req.Installer.Trim(),
             AreasJson = JsonSerializer.Serialize(areas),
-            GlassSizesJson = type == WarrantyType.Tint && req.GlassSizes != null
+            GlassSizesJson = type == WarrantyType.Tint && req.GlassSizes != null && areas.All(req.GlassSizes.ContainsKey)
                 ? JsonSerializer.Serialize(areas.ToDictionary(a => a, a => req.GlassSizes[a])) : null,
             FlagsJson = "[]"
         };

@@ -8,7 +8,7 @@ import PortalSignIn from "@/components/PortalSignIn";
 import ScanButton from "@/components/ScanButton";
 import { makeT, type T } from "@/lib/i18n";
 import { useLang, useT } from "@/lib/i18n/client";
-import CarWindows, { PANEL_LABELS, glassSizeProblem, type GlassSizes } from "./CarWindows";
+import CarWindows, { PANEL_LABELS, filmLengthProblem } from "./CarWindows";
 import styles from "./activate.module.css";
 
 const panels = ["hood", "front-bumper", "roof", "trunk", "rear-bumper", "left-front-fender", "right-front-fender", "left-doors", "right-doors", "left-rear-quarter", "right-rear-quarter", "mirrors"];
@@ -59,7 +59,6 @@ export default function ActivationFlow({ user, checked, onUser, initialCode, emb
   const [info, setInfo] = useState<ActivationInfo | null>(null);
   const [form, setForm] = useState(initial);
   const [areas, setAreas] = useState<string[]>([]);
-  const [sizes, setSizes] = useState<GlassSizes>({});
   const [usedLength, setUsedLength] = useState("");
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
@@ -82,21 +81,21 @@ export default function ActivationFlow({ user, checked, onUser, initialCode, emb
   }, [checked, initialCode, open]);
 
   function reset(keepRoll: boolean) {
-    setResult(null); setForm(initial); setAreas([]); setSizes({}); setUsedLength(""); setCustomerPhone(""); setPhotos({}); setError("");
+    setResult(null); setForm(initial); setAreas([]); setUsedLength(""); setCustomerPhone(""); setPhotos({}); setError("");
     if (!keepRoll) { setInfo(null); setToken(""); setTyped(""); }
   }
 
   async function activate(event: FormEvent) {
     event.preventDefault(); if (!info || !user) return;
     if (!areas.length) { setError(t("Select the installed windows or protected panels.")); return; }
-    if (info.type === "tint") { const problem = glassSizeProblem(areas, sizes, t); if (problem) { setError(problem); return; } }
+    if (info.type === "tint") { const problem = filmLengthProblem(areas, usedLength, info.widthCm, t); if (problem) { setError(problem); return; } }
     if (installer && !photosComplete(photos)) { setError(t("Add a photo of the vehicle with its plate and of the installed film.")); return; }
     setBusy(true); setError("");
     try {
-      // Meters are optional: a roll covers as many vehicles as it fits, nobody has to measure it.
+      // Window film needs the meters used (checked above against the selected glass); for PPF they stay optional.
       const used = usedLength.trim() ? Number(usedLength) : null;
       const registration = { ...form, installer: installer ? (user.shopName ?? "") : form.installer, phone: installer ? customerPhone : user.phone, type: info.type, filmSerial: info.id, windows: info.type === "tint" ? areas : undefined,
-        glassSizes: info.type === "tint" ? Object.fromEntries(areas.map(id => [id, { lengthCm: Number(sizes[id].length), widthCm: Number(sizes[id].width) }])) : undefined, panels: info.type === "ppf" ? areas : undefined };
+        panels: info.type === "ppf" ? areas : undefined };
       const completed = installer
         ? await installerActivation(token, registration, used, customerPhone, country || user.country || "", photos)
         : await completeActivation(token, registration, used);
@@ -166,9 +165,9 @@ export default function ActivationFlow({ user, checked, onUser, initialCode, emb
           <label>{t("Country of installation")}<input maxLength={100} placeholder={user.country ?? t("Iran")} value={country} onChange={event => setCountry(event.target.value)} /></label>
         </div>}
         {installer && <p />}
-        <div className={styles.grid}>{fields.filter(([key]) => !(installer && key === "installer")).map(([key, label, max]) => <label key={key}>{installer && key === "owner" ? t("Customer full name") : t(label)}<input required maxLength={max} value={form[key]} type={key === "installed" ? "date" : "text"} autoComplete={key === "owner" ? "name" : "off"} onChange={event => setForm(value => ({ ...value, [key]: event.target.value }))} /></label>)}</div>
-        <label className={styles.meters}>{t("Film used (m, optional)")}<input type="number" inputMode="decimal" min="0.01" step="0.01" value={usedLength} onChange={event => setUsedLength(event.target.value)} /></label>
-        <fieldset><legend>{info.type === "tint" ? t("Installed windows") : t("Protected panels")}</legend>{info.type === "tint" ? <CarWindows value={areas} onChange={setAreas} sizes={sizes} onSizes={setSizes} /> : <div className={styles.areas}>{panels.map(area => <label key={area}><input type="checkbox" checked={areas.includes(area)} onChange={event => setAreas(current => event.target.checked ? [...current, area] : current.filter(item => item !== area))} />{t(PANEL_LABELS[area] ?? area.replaceAll("-", " "))}</label>)}</div>}</fieldset>
+        <div className={styles.grid}>{fields.filter(([key]) => !(installer && key === "installer")).map(([key, label, max]) => <label key={key}>{installer && key === "owner" ? t("Customer full name") : key === "invoiceNumber" ? t("Invoice number (optional)") : t(label)}<input required={key !== "invoiceNumber"} maxLength={max} value={form[key]} type={key === "installed" ? "date" : "text"} autoComplete={key === "owner" ? "name" : "off"} onChange={event => setForm(value => ({ ...value, [key]: event.target.value }))} /></label>)}</div>
+        <label className={styles.meters}>{info.type === "tint" ? t("Film used (m)") : t("Film used (m, optional)")}<input required={info.type === "tint"} type="number" inputMode="decimal" min="0.01" step="0.01" value={usedLength} onChange={event => setUsedLength(event.target.value)} /></label>
+        <fieldset><legend>{info.type === "tint" ? t("Installed windows") : t("Protected panels")}</legend>{info.type === "tint" ? <CarWindows value={areas} onChange={setAreas} /> : <div className={styles.areas}>{panels.map(area => <label key={area}><input type="checkbox" checked={areas.includes(area)} onChange={event => setAreas(current => event.target.checked ? [...current, area] : current.filter(item => item !== area))} />{t(PANEL_LABELS[area] ?? area.replaceAll("-", " "))}</label>)}</div>}</fieldset>
         {installer && <PhotoPicker value={photos} onChange={setPhotos} disabled={busy} />}
         {error && <p role="alert" className={styles.error}>{error}</p>}
         <button className={styles.button} type="submit" disabled={busy || !info.released}>{busy ? (installer ? t("Uploading…") : t("Checking…")) : installer ? t("Send for review") : t("Check & register warranty")}</button>

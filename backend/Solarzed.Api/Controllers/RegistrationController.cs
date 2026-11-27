@@ -21,7 +21,9 @@ public class RegistrationController(AppDbContext db) : ControllerBase
     public async Task<IActionResult> Register([FromBody] RegisterRequest req)
     {
         var setting = await db.CoverageSettings.AsNoTracking().FirstOrDefaultAsync();
-        var (err, entity) = WarrantyService.Validate(req, setting?.WarrantyCodeLength ?? 16, requireGlassSizes: false);
+        // Staff paperwork without a carton is keyed by ROLL NO + invoice, so the invoice stays required here.
+        if (string.IsNullOrWhiteSpace(req.InvoiceNumber)) return BadRequest(new { error = "invoiceNumber required" });
+        var (err, entity) = WarrantyService.Validate(req, setting?.WarrantyCodeLength ?? 16);
         if (err != null) return BadRequest(new { error = err });
 
         // Duplicate serial+invoice guard
